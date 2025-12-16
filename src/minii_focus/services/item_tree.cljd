@@ -113,7 +113,7 @@
                                                     nested-hierarchies))))))))))))))
 
 (defn is-task-blocked?
-  "Check if task is blocked by parent task"
+  "Check if task is blocked by parent task (returns Future<bool>)"
   [task-id]
   (let [parent-relation (get-parent task-id)]
     (-> parent-relation
@@ -129,6 +129,17 @@
                                     (not= (.-status parent-item) "completed")
                                     false)))))
                    false))))))
+
+(defn check-tasks-blocked-status
+  "Check blocked status for multiple tasks, returns map of task-id -> blocked?"
+  [task-ids]
+  (let [checks (map (fn [task-id]
+                     (-> (is-task-blocked? task-id)
+                         (.then (fn [blocked?] [task-id blocked?]))))
+                   task-ids)]
+    (-> (dart-core/Future.wait checks)
+        (.then (fn [results]
+                (into {} results))))))
 
 ;; =============================================================================
 ;; Hierarchy operations

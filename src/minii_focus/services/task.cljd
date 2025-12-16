@@ -102,10 +102,23 @@
     (.getFocusedItems database)))
 
 (defn get-executable-tasks
-  "Get executable tasks"
+  "Get executable tasks (excluding blocked tasks)"
   []
   (let [^drift/AppDatabase database (db/get-database)]
     (.getExecutableTasks database)))
+
+(defn get-tasks-with-blocked-info
+  "Get tasks with blocked status information"
+  [tasks]
+  (if (empty? tasks)
+    (dart-core/Future.value [])
+    (let [task-ids (map (fn [t] (.-id t)) tasks)]
+      (-> (tree-svc/check-tasks-blocked-status task-ids)
+          (.then (fn [blocked-map]
+                  (map (fn [task]
+                        {:task task
+                         :blocked (get blocked-map (.-id task) false)})
+                      tasks)))))))
 
 (defn get-inbox-tasks
   "Get inbox tasks (incomplete and no defer/due)"

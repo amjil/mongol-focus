@@ -1,66 +1,165 @@
 (ns minii-focus.screens.tags
-  "Tags page - manage tags and simple filtering"
+  "Tags page - manage tags and filter tasks by tags"
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
+   [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.states.app-state :as state]
-   [minii-focus.services.tag :as tag-svc]))
+   [minii-focus.services.tag :as tag-svc]
+   [minii-focus.services.task :as task]))
 
 (defn tags-screen []
-  (let [name-state (atom "")]
+  (let [name-state (atom "")
+        selected-tags (atom #{})
+        filter-mode (atom :or)]
     (f/widget
-     :context _ctx
+     :context ctx
      :watch [_nm name-state
-             {tags :tags loading :tags-loading} state/app-state]
+             _st selected-tags
+             _fm filter-mode
+             {tags :tags tagged-items :tagged-items} state/app-state]
      (m/Scaffold
       .appBar (m/AppBar
                .actions [(m/IconButton
+                          .tooltip "Toggle filter mode (OR/AND)"
+                          .icon (m/Icon (if (= @filter-mode :or) m/Icons.filter_alt m/Icons.filter_alt_off))
+                          .onPressed (fn []
+                                       (swap! filter-mode (fn [m] (if (= m :or) :and :or)))
+                                       (when (seq @selected-tags)
+                                         (tag-svc/refresh-tagged-items! (vec @selected-tags) @filter-mode))))
+                         (m/IconButton
                           .tooltip "Refresh"
                           .icon (m/Icon m/Icons.refresh)
-                          .onPressed (fn [] (tag-svc/refresh-tags!)))])
-      .body (m/Padding
-             .padding (m/EdgeInsets.all (comp/space :m))
-             .child
-             (cond
-               loading (m/Center .child (m/CircularProgressIndicator))
-               :else
-               (m/Row
-                .crossAxisAlignment m/CrossAxisAlignment.start
-                .children
-                [(m/Column
-                  .children
-                  [(m/Expanded
-                    .child (mgl/MongolTextField
-                            .decoration (m/InputDecoration .labelText "New tag")
-                            .onChanged (fn [v] (reset! name-state v))))
-                   (m/SizedBox .height (comp/space :s))
-                   (m/ElevatedButton
-                    .onPressed (fn []
-                                 (when (seq @name-state)
-                                   (-> (tag-svc/create-tag {:name @name-state})
-                                       (.then (fn [_]
-                                                (reset! name-state "")
-                                                (tag-svc/refresh-tags!))))))
-                    .child (mgl/MongolText "Add"))])
-                 (m/SizedBox .height (comp/space :l))
-                 (if (empty? tags)
-                   (comp/mongol-text-block
-                    {:text "No tags"
-                     :style (m/TextStyle .color (comp/color :text-weak))})
-                   (m/ListView.builder
-                    .scrollDirection m/Axis.horizontal
-                    .shrinkWrap true
-                    .itemCount (count tags)
-                    .itemBuilder (fn [_ctx idx]
-                                   (let [t (nth tags idx)]
-                                     (mgl/MongolListTile
-                                      .title (mgl/MongolText (.-name t))
-                                      .trailing (m/IconButton
-                                                 .icon (m/Icon m/Icons.delete)
-                                                 .onPressed (fn []
-                                                              (-> (tag-svc/delete-tag (.-id t))
-                                                                  (.then (fn []
-                                                                           (tag-svc/refresh-tags!)))))))))))])))))))
+                          .onPressed (fn []
+                                       (tag-svc/refresh-tags!)
+                                       (when (seq @selected-tags)
+                                         (tag-svc/refresh-tagged-items! (vec @selected-tags) @filter-mode))))])
+      .body
+      (comp/mongol-row-layout
+       {:main-row
+        (m/Padding
+         .padding (m/EdgeInsets.all (comp/space :m))
+         .child
+         (m/SingleChildScrollView
+          .child
+          (m/Row
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(comp/mongol-text-block
+             {:text "Create Tag"
+              :style (m/TextStyle .fontSize (comp/font-size :m))})
+            (m/SizedBox .width (comp/space :s))
+            (m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .children
+             [(m/Container
+               .padding (m/EdgeInsets.all (comp/space :s))
+               .decoration (m/BoxDecoration
+                            .border (m/Border.all
+                                     .color m/Colors.grey.shade300
+                                     .width 1)
+                            .borderRadius (m/BorderRadius.circular 4))
+               .child
+               (m/SizedBox
+                .height (+ (* (comp/font-size :m) 20) (* (comp/space :s) 2))
+                .child (mgl/MongolTextField
+                        .decoration nil
+                        .maxLines 1
+                        .onChanged (fn [v] (reset! name-state v)))))
+              (m/SizedBox .width (comp/space :s))
+              (mgl/MongolElevatedButton
+               .onPressed (fn []
+                            (when (seq @name-state)
+                              (-> (tag-svc/create-tag {:name @name-state})
+                                  (.then (fn [_]
+                                           (reset! name-state "")
+                                           (tag-svc/refresh-tags!))))))
+               .child (mgl/MongolText "Add"))])
+            (m/SizedBox .width (comp/space :l))
+            (comp/mongol-text-block
+             {:text "Select Tags to Filter"
+              :style (m/TextStyle .fontSize (comp/font-size :m))})
+            (m/SizedBox .width (comp/space :s))
+            (if (empty? tags)
+              (comp/mongol-text-block
+               {:text "No tags"
+                :style (m/TextStyle .color (comp/color :text-weak))})
+              (m/Wrap
+               .spacing (comp/space :s)
+               .runSpacing (comp/space :s)
+               .children
+               (map (fn [t]
+                      (let [tid (.-id t)
+                            selected? (contains? @selected-tags tid)]
+                        (m/FilterChip
+                         .label (m/Text (.-name t))
+                         .selected selected?
+                         .onSelected (fn [v]
+                                       (if v
+                                         (do
+                                           (swap! selected-tags conj tid)
+                                           (tag-svc/refresh-tagged-items! (vec (conj @selected-tags tid)) @filter-mode))
+                                         (do
+                                           (swap! selected-tags disj tid)
+                                           (if (seq (disj @selected-tags tid))
+                                             (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
+                                             (state/set-tagged-items! []))))))))
+                    tags)))
+            (m/SizedBox .width (comp/space :l))
+            (comp/mongol-text-block
+             {:text (if (seq @selected-tags)
+                      (str "Tasks with " (if (= @filter-mode :or) "any" "all") " selected tags (" (count tagged-items) ")")
+                      "Select tags to filter tasks")
+              :style (m/TextStyle .fontSize (comp/font-size :m))})
+            (m/SizedBox .width (comp/space :s))
+            (if (seq @selected-tags)
+              (if (empty? tagged-items)
+                (comp/mongol-text-block
+                 {:text "No tasks found"
+                  :style (m/TextStyle .color (comp/color :text-weak))})
+                (m/Expanded
+                 .child (m/ListView
+                         .shrinkWrap true
+                         .scrollDirection m/Axis.horizontal
+                         .children
+                         (map (fn [item]
+                                (let [item-id (.-id item)]
+                                  (comp/mongol-task-item
+                                   {:content (.-content item)
+                                    :status (keyword (.-status item))
+                                    :on-tap (fn []
+                                              (task/refresh-task-detail! item-id)
+                                              (m/Navigator.push
+                                               ctx
+                                               (m/MaterialPageRoute
+                                                .builder (fn [_]
+                                                           (task-detail/task-detail-screen item-id)))))})))
+                              tagged-items))))
+              (comp/mongol-text-block
+               {:text "Select tags above to see filtered tasks"
+                :style (m/TextStyle .color (comp/color :text-weak))}))])))
+        :side-row
+        (m/Container
+         .padding (m/EdgeInsets.all (comp/space :m))
+         .child
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          [(comp/mongol-text-block
+            {:text "Tag Filter"
+             :style (m/TextStyle .fontSize (comp/font-size :m))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Mode: " (if (= @filter-mode :or) "OR" "AND"))
+             :style (m/TextStyle .color (comp/color :text-weak))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Selected: " (count @selected-tags))
+             :style (m/TextStyle .color (comp/color :text-weak))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Results: " (count tagged-items))
+             :style (m/TextStyle .color (comp/color :text-weak))})]))})))))
 

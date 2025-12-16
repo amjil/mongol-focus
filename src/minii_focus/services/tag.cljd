@@ -2,8 +2,9 @@
   "Tag management service"
   (:require
    ["dart:core" :as dart-core]
-  ["package:drift/drift.dart" :as d]
-  ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   ["package:drift/drift.dart" :as d]
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [clojure.set :as set]
    [minii-focus.services.database :as db]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]))
@@ -132,4 +133,58 @@
        (.join [(fn [items item-tags]
                  (and (.equals (.-id items) (.-itemId item-tags))
                       (.equals (.-tagId item-tags) tag-id)))])))))
+
+(defn get-items-by-tags
+  "Get all tasks that have any of the specified tags (OR logic)"
+  [tag-ids]
+  (if (empty? tag-ids)
+    (dart-core/Future.value [])
+    (let [^drift/AppDatabase database (db/get-database)]
+      (.get
+       (doto (.select database (.-items database))
+         (.join [(fn [items item-tags]
+                   (and (.equals (.-id items) (.-itemId item-tags))
+                        (.isIn (.-tagId item-tags) tag-ids)))]))))))
+
+(defn get-items-by-all-tags
+  "Get all tasks that have all of the specified tags (AND logic)"
+  [tag-ids]
+  (if (empty? tag-ids)
+    (dart-core/Future.value [])
+    (let [^drift/AppDatabase database (db/get-database)
+          ;; Get items for each tag separately, then find intersection
+          tag-queries (map (fn [tag-id]
+                           (.get
+                            (doto (.select database (.-items database))
+                              (.join [(fn [items item-tags]
+                                        (and (.equals (.-id items) (.-itemId item-tags))
+                                             (.equals (.-tagId item-tags) tag-id)))]))))
+                         tag-ids)]
+      (-> (dart-core/Future.wait tag-queries)
+          (.then (fn [results]
+                  ;; Find intersection of all tag results
+                  (if (empty? results)
+                    []
+                    (let [id-sets (map (fn [items] (set (map (fn [item] (.-id item)) items))) results)
+                          common-ids (reduce (fn [acc s] (set/intersection acc s)) (first id-sets) (rest id-sets))
+                          all-items (reduce concat results)]
+                      (filter (fn [item] (contains? common-ids (.-id item))) all-items)))))))))
+
+(defn refresh-tagged-items!
+  "Refresh items filtered by tag(s) and write to app-state"
+  [tag-ids filter-mode]
+  (state/set-tags-loading! true)
+  (let [query-fn (case filter-mode
+                  :or get-items-by-tags
+                  :and get-items-by-all-tags
+                  get-items-by-tags)]
+    (-> (query-fn tag-ids)
+        (.then (fn [items]
+                (state/set-tagged-items! items)
+                (state/set-tags-loading! false)
+                items))
+        (.catchError (fn [e]
+                     (dart-core/print (str "Error refreshing tagged items: " e))
+                     (state/set-tagged-items! [])
+                     (state/set-tags-loading! false))))))
 

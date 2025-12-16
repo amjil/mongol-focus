@@ -32,6 +32,7 @@
          :reviews-loading false
          :tags []
          :tags-loading false
+         :tagged-items []
          :focus-sessions-loading false
          ;; Compatible with old fields (gradual migration)
          :tasks []
@@ -147,5 +148,9 @@
 
 (defn set-focus-sessions-loading! [loading]
   (update-state! assoc :focus-sessions-loading loading))
+
+;; Tagged items (for tag filtering)
+(defn set-tagged-items! [items]
+  (update-state! assoc :tagged-items items))
 
 

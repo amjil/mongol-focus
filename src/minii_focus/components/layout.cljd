@@ -49,6 +49,7 @@
   (f/widget
    (m/Row
     .mainAxisSize m/MainAxisSize.max
+    .crossAxisAlignment m/CrossAxisAlignment.stretch
     .mainAxisAlignment m/MainAxisAlignment.spaceAround
     .children
     [(m/Expanded
