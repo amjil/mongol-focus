@@ -47,29 +47,9 @@
 
 (defn update-task
   "Update task with automatic refresh of related pages"
-  [id content status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at]
-  (let [^drift/AppDatabase database (db/get-database)
-        ^#/(d/Value String?)
-        content-value (if (some? content) (d/Value content) (d/Value nil))
-        ^#/(d/Value String?)
-        status-value (if (some? status) (d/Value status) (d/Value.absent))
-        ^#/(d/Value dart-core/DateTime?)
-        defer-value (if defer-at
-                      (d/Value defer-at)
-                      (d/Value nil))
-        ^#/(d/Value dart-core/DateTime?)
-        due-value (if due-at
-                    (d/Value due-at)
-                    (d/Value nil))
-        query (doto (.update database (.-items database))
-                (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id))))
-        companion (drift/ItemsCompanion.
-                   .content content-value
-                   .status status-value
-                   .deferAt defer-value
-                   .dueAt due-value
-                   .updatedAt (d/Value (dart-core/DateTime.now)))]
-    (.write query companion)))
+  [id content status defer-at due-at]
+  (let [^drift/AppDatabase database (db/get-database) ]
+    (.updateTask database id content status defer-at due-at)))
 
 (defn delete-task
   "Delete task"
@@ -364,28 +344,23 @@
   "Mark task as completed with automatic refresh"
   [id]
   (let [^drift/AppDatabase database (db/get-database)]
-    (-> (.updateTask database id nil "completed" nil nil)
-        ;; (.then (fn []
-        ;;          ;; Auto-refresh related pages
-        ;;          (refresh-today-tasks!)
-        ;;          (refresh-inbox-tasks!)
-        ;;          (refresh-forecast-items!)
-        ;;          (refresh-projects!)
-        ;;          (refresh-focus-tasks!)))
-        )))
+    (.updateTask database id nil "completed" nil nil)))
 
 (defn mark-task-active
   "Mark task as active"
   [id]
-  (update-task id nil "active" nil nil))
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.updateTask database id nil "active" nil nil)))
 
 (defn mark-task-idle
   "Mark task as idle"
   [id]
-  (update-task id nil "idle" nil nil))
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.updateTask database id nil "idle" nil nil)))
 
 (defn mark-task-blocked
   "Mark task as blocked"
   [id]
-  (update-task id nil "blocked" nil nil))
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.updateTask database id nil "blocked" nil nil)))
 
