@@ -13,6 +13,7 @@
    [minii-focus.services.task :as task]
    [minii-focus.states.app-state :as state]
    [minii-focus.components.core :as comp]
+   [minii-focus.screens.home :as home]
    [minii-focus.screens.today :as today]
    [minii-focus.screens.focus :as focus]
    [minii-focus.screens.inbox :as inbox]
@@ -62,7 +63,8 @@
                        :keyboard/key-container-color m/Colors.grey.shade500
                        :keyboard/mongol-font-family "OnonSoninSans"})
           current-index (atom 0)
-          pages [(today/today-screen)
+          pages [(home/home-screen {:on-navigate (fn [idx] (reset! current-index idx))})
+                 (today/today-screen)
                  (inbox/inbox-screen)
                  (focus/focus-screen)
                  (forecast/forecast-screen)
@@ -72,19 +74,20 @@
                  (focus-stats/focus-stats-screen)
                  (settings/settings-screen)]
           ;; Bottom navigation only shows the 4 most important entries
-          bottom-items [{:title "Today" :icon m/Icons.calendar_today :idx 0}
-                        {:title "Inbox" :icon m/Icons.inbox :idx 1}
-                        {:title "Focus" :icon m/Icons.timer :idx 2}
-                        {:title "Forecast" :icon m/Icons.timeline :idx 3}]
-          drawer-items [{:title "Today" :idx 0}
-                        {:title "Inbox" :idx 1}
-                        {:title "Focus" :idx 2}
-                        {:title "Forecast" :idx 3}
-                        {:title "Projects" :idx 4}
-                        {:title "Tags" :idx 5}
-                        {:title "Review" :idx 6}
-                        {:title "Stats" :idx 7}
-                        {:title "Settings" :idx 8}]
+          bottom-items [{:title "Home" :icon m/Icons.home :idx 0}
+                        {:title "Today" :icon m/Icons.calendar_today :idx 1}
+                        {:title "Inbox" :icon m/Icons.inbox :idx 2}
+                        {:title "Focus" :icon m/Icons.timer :idx 3}]
+          drawer-items [{:title "Home" :idx 0}
+                        {:title "Today" :idx 1}
+                        {:title "Inbox" :idx 2}
+                        {:title "Focus" :idx 3}
+                        {:title "Forecast" :idx 4}
+                        {:title "Projects" :idx 5}
+                        {:title "Tags" :idx 6}
+                        {:title "Review" :idx 7}
+                        {:title "Stats" :idx 8}
+                        {:title "Settings" :idx 9}]
           set-page! (fn [idx]
                       (reset! current-index idx))]
     :bind {:info info}
@@ -98,7 +101,8 @@
                  .primarySwatch m/Colors.blue
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
-     .routes {"/today" today/today-screen
+     .routes {"/home" (home/home-screen {:on-navigate (fn [_] nil)})
+              "/today" today/today-screen
               "/inbox" inbox/inbox-screen
               "/focus" focus/focus-screen
               "/forecast" forecast/forecast-screen
@@ -134,17 +138,24 @@
                    .children pages)
             .bottomNavigationBar (m/BottomNavigationBar
                                   .type m/BottomNavigationBarType.fixed
-                                  .currentIndex @current-index
+                                  .currentIndex (min @current-index (dec (count bottom-items)))
                                   .onTap (fn [idx] (set-page! idx)
                                            (condp = idx
-                                             1 (-> (task/get-inbox-tasks)
+                                             0 (do
+                                                 ;; Refresh home page data
+                                                 (task/refresh-today-tasks!)
+                                                 (task/refresh-inbox-tasks!)
+                                                 (task/refresh-forecast-items!)
+                                                 (task/refresh-focus-sessions!)
+                                                 nil)
+                                             2 (-> (task/get-inbox-tasks)
                                                    (.then (fn [x]
                                                             (dart-core/print (str "inbox tasks: " x))
                                                             (swap! state/app-state assoc :inbox-tasks x)
                                                             (swap! state/app-state assoc :inbox-loading false)))
                                                    (.catchError (fn [e]
                                                                   (dart-core/print e)
-                                                                  (swap! state/app-state :inbox-loading false))))
+                                                                  (swap! state/app-state assoc :inbox-loading false))))
                                              nil)
                                            nil)
                                   .items (into []

@@ -11,10 +11,10 @@
 
 (defn- classify [items]
   (let [today (dt/now)
-        start (dart-core/DateTime. (.year today) (.month today) (.day today))
-        end (dart-core/DateTime. (.year today) (.month today) (.day today) 23 59 59)
-        ms-start (.millisecondsSinceEpoch start)
-        ms-end (.millisecondsSinceEpoch end)]
+        start (dart-core/DateTime. (.-year today) (.-month today) (.-day today))
+        end (dart-core/DateTime. (.-year today) (.-month today) (.-day today) 23 59 59)
+        ms-start (.-millisecondsSinceEpoch start)
+        ms-end (.-millisecondsSinceEpoch end)]
     (reduce
      (fn [acc item]
        (let [due (.-dueAt item)
