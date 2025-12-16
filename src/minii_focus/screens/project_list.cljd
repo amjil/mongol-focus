@@ -40,6 +40,7 @@
                             is-open (contains? @expanded pid)
                             child-items (get @children-map pid)]
                         (m/ExpansionTile
+                         .key (m/ValueKey pid)
                          .title (comp/mongol-text-block
                                  {:text (.-content proj)
                                   :style (m/TextStyle .fontSize (comp/font-size :l))})
@@ -57,11 +58,34 @@
                                                  (swap! expanded disj pid)))
                          .children
                          [(if (and child-items (seq child-items))
-                            (m/Column
+                            (m/ReorderableListView
+                             .scrollDirection m/Axis.horizontal
+                             .onReorder (fn [old-index new-index]
+                                         (let [reordered-items (vec child-items)
+                                               item (nth reordered-items old-index)
+                                               without-item (concat (subvec reordered-items 0 old-index)
+                                                                    (subvec reordered-items (inc old-index)))
+                                               new-items (vec (concat (take new-index without-item)
+                                                                     [item]
+                                                                     (drop new-index without-item)))
+                                               new-child-ids (map (fn [row] (.-id (:item row))) new-items)]
+                                           ;; Optimistic update
+                                           (swap! children-map assoc pid new-items)
+                                           ;; Persist to database
+                                           (-> (tree-svc/reorder-siblings pid new-child-ids)
+                                               (.then (fn []
+                                                       (dart-core/print (str "Reordered children of " pid))))
+                                               (.catchError (fn [e]
+                                                             (dart-core/print (str "Error reordering: " e))
+                                                             ;; Rollback on error
+                                                             (swap! children-map assoc pid child-items))))))
                              .children
                              (map (fn [row]
-                                    (let [item (:item row)]
+                                    (let [item (:item row)
+                                          item-id (.-id item)]
                                       (m/ListTile
+                                       .key (m/ValueKey item-id)
+                                       .leading (m/Icon m/Icons.drag_handle)
                                        .title (m/Text (.-content item))
                                        .subtitle (m/Text (str "Position " (:position row))))))
                                   child-items))

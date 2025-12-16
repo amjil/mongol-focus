@@ -44,16 +44,32 @@
                    [(m/IconButton
                      .icon (m/Icon m/Icons.check)
                      .onPressed (fn []
+                                  ;; Optimistic update: update local state immediately
+                                  (when task-detail
+                                    (swap! state/app-state
+                                           (fn [s]
+                                             (if-let [td (:task-detail s)]
+                                               (assoc s :task-detail
+                                                      (-> td
+                                                          (assoc :content @content-state)
+                                                          (assoc :status (name @status-state))
+                                                          (assoc :deferAt @defer-state)
+                                                          (assoc :dueAt @due-state)))
+                                               s))))
+                                  (reset! editing-state false)
+                                  ;; Then persist to database (auto-refresh happens in update-task)
                                   (-> (task/update-task (.-id task-detail)
-                                                        {:content @content-state
-                                                         :status (name @status-state)
-                                                         :defer-at @defer-state
-                                                         :due-at @due-state})
-                                      (.then (fn []
-                                               (reset! editing-state false)
-                                               (task/refresh-task-detail! (.-id task-detail)))))
-                                  (.catchError (fn [error]
-                                                 (dart-core/print (str "Error saving task: " error))))))
+                                                        @content-state
+                                                        (name @status-state)
+                                                        @defer-state
+                                                        @due-state)
+                                      (.then (fn [x]
+                                               (task/refresh-task-detail! (.-id task-detail))))
+                                      (.catchError (fn [error]
+                                                     (dart-core/print (str "Error saving task: " error))
+                                                     ;; Rollback on error
+                                                     (when task-detail
+                                                       (task/refresh-task-detail! (.-id task-detail))))))))
                     (m/IconButton
                      .icon (m/Icon m/Icons.close)
                      .onPressed (fn []
@@ -141,7 +157,7 @@
                                                               (let [new-status (first selection)]
                                                                 (if @editing-state
                                                                   (reset! status-state new-status)
-                                                                  (-> (task/update-task (.-id task-detail) {:status (name new-status)})
+                                                                  (-> (task/update-task (.-id task-detail) nil (name new-status) nil nil)
                                                                       (.then (fn [] (task/refresh-task-detail! task-id)))
                                                                       (.catchError (fn [error]
                                                                                      (dart-core/print (str "Error updating status: " error))))))))))]))
@@ -165,7 +181,7 @@
                                                           (when picked
                                                             (if @editing-state
                                                               (reset! defer-state picked)
-                                                              (-> (task/update-task task-id {:defer-at picked})
+                                                              (-> (task/update-task task-id nil nil picked nil)
                                                                   (.then (fn [] (task/refresh-task-detail! task-id)))
                                                                   (.catchError (fn [error]
                                                                                  (dart-core/print (str "Error updating defer: " error))))))))))
@@ -186,7 +202,7 @@
                                                           (when picked
                                                             (if @editing-state
                                                               (reset! due-state picked)
-                                                              (-> (task/update-task (.-id task-detail) {:due-at picked})
+                                                              (-> (task/update-task (.-id task-detail) nil nil nil picked)
                                                                   (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                                                   (.catchError (fn [error]
                                                                                  (dart-core/print (str "Error updating due: " error))))))))))
@@ -240,11 +256,10 @@
                                (m/SizedBox .height (comp/space :s))
                                (mgl/MongolElevatedButton
                                 .onPressed (fn []
-                                             (-> (task/enter-focus (.-id task-detail))
-                                                 (.then (fn [session-id]
-                                                          (state/set-focused-task! task-detail)
-                                                          (state/set-focus-session-id! session-id)
-                                                          (dart-core/print "Entered focus")))))
+                                             (let [session-id (task/enter-focus (.-id task-detail))]
+                                               (state/set-focused-task! task-detail)
+                                               (state/set-focus-session-id! session-id)
+                                               (dart-core/print "Entered focus")))
                                 .child (mgl/MongolText "Enter Focus"))
                                (m/SizedBox .height (comp/space :s))
                                (mgl/MongolElevatedButton

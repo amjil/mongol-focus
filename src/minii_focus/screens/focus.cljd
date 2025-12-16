@@ -10,75 +10,71 @@
 
 (defn focus-screen []
   (f/widget
-   :watch [{loading :focus-loading 
-            tasks :focus-tasks 
-            depth :focus-depth 
+   :watch [{loading :focus-loading
+            tasks :focus-tasks
+            depth :focus-depth
             session-id :focus-session-id} state/app-state]
-   (m/Scaffold
-    .appBar (m/AppBar
-             .actions [(m/IconButton
-                        .tooltip "Refresh"
-                        .icon (m/Icon m/Icons.refresh)
-                        .onPressed (fn []
-                                     (task/refresh-focus-tasks!)))])
-    .body
-    (cond
-      loading
-      (m/Center
-       .child (m/CircularProgressIndicator))
+   (let [main-view (cond
+                     loading
+                     (m/Center
+                      .child (m/CircularProgressIndicator))
 
-      (empty? tasks)
-      (m/Center
-       .child (comp/mongol-text-block
-               {:text "No Focus task currently"
-                :style (m/TextStyle
-                        .color (comp/color :text-weak)
-                        .fontSize (comp/font-size :m))}))
+                     (empty? tasks)
+                     (m/Center
+                      .child (comp/mongol-text-block
+                              {:text "No Focus task currently"
+                               :style (m/TextStyle
+                                       .color (comp/color :text-weak)
+                                       .fontSize (comp/font-size :m))}))
 
-      :else
-      (let [focused-task (first tasks)
-            main-column (m/Column
-                         .mainAxisAlignment m/MainAxisAlignment.center
-                         .crossAxisAlignment m/CrossAxisAlignment.center
-                         .children
-                         [(comp/mongol-text-block
-                           {:text (.-content focused-task)
-                            :style (m/TextStyle
-                                    .fontSize (comp/font-size :xl)
-                                    .height (comp/line-height (comp/font-size :xl)))})
-                          (m/SizedBox .height (comp/space :l))
-                          (comp/focus-depth-bar
-                           {:depth-score depth
-                           :max-score 100})])
-            side-column (m/Column
-                         .mainAxisAlignment m/MainAxisAlignment.center
-                         .children
-                         [(m/IconButton
-                           .tooltip "Exit Focus"
-                           .icon (m/Icon m/Icons.close)
-                           .onPressed (fn []
-                                        (when (and focused-task session-id)
-                                          (-> (task/exit-focus (.-id focused-task) session-id depth)
-                                              (.then (fn []
-                                                       (state/set-focused-task! nil)
-                                                       (state/set-focus-session-id! nil)
-                                                       (state/update-focus-depth! 0)
-                                                       (task/refresh-focus-tasks!)
-                                                       (task/refresh-today-tasks!)))
-                                              (.catchError (fn [error]
-                                                             (dart-core/print (str "Error exiting focus: " error))))))))])]
-        (comp/focus-container
-         {:is-focused true
-          :child (comp/mongol-column-layout
-                  {:main-column (comp/vertical-reveal-motion
-                                 {:child main-column})
-                   :side-column (comp/focus-enter-motion
-                                 {:main-child (comp/vertical-reveal-motion {:child side-column})
-                                  :side-child (m/SizedBox .width 0)
-                                  :is-focused true})
-                   :main-width 0.8
-                   :side-width 0.2})}))))))
+                     :else
+                     (let [focused-task (first tasks)]
+                       (comp/focus-container
+                        {:is-focused true
+                         :child (m/Column
+                                 .mainAxisAlignment m/MainAxisAlignment.center
+                                 .crossAxisAlignment m/CrossAxisAlignment.center
+                                 .children
+                                 [(comp/mongol-text-block
+                                   {:text (.-content focused-task)
+                                    :style (m/TextStyle
+                                            .fontSize (comp/font-size :xl)
+                                            .height (comp/line-height (comp/font-size :xl)))})
+                                  (m/SizedBox .height (comp/space :l))
+                                  (comp/focus-depth-bar
+                                   {:depth-score depth
+                                    :max-score 100})])})))]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .actions [(m/IconButton
+                          .tooltip "Refresh"
+                          .icon (m/Icon m/Icons.refresh)
+                          .onPressed (fn []
+                                       (task/refresh-focus-tasks!)))])
+      .body (comp/mongol-row-layout
+             {:main-row (comp/vertical-reveal-motion
+                         {:child main-view})
+              :side-row (m/Container
+                         .padding (m/EdgeInsets.all (comp/space :m))
+                         .child (m/Column
+                                 .mainAxisAlignment m/MainAxisAlignment.center
+                                 .crossAxisAlignment m/CrossAxisAlignment.center
+                                 .children
+                                 [(m/IconButton
+                                   .tooltip "Exit Focus"
+                                   .icon (m/Icon m/Icons.close)
+                                   .onPressed (fn []
+                                                (when (and (seq tasks) session-id)
+                                                  (let [focused-task (first tasks)]
+                                                    (-> (task/exit-focus (.-id focused-task) session-id depth)
+                                                        (.then (fn []
+                                                                 (state/set-focused-task! nil)
+                                                                 (state/set-focus-session-id! nil)
+                                                                 (state/update-focus-depth! 0)
+                                                                 (task/refresh-focus-tasks!)
+                                                                 (task/refresh-today-tasks!)))
+                                                        (.catchError (fn [error]
+                                                                       (dart-core/print (str "Error exiting focus: " error)))))))))]))})))))
 
 ;; NOTE: Loading/refresh is handled by services.task; pages only subscribe to state and trigger refresh via buttons.
-
 

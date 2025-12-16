@@ -46,8 +46,8 @@
      companion)))
 
 (defn update-task
-  "Update task"
-  [id {:keys [content status defer-at due-at]}]
+  "Update task with automatic refresh of related pages"
+  [id content status defer-at due-at]
   (let [^drift/AppDatabase database (db/get-database)
         query (doto (.update database (.-items database))
                 (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id))))
@@ -349,22 +349,30 @@
 ;; =============================================================================
 
 (defn mark-task-completed
-  "Mark task as completed"
+  "Mark task as completed with automatic refresh"
   [id]
-  (update-task id {:status "completed"}))
+  (-> (update-task id nil "completed" nil nil)
+      ;; (.then (fn []
+      ;;          ;; Auto-refresh related pages
+      ;;          (refresh-today-tasks!)
+      ;;          (refresh-inbox-tasks!)
+      ;;          (refresh-forecast-items!)
+      ;;          (refresh-projects!)
+      ;;          (refresh-focus-tasks!)))
+      ))
 
 (defn mark-task-active
   "Mark task as active"
   [id]
-  (update-task id {:status "active"}))
+  (update-task id nil "active" nil nil))
 
 (defn mark-task-idle
   "Mark task as idle"
   [id]
-  (update-task id {:status "idle"}))
+  (update-task id nil "idle" nil nil))
 
 (defn mark-task-blocked
   "Mark task as blocked"
   [id]
-  (update-task id {:status "blocked"}))
+  (update-task id nil "blocked" nil nil))
 

@@ -10,7 +10,7 @@
    [minii-focus.services.task :as task]
    [minii-focus.states.app-state :as state]))
 
-(defn- side-panel [tasks defer-date due-date]
+(defn- side-panel [tasks tasks-with-info defer-date due-date]
   (m/Container
    .padding (m/EdgeInsets.all (comp/space :m))
    .child (m/Column
@@ -22,6 +22,10 @@
             (m/SizedBox .height (comp/space :s))
             (comp/mongol-text-block
              {:text (str "Pending " (count tasks))
+              :style (m/TextStyle .color (comp/color :text-weak))})
+            (m/SizedBox .height (comp/space :s))
+            (comp/mongol-text-block
+             {:text (str "Blocked " (count (filter :blocked tasks-with-info)))
               :style (m/TextStyle .color (comp/color :text-weak))})
             (m/SizedBox .height (comp/space :s))
             (comp/mongol-text-block
@@ -40,12 +44,14 @@
   (let [content (atom "")
         defer-date (atom nil)
         due-date (atom nil)
-        controller (m/TextEditingController.)]
+        controller (m/TextEditingController.)
+        tasks-with-info (atom [])]
     (f/widget
      :context ctx
      :watch [_ct content
              _de defer-date
              _du due-date
+             _twi tasks-with-info
              {tasks :inbox-tasks loading :inbox-loading} state/app-state]
      (m/Scaffold)
      .body
@@ -89,30 +95,50 @@
                                                m/Colors.black))})])))
           (m/SizedBox .width (comp/space :s))
           (m/Divider)
-          (cond
-            loading (m/Center .child (m/CircularProgressIndicator))
-            (empty? tasks) (comp/mongol-text-block
-                            {:text "Inbox is empty"
-                             :style (m/TextStyle .color (comp/color :text-weak))})
-            :else (comp/mongol-task-list
-                   tasks
-                   (fn [task]
-                     (-> (task/mark-task-completed (.-id task))
-                         (.then (fn []
-                                  (task/reload-inbox! ctx)
-                                  (task/show-toast ctx "Completed" :success)))
-                         (.catchError (fn [e]
-                                        (dart-core/print e)
-                                        (task/show-toast ctx "Update failed" :error)))))
-                   (fn [task]
-                     ;; Navigate to task detail page
-                     (task/refresh-task-detail! (.-id task))
-                     (m/Navigator.push
-                      ctx
-                      (m/MaterialPageRoute
-                       .builder (fn [_]
-                                  (task-detail/task-detail-screen (.-id task))))))))]))
-       :side-row (side-panel tasks defer-date due-date)}))))
+          (do
+            ;; Load blocked info when tasks change
+            (when (and (not loading) (seq tasks) (empty? @tasks-with-info))
+              (-> (task/get-tasks-with-blocked-info tasks)
+                  (.then (fn [info-list]
+                          (reset! tasks-with-info info-list)))
+                  (.catchError (fn [error]
+                                (dart-core/print (str "Error loading blocked info: " error))))))
+            (cond
+              loading (m/Center .child (m/CircularProgressIndicator))
+              (empty? tasks) (comp/mongol-text-block
+                              {:text "Inbox is empty"
+                               :style (m/TextStyle .color (comp/color :text-weak))})
+              :else (comp/mongol-task-list
+                     (if (seq @tasks-with-info)
+                       (map :task @tasks-with-info)
+                       tasks)
+                     (fn [task]
+                       ;; Optimistic update: mark as completed immediately
+                       (let [task-id (.-id task)]
+                         (swap! state/app-state
+                                (fn [s]
+                                  (update s :inbox-tasks
+                                         (fn [ts] (filter #(not= (.-id %) task-id) ts)))))
+                         (-> (task/mark-task-completed task-id)
+                             (.then (fn []
+                                     (task/reload-inbox! ctx)
+                                     (task/show-toast ctx "Completed" :success)))
+                             (.catchError (fn [e]
+                                           (dart-core/print e)
+                                           ;; Rollback on error
+                                           (swap! state/app-state
+                                                  (fn [s]
+                                                    (update s :inbox-tasks #(conj % task))))
+                                           (task/show-toast ctx "Update failed" :error))))))
+                     (fn [task]
+                       ;; Navigate to task detail page
+                       (task/refresh-task-detail! (.-id task))
+                       (m/Navigator.push
+                        ctx
+                        (m/MaterialPageRoute
+                         .builder (fn [_]
+                                    (task-detail/task-detail-screen (.-id task)))))))))]))
+       :side-row (side-panel tasks @tasks-with-info defer-date due-date)}))))
 
 ;; NOTE: Loading/refresh is handled by services; pages only subscribe to state and trigger refresh via buttons.
 

@@ -156,6 +156,15 @@
                                                    (.catchError (fn [e]
                                                                   (dart-core/print e)
                                                                   (swap! state/app-state assoc :inbox-loading false))))
+                                                                  
+                                             3 (-> (task/refresh-focus-tasks!)
+                                                   (.then (fn [x]
+                                                            (dart-core/print (str "focus tasks: " x))
+                                                            (swap! state/app-state assoc :focus-tasks x)
+                                                            (swap! state/app-state assoc :focus-loading false)))
+                                                   (.catchError (fn [e]
+                                                                  (dart-core/print e)
+                                                                  (swap! state/app-state assoc :focus-loading false))))
                                              nil)
                                            nil)
                                   .items (into []

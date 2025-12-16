@@ -23,9 +23,10 @@
                        (m/Center
                         .child (m/CircularProgressIndicator))
                        (m/ListView
+                        .scrollDirection m/Axis.horizontal
                         .padding (m/EdgeInsets.all (comp/space :m))
                         .children
-                        (if (empty? @tasks-with-info)
+                        (if (empty? _twi)
                           [(m/Padding
                             .padding (m/EdgeInsets.all (comp/space :xl))
                             .child (comp/mongol-text-block
@@ -33,69 +34,70 @@
                                      :style (m/TextStyle
                                              .color (comp/color :text-weak)
                                              .fontSize (comp/font-size :m))}))]
-                          (->> @tasks-with-info
+                          (->> _twi
                                (filter (fn [info]
-                                        (or @show-blocked
-                                            (not (:blocked info)))))
+                                         (or @show-blocked
+                                             (not (:blocked info)))))
                                (map (fn [info]
-                                     (let [task-row (:task info)
-                                           task-id (.-id task-row)
-                                           task-status (keyword (.-status task-row))
-                                           blocked (:blocked info)]
-                                       (comp/mongol-task-item
-                                        {:content (.-content task-row)
-                                         :status task-status
-                                         :blocked? blocked
-                                         :on-tap (fn []
-                                                  ;; Navigate to task detail page
-                                                  (task/refresh-task-detail! task-id)
-                                                  (m/Navigator.push
-                                                   ctx
-                                                   (m/MaterialPageRoute
-                                                    .builder (fn [_]
-                                                               (task-detail/task-detail-screen task-id)))))
-                                         :on-long-press (fn []
-                                                         ;; Structure adjustment placeholder: will integrate item_tree drag/move later
-                                                         (m/showModalBottomSheet
-                                                          .context ctx
-                                                          .builder (fn [_]
-                                                                     (m/Wrap
-                                                                      .children
-                                                                      [(m/ListTile
-                                                                        .leading (m/Icon m/Icons.subdirectory_arrow_right)
-                                                                        .title (m/Text "Set as subtask (placeholder)")
-                                                                        .onTap (fn []
-                                                                                 (dart-core/print (str "Set as child (TODO): " task-id))
-                                                                                 (m/Navigator.pop ctx)))
-                                                                       (m/ListTile
-                                                                        .leading (m/Icon m/Icons.arrow_upward)
-                                                                        .title (m/Text "Move up (placeholder)")
-                                                                        .onTap (fn []
-                                                                                 (dart-core/print (str "Move up (TODO): " task-id))
-                                                                                 (m/Navigator.pop ctx)))
-                                                                       (m/ListTile
-                                                                        .leading (m/Icon m/Icons.arrow_downward)
-                                                                        .title (m/Text "Move down (placeholder)")
-                                                                        .onTap (fn []
-                                                                                 (dart-core/print (str "Move down (TODO): " task-id))
-                                                                                 (m/Navigator.pop ctx)))]))))
-                                         :on-swipe-left (fn []
-                                                         ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)
-                                                         (-> (task/enter-focus task-id)
-                                                             (.then (fn [session-id]
-                                                                      (state/set-focused-task! task-row)
-                                                                      (state/set-focus-session-id! session-id)
-                                                                      (task/refresh-today-tasks!)
-                                                                      (task/refresh-focus-tasks!)
-                                                                      (dart-core/print (str "Entered focus: " task-id))))
-                                                             (.catchError (fn [error]
-                                                                            (dart-core/print (str "Error entering focus: " error))))))}))))))))]
-    ;;  (when (and (not loading) (seq tasks) (empty? @tasks-with-info))
-    ;;    (-> (task/get-tasks-with-blocked-info tasks)
-    ;;        (.then (fn [info-list]
-    ;;                (reset! tasks-with-info info-list)))
-    ;;        (.catchError (fn [error]
-    ;;                      (dart-core/print (str "Error loading blocked info: " error))))))
+                                      (let [task-row (:task info)
+                                            task-id (.-id task-row)
+                                            task-status (keyword (.-status task-row))
+                                            blocked (:blocked info)]
+                                        (comp/mongol-task-item
+                                         {:content (.-content task-row)
+                                          :status task-status
+                                          :blocked? blocked
+                                          :on-tap (fn []
+                                                    ;; Navigate to task detail page
+                                                    (task/refresh-task-detail! task-id)
+                                                    (m/Navigator.push
+                                                     ctx
+                                                     (m/MaterialPageRoute
+                                                      .builder (fn [_]
+                                                                 (task-detail/task-detail-screen task-id)))))
+                                          :on-long-press (fn []
+                                                           ;; Structure adjustment placeholder: will integrate item_tree drag/move later
+                                                           (m/showModalBottomSheet
+                                                            .context ctx
+                                                            .builder (fn [_]
+                                                                       (m/Wrap
+                                                                        .children
+                                                                        [(m/ListTile
+                                                                          .leading (m/Icon m/Icons.subdirectory_arrow_right)
+                                                                          .title (m/Text "Set as subtask (placeholder)")
+                                                                          .onTap (fn []
+                                                                                   (dart-core/print (str "Set as child (TODO): " task-id))
+                                                                                   (m/Navigator.pop ctx)))
+                                                                         (m/ListTile
+                                                                          .leading (m/Icon m/Icons.arrow_upward)
+                                                                          .title (m/Text "Move up (placeholder)")
+                                                                          .onTap (fn []
+                                                                                   (dart-core/print (str "Move up (TODO): " task-id))
+                                                                                   (m/Navigator.pop ctx)))
+                                                                         (m/ListTile
+                                                                          .leading (m/Icon m/Icons.arrow_downward)
+                                                                          .title (m/Text "Move down (placeholder)")
+                                                                          .onTap (fn []
+                                                                                   (dart-core/print (str "Move down (TODO): " task-id))
+                                                                                   (m/Navigator.pop ctx)))]))))
+                                          :on-swipe-left (fn []
+                                                           ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)
+                                                           (-> (task/enter-focus task-id)
+                                                               (.then (fn [session-id]
+                                                                        (state/set-focused-task! task-row)
+                                                                        (state/set-focus-session-id! session-id)
+                                                                        (task/refresh-today-tasks!)
+                                                                        (task/refresh-focus-tasks!)
+                                                                        (dart-core/print (str "Entered focus: " task-id))))
+                                                               (.catchError (fn [error]
+                                                                              (dart-core/print (str "Error entering focus: " error))))))}))))))))]
+     ;;  (do
+     ;;    (when (and (not loading) (seq tasks) (empty? @tasks-with-info))
+     ;;      (-> (task/get-tasks-with-blocked-info tasks)
+     ;;          (.then (fn [info-list]
+     ;;                  (reset! tasks-with-info info-list)))
+     ;;          (.catchError (fn [error]
+     ;;                        (dart-core/print (str "Error loading blocked info: " error)))))))
      (m/Scaffold
       .appBar (m/AppBar
                .actions [(m/IconButton
@@ -107,8 +109,17 @@
                           .tooltip "Refresh"
                           .icon (m/Icon m/Icons.refresh)
                           .onPressed (fn []
-                                      (reset! tasks-with-info [])
-                                      (task/refresh-today-tasks!)))])
+                                       (reset! tasks-with-info [])
+                                       (task/refresh-today-tasks!)
+                                       ;; Reload blocked info after refresh
+                                       (-> (task/get-today-tasks)
+                                           (.then (fn [refreshed-tasks]
+                                                    (when (seq refreshed-tasks)
+                                                      (-> (task/get-tasks-with-blocked-info refreshed-tasks)
+                                                          (.then (fn [info-list]
+                                                                   (reset! tasks-with-info info-list)))
+                                                          (.catchError (fn [error]
+                                                                         (dart-core/print (str "Error loading blocked info: " error)))))))))))])
       .body (comp/mongol-row-layout
              {:main-row (comp/vertical-reveal-motion
                          {:child main-view})

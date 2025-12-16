@@ -30,11 +30,12 @@
      items)))
 
 (defn forecast-screen []
-  (f/widget
-   :let [bucket-filter (atom :all)]
-   :watch [_app state/app-state _bf bucket-filter]
-   :let [loading (:forecast-loading @state/app-state)
-         items (:forecast-items @state/app-state)]
+  (let [tasks-with-info (atom [])
+        bucket-filter (atom :all)]
+    (f/widget
+     :watch [_app state/app-state _bf bucket-filter _twi tasks-with-info]
+     :let [loading (:forecast-loading @state/app-state)
+           items (:forecast-items @state/app-state)]
    (m/Scaffold
     .appBar (m/AppBar
              .actions [(m/IconButton
@@ -50,14 +51,28 @@
                              {:text "No tasks with dates"
                               :style (m/TextStyle .color (comp/color :text-weak))}))
      :else
-     (let [buckets (classify items)
-           view (case @bucket-filter
-                  :overdue {:title "Overdue" :data (:overdue buckets)}
-                  :today {:title "Today" :data (:today buckets)}
-                  :upcoming {:title "Upcoming" :data (:upcoming buckets)}
-                  {:title "All" :data (concat (:overdue buckets)
-                                              (:today buckets)
-                                              (:upcoming buckets))})
+     (do
+       ;; Load blocked info when items change
+       (when (and (not loading) (seq items) (empty? @tasks-with-info))
+         (-> (task-svc/get-tasks-with-blocked-info items)
+             (.then (fn [info-list]
+                     (reset! tasks-with-info info-list)))
+             (.catchError (fn [error]
+                           (dart-core/print (str "Error loading blocked info: " error))))))
+       (let [buckets (classify items)
+             view-data (case @bucket-filter
+                        :overdue (:overdue buckets)
+                        :today (:today buckets)
+                        :upcoming (:upcoming buckets)
+                        (concat (:overdue buckets)
+                                (:today buckets)
+                                (:upcoming buckets)))
+             view {:title (case @bucket-filter
+                           :overdue "Overdue"
+                           :today "Today"
+                           :upcoming "Upcoming"
+                           "All")
+                   :data view-data}
            side-panel (m/Container
                        .padding (m/EdgeInsets.all (comp/space :m))
                        .child (m/Column
@@ -109,14 +124,19 @@
              (m/Column
               .children
               (for [it (:data view)]
-                (m/ListTile
-                 .title (comp/mongol-text-block
-                         {:text (.-content it)
-                          :style (m/TextStyle .fontSize (comp/font-size :m))})
-                 .subtitle (comp/mongol-text-block
-                            {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
-                                        " / defer "
-                                        (or (dt/format-date (.-deferAt it)) "-"))
-                             :style (m/TextStyle .color (comp/color :text-weak)
-                                                 .fontSize (comp/font-size :s))})))))])
-         :side-column side-panel})))))
+                (let [task-info (first (filter #(= (.-id (:task %)) (.-id it)) @tasks-with-info))
+                      blocked? (:blocked task-info)]
+                  (m/ListTile
+                   .title (comp/mongol-text-block
+                           {:text (.-content it)
+                            :style (m/TextStyle
+                                    .fontSize (comp/font-size :m)
+                                    .color (if blocked? m/Colors.red.shade300 nil))})
+                   .subtitle (comp/mongol-text-block
+                              {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
+                                          " / defer "
+                                          (or (dt/format-date (.-deferAt it)) "-")
+                                          (when blocked? " [Blocked]"))
+                               :style (m/TextStyle .color (comp/color :text-weak)
+                                                   .fontSize (comp/font-size :s))}))))))])
+         :side-column side-panel})))))))
