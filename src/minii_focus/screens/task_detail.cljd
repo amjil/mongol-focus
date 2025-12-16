@@ -99,13 +99,14 @@
                     (comp/mongol-text-block
                      {:text (display-content)
                       :style (m/TextStyle .fontSize (comp/font-size :l))}))
-                  (m/SizedBox .height (comp/space :l))
-                  (m/Row
+                  (m/SizedBox .width (comp/space :l))
+                  (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.center
                    .children
                    [(comp/mongol-text-block
                      {:text "Parent task"
                       :style (m/TextStyle .fontSize (comp/font-size :m))})
-                    (m/SizedBox .width (comp/space :s))
+                    (m/SizedBox .height (comp/space :s))
                     (if parent-rel
                       (comp/mongol-text-block
                        {:text (.-parentId parent-rel)
@@ -221,8 +222,8 @@
                                       (.catchError (fn [error]
                                                      (dart-core/print (str "Error toggling status: " error))))))
                      .child (mgl/MongolText (if (= (display-status) :completed)
-                                      "Mark as active"
-                                      "Mark as completed")))
+                                              "Mark as active"
+                                              "Mark as completed")))
                     (m/SizedBox .height (comp/space :s))
                     (mgl/MongolElevatedButton
                      .onPressed (fn []
