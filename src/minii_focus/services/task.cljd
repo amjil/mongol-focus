@@ -18,19 +18,27 @@
 
 (defn create-task
   "Create new task"
-  [^String content type status defer-at due-at]
+  [^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at]
   (let [^drift/AppDatabase database (db/get-database)
         ^String task-id (ids/generate-id)
         ^String task-type (or type "task")
         ^String task-status (or status "active")
         now (dart-core/DateTime.now)
+        ^#/(d/Value dart-core/DateTime?) 
+        defer-value (if (some? defer-at)
+                     (d/Value defer-at)
+                     (d/Value nil))
+        ^#/(d/Value dart-core/DateTime?) 
+        due-value (if due-at
+                   (d/Value due-at)
+                   (d/Value nil))
         companion (drift/ItemsCompanion.insert
                    .id task-id
                    .type task-type
                    .content content
                    .status (d/Value task-status)
-                   .deferAt (if defer-at (d/Value defer-at) (d/Value nil))
-                   .dueAt (if due-at (d/Value due-at) (d/Value nil))
+                   .deferAt defer-value
+                   .dueAt due-value
                    .createdAt (d/Value now)
                    .updatedAt (d/Value now))]
     (.insert

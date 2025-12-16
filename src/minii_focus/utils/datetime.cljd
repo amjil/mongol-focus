@@ -10,9 +10,9 @@
 ;; Format date (simple version)
 (defn format-date [date]
   (when date
-    (let [year (.year date)
-          month (.month date)
-          day (.day date)]
+    (let [year (.-year date)
+          month (.-month date)
+          day (.-day date)]
       (str year "-" (when (< month 10) "0") month "-" (when (< day 10) "0") day))))
 
 ;; Check if date is today or before

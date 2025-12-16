@@ -7,6 +7,7 @@
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.keyboard :as keyboard]
+   [minii-focus.utils.datetime :as dt]
    [minii-focus.components.tokens :as tokens]
    [minii-focus.components.text :as text]
    [minii-focus.services.task :as task]))
@@ -39,6 +40,7 @@
                                     :keyboard/font-size 18
                                     :keyboard/key-container-color m/Colors.grey.shade500
                                     :keyboard/mongol-font-family "OnonSoninSans"}))]
+   :watch [defer defer-date due due-date]
    (m/AlertDialog
     .insetPadding (m/EdgeInsets.zero)
     .contentPadding (m/EdgeInsets.zero)
@@ -75,9 +77,6 @@
                          .child (mongol/MongolTextField
                                  .controller controller
                                  .decoration nil
-                                 ;;        .decoration (m/InputDecoration
-                                 ;;                     .border m/InputBorder.none
-                                 ;;                     .hintText "Please enter...")
                                  .onChanged (fn [v] (when content (reset! content v)))
                                  .autofocus true))
                         (m/SizedBox .width (tokens/space :s))
@@ -98,7 +97,7 @@
                                                 nil)
                                    .child (text/mongol-text-block
                                            {:text (if (and defer-date @defer-date)
-                                                    (str "Start " (.toString @defer-date))
+                                                    (str "Start " (dt/format-date defer))
                                                     "Start Not set")
                                             :style (m/TextStyle .fontSize (tokens/font-size :s))})))
                           (m/SizedBox .height (tokens/space :s))
@@ -116,15 +115,15 @@
                                                 nil)
                                    .child (text/mongol-text-block
                                            {:text (if (and due-date @due-date)
-                                                    (str "Due " (.toString @due-date))
+                                                    (str "Due " (dt/format-date due))
                                                     "Due Not set")
                                             :style (m/TextStyle .fontSize (tokens/font-size :s))})))])
                         (m/SizedBox .width (tokens/space :s))
                         (mongol/MongolElevatedButton
                          .onPressed (fn []
                                       (let [content-value (if content @content (.-text controller))
-                                            defer-value (when defer-date @defer-date)
-                                            due-value (when due-date @due-date)]
+                                            ^dart-core/DateTime? defer-value (when defer-date @defer-date)
+                                            ^dart-core/DateTime? due-value (when due-date @due-date)]
                                         (if (empty? content-value)
                                           (task/show-toast ctx "Please enter content" :warning)
                                           (-> (task/create-task content-value "task" "active" defer-value due-value)
