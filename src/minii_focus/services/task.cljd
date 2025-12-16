@@ -1,0 +1,349 @@
+(ns minii-focus.services.task
+  "Task management service"
+  (:require
+   ["dart:core" :as dart-core]
+   ["package:drift/drift.dart" :as d]
+   ;; Corresponds to package name `cljd_mongol_focus` in pubspec.yaml
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.tag :as tag-svc]
+   [minii-focus.services.database :as db]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.ids :as ids]
+   [minii-focus.utils.toast :as toast]))
+
+;; =============================================================================
+;; Task CRUD operations
+;; =============================================================================
+
+(defn create-task
+  "Create new task"
+  [{:keys [content type status defer-at due-at]}]
+  (let [^drift/AppDatabase database (db/get-database)
+        task-id (ids/generate-id)
+        task-type (or type "task")
+        task-status (or status "active")
+        now (dart-core/DateTime.now)
+        companion (drift/ItemsCompanion.insert
+                   .id task-id
+                   .type task-type
+                   .content (or content "")
+                   .status task-status
+                   .deferAt (when defer-at (d/Value defer-at))
+                   .dueAt (when due-at (d/Value due-at))
+                   .createdAt now
+                   .updatedAt now)]
+    (.insert
+     (.into database (.-items database))
+     companion)))
+
+(defn update-task
+  "Update task"
+  [id {:keys [content status defer-at due-at]}]
+  (let [^drift/AppDatabase database (db/get-database)
+        query (doto (.update database (.-items database))
+                (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id))))
+        companion (drift/ItemsCompanion.
+                   .content (when content (d/Value content))
+                   .status (when status (d/Value status))
+                   .deferAt (when defer-at (d/Value defer-at))
+                   .dueAt (when due-at (d/Value due-at))
+                   .updatedAt (d/Value (dart-core/DateTime.now)))]
+    (.write query companion)))
+
+(defn delete-task
+  "Delete task"
+  [id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.go
+     (doto
+      (.delete database (.-items database))
+       (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+
+(defn get-task-by-id
+  "Get task by ID"
+  [id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getSingleOrNull
+     (doto (.select database (.-items database))
+       (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+
+(defn get-projects
+  "Get all projects (type = project)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-items database))
+       (.where (fn [^drift/Items tbl] (.equals (.-type tbl) "project")))
+       (.orderBy [(fn [tbl] (.asc (.-createdAt tbl)))])))))
+
+;; =============================================================================
+;; Task query operations
+;; =============================================================================
+
+(defn get-today-tasks
+  "Get today's tasks"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getTodayItems database)))
+
+(defn get-focused-tasks
+  "Get tasks in Focus"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getFocusedItems database)))
+
+(defn get-executable-tasks
+  "Get executable tasks"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getExecutableTasks database)))
+
+(defn get-inbox-tasks
+  "Get inbox tasks (incomplete and no defer/due)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-items database))
+       (.where (fn [^drift/Items tbl]
+                 (and (.isNull (.-deferAt tbl))
+                      (.isNull (.-dueAt tbl))
+                      (.notEquals (.-status tbl) "completed"))))
+       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+
+(defn get-forecast-items
+  "Get tasks to display in Forecast (has defer or due, and incomplete)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-items database))
+       (.where (fn [^drift/Items tbl]
+                 (and (or (.isNotNull (.-dueAt tbl))
+                          (.isNotNull (.-deferAt tbl)))
+                      (.notEquals (.-status tbl) "completed"))))
+       (.orderBy [(fn [tbl] (.asc (.-dueAt tbl)))])))))
+
+(defn get-focus-sessions
+  "Get all Focus sessions (ordered by time descending)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-focusSessions database))
+       (.orderBy [(fn [tbl] (.desc (.-startAt tbl)))])))))
+
+;; =============================================================================
+;; Page data loading/refresh (side effects in services, pages only trigger)
+;; =============================================================================
+
+(defn refresh-inbox-tasks!
+  "Refresh Inbox page task list and write to app-state"
+  []
+  (state/set-inbox-loading! true)
+  (-> (get-inbox-tasks)
+      (.then (fn [tasks]
+               (state/set-inbox-tasks! tasks)
+               ;; Compatible with old field (if there are still places reading :tasks)
+               (state/set-tasks! tasks)
+               (state/set-inbox-loading! false)
+               tasks))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing inbox tasks: " error))
+                     (state/set-inbox-loading! false)))))
+
+(defn show-toast
+  "Unified toast entry, defaults to info, can pass :success/:error/:warning"
+  ([ctx msg] (show-toast ctx msg :info))
+  ([ctx msg type] (toast/show-toast ctx msg type)))
+
+(defn reload-inbox!
+  "Inbox list refresh entry with error handling, for direct page calls"
+  [ctx]
+  (-> (refresh-inbox-tasks!)
+      (.catchError (fn [e]
+                     (dart-core/print e)
+                     (toast/handle-error-with-toast ctx e "Refresh failed")))))
+
+(defn refresh-today-tasks!
+  "Refresh Today page task list and write to app-state"
+  []
+  (state/set-today-loading! true)
+  (-> (get-today-tasks)
+      (.then (fn [tasks]
+               (state/set-today-tasks! tasks)
+               ;; Compatible with old field (if there are still places reading :tasks)
+               (state/set-tasks! tasks)
+               (state/set-today-loading! false)
+               tasks))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing today tasks: " error))
+                     (state/set-today-loading! false)))))
+
+(defn refresh-focus-tasks!
+  "Refresh Focus page task list and write to app-state"
+  []
+  (state/set-focus-loading! true)
+  (-> (get-focused-tasks)
+      (.then (fn [tasks]
+               (state/set-focus-tasks! tasks)
+               (state/set-focus-loading! false)
+               tasks))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing focus tasks: " error))
+                     (state/set-focus-loading! false)))))
+
+(defn refresh-forecast-items!
+  "Refresh Forecast page task list and write to app-state"
+  []
+  (state/set-forecast-loading! true)
+  (-> (get-forecast-items)
+      (.then (fn [items]
+               (state/set-forecast-items! items)
+               (state/set-forecast-loading! false)
+               items))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing forecast items: " error))
+                     (state/set-forecast-loading! false)))))
+
+(defn refresh-projects!
+  "Refresh Projects page data and write to app-state"
+  []
+  (state/set-projects-loading! true)
+  (-> (get-projects)
+      (.then (fn [rows]
+               (state/set-projects! rows)
+               (state/set-projects-loading! false)
+               rows))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing projects: " error))
+                     (state/set-projects-loading! false)))))
+
+(defn refresh-focus-sessions!
+  "Refresh Focus stats page data and write to app-state"
+  []
+  (state/set-focus-sessions-loading! true)
+  (-> (get-focus-sessions)
+      (.then (fn [sessions]
+               (state/set-focus-sessions! sessions)
+               (state/set-focus-sessions-loading! false)
+               sessions))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing focus sessions: " error))
+                     (state/set-focus-sessions-loading! false)))))
+
+(defn- reset-task-detail-state!
+  []
+  (state/set-task-detail! nil)
+  (state/set-task-detail-tags! #{})
+  (state/set-task-detail-all-tags! [])
+  (state/set-task-detail-parent! nil))
+
+(defn refresh-task-detail!
+  "Refresh task detail data and write to app-state"
+  [task-id]
+  (if task-id
+    (do
+      (state/set-task-detail-loading! true)
+      (reset-task-detail-state!)
+      (-> (dart-core/Future.wait
+           [(get-task-by-id task-id)
+            (tag-svc/get-item-tags task-id)
+            (tag-svc/get-all-tags)
+            (tree-svc/get-parent task-id)])
+          (.then (fn [[task-data tag-links tag-list parent-rel]]
+                   (state/set-task-detail! task-data)
+                   (state/set-task-detail-tags!
+                    (if tag-links
+                      (set (map (fn [row] (.-tagId row)) tag-links))
+                      #{}))
+                   (state/set-task-detail-all-tags! (or tag-list []))
+                   (state/set-task-detail-parent! parent-rel)
+                   (state/set-task-detail-loading! false)))
+          (.catchError (fn [error]
+                         (dart-core/print (str "Error refreshing task detail: " error))
+                         (reset-task-detail-state!)
+                         (state/set-task-detail-loading! false)))))
+    (do
+      (reset-task-detail-state!)
+      (state/set-task-detail-loading! false))))
+
+;; =============================================================================
+;; Focus operations
+;; =============================================================================
+
+(defn enter-focus
+  "Enter Focus mode"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)
+        session-id (ids/generate-id)
+        ;; Update task to Focus status
+        task-query (doto (.update database (.-items database))
+                     (.where (fn [^drift/Items tbl] (.equals (.-id tbl) task-id))))
+        task-companion (drift/ItemsCompanion.
+                        .isFocused (d/Value true)
+                        .updatedAt (d/Value now))
+        ;; Create Focus session
+        session-companion (drift/FocusSessionsCompanion.insert
+                           .id session-id
+                           .itemId task-id
+                           .startAt now)]
+    (.write task-query task-companion)
+    (.insert
+     (.into database (.-focusSessions database))
+     session-companion)
+    session-id))
+
+(defn exit-focus
+  "Exit Focus mode"
+  [task-id session-id depth-score]
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)
+        ;; Update task to non-Focus status
+        task-query (doto (.update database (.-items database))
+                     (.where (fn [^drift/Items tbl] (.equals (.-id tbl) task-id))))
+        task-companion (drift/ItemsCompanion.
+                        .isFocused (d/Value false)
+                        .updatedAt (d/Value now))
+        ;; Update Focus session
+        session-query (doto (.update database (.-focusSessions database))
+                        (.where (fn [^drift/FocusSessions tbl] (.equals (.-id tbl) session-id))))
+        session-companion (drift/FocusSessionsCompanion.
+                           .endAt (d/Value now)
+                           .depthScore (d/Value (or depth-score 0)))]
+    (.write task-query task-companion)
+    (.write session-query session-companion)))
+
+(defn update-focus-depth
+  "Update Focus depth score"
+  [session-id depth-score]
+  (let [^drift/AppDatabase database (db/get-database)
+        query (doto (.update database (.-focusSessions database))
+                (.where (fn [^drift/FocusSessions tbl] (.equals (.-id tbl) session-id))))
+        companion (drift/FocusSessionsCompanion.
+                   .depthScore (d/Value depth-score))]
+    (.write query companion)))
+
+;; =============================================================================
+;; Task status transitions
+;; =============================================================================
+
+(defn mark-task-completed
+  "Mark task as completed"
+  [id]
+  (update-task id {:status "completed"}))
+
+(defn mark-task-active
+  "Mark task as active"
+  [id]
+  (update-task id {:status "active"}))
+
+(defn mark-task-idle
+  "Mark task as idle"
+  [id]
+  (update-task id {:status "idle"}))
+
+(defn mark-task-blocked
+  "Mark task as blocked"
+  [id]
+  (update-task id {:status "blocked"}))
+

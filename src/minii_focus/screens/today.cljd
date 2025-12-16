@@ -1,0 +1,111 @@
+(ns minii-focus.screens.today
+  "Today page - display today's tasks"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.screens.task-detail :as task-detail]
+   [minii-focus.services.task :as task]
+   [minii-focus.states.app-state :as state]))
+
+(defn today-screen []
+  (f/widget
+   :context ctx
+   ;; Pages only subscribe to state, don't do loading side effects in render
+   :watch [_app state/app-state
+           {loading :today-loading tasks :today-tasks} state/app-state]
+   :let [main-view (if loading
+                     (m/Center
+                      .child (m/CircularProgressIndicator))
+                     (m/ListView
+                      .padding (m/EdgeInsets.all (comp/space :m))
+                      .children
+                      (if (empty? tasks)
+                        [(m/Padding
+                          .padding (m/EdgeInsets.all (comp/space :xl))
+                          .child (comp/mongol-text-block
+                                  {:text "No tasks today"
+                                   :style (m/TextStyle
+                                           .color (comp/color :text-weak)
+                                           .fontSize (comp/font-size :m))}))]
+                        (map (fn [task-row]
+                               (let [task-id (.-id task-row)
+                                     task-status (keyword (.-status task-row))]
+                                 (comp/mongol-task-item
+                                  {:content (.-content task-row)
+                                   :status task-status
+                                   :on-tap (fn []
+                                             ;; Navigate to task detail page
+                                             (task/refresh-task-detail! task-id)
+                                             (m/Navigator.push
+                                              ctx
+                                              (m/MaterialPageRoute
+                                               .builder (fn [_]
+                                                          (task-detail/task-detail-screen task-id)))))
+                                   :on-long-press (fn []
+                                                    ;; Structure adjustment placeholder: will integrate item_tree drag/move later
+                                                    (m/showModalBottomSheet
+                                                     .context ctx
+                                                     .builder (fn [_]
+                                                                (m/Wrap
+                                                                 .children
+                                                                 [(m/ListTile
+                                                                   .leading (m/Icon m/Icons.subdirectory_arrow_right)
+                                                                   .title (m/Text "Set as subtask (placeholder)")
+                                                                   .onTap (fn []
+                                                                            (dart-core/print (str "Set as child (TODO): " task-id))
+                                                                            (m/Navigator.pop ctx)))
+                                                                  (m/ListTile
+                                                                   .leading (m/Icon m/Icons.arrow_upward)
+                                                                   .title (m/Text "Move up (placeholder)")
+                                                                   .onTap (fn []
+                                                                            (dart-core/print (str "Move up (TODO): " task-id))
+                                                                            (m/Navigator.pop ctx)))
+                                                                  (m/ListTile
+                                                                   .leading (m/Icon m/Icons.arrow_downward)
+                                                                   .title (m/Text "Move down (placeholder)")
+                                                                   .onTap (fn []
+                                                                            (dart-core/print (str "Move down (TODO): " task-id))
+                                                                            (m/Navigator.pop ctx)))]))))
+                                   :on-swipe-left (fn []
+                                                    ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)
+                                                    (-> (task/enter-focus task-id)
+                                                        (.then (fn [session-id]
+                                                                 (state/set-focused-task! task-row)
+                                                                 (state/set-focus-session-id! session-id)
+                                                                 (task/refresh-today-tasks!)
+                                                                 (task/refresh-focus-tasks!)
+                                                                 (dart-core/print (str "Entered focus: " task-id))))
+                                                        (.catchError (fn [error]
+                                                                       (dart-core/print (str "Error entering focus: " error))))))})))
+                             tasks))))
+         side-column (m/Container
+                      .padding (m/EdgeInsets.all (comp/space :m))
+                      .child (m/Column
+                              .crossAxisAlignment m/CrossAxisAlignment.start
+                              .children
+                              [(comp/mongol-text-block
+                                {:text "Today overview"
+                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
+                               (m/SizedBox .height (comp/space :s))
+                               (comp/mongol-text-block
+                                {:text (str "Total " (count tasks))
+                                 :style (m/TextStyle .color (comp/color :text-weak))})
+                               (m/SizedBox .height (comp/space :s))
+                               (comp/mongol-text-block
+                                {:text (str "Active " (count (filter #(= "active" (.-status %)) tasks)))
+                                 :style (m/TextStyle .color (comp/color :text-weak))})]))]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .actions [(m/IconButton
+                        .tooltip "Refresh"
+                        .icon (m/Icon m/Icons.refresh)
+                        .onPressed (fn []
+                                     (task/refresh-today-tasks!)))])
+    .body (comp/mongol-column-layout
+           {:main-column (comp/vertical-reveal-motion
+                          {:child main-view})
+            :side-column side-column}))))
+
+

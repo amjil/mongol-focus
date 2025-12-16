@@ -1,0 +1,50 @@
+(ns minii-focus.screens.settings
+  "Settings page - theme and font size preferences"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.services.settings :as settings-svc]))
+
+(def themes ["light" "dark"])
+(def font-sizes ["small" "medium" "large"])
+
+(defn settings-screen []
+  (f/widget
+   :context _ctx
+   :let [theme settings-svc/theme
+         font-size settings-svc/font-size
+         loading settings-svc/loading]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .title (comp/mongol-text-block
+                     {:text "Settings"
+                      :style (m/TextStyle .fontSize (comp/font-size :l))})
+             .actions [(m/IconButton
+                        .tooltip "Refresh"
+                        .icon (m/Icon m/Icons.refresh)
+                        .onPressed (fn [] (settings-svc/refresh-settings!)))])
+    .body (cond
+            @loading (m/Center .child (m/CircularProgressIndicator))
+            :else
+            (m/ListView
+             .scrollDirection m/Axis.horizontal
+             .children
+             [(mgl/MongolListTile
+               .title (mgl/MongolText "Theme")
+               .trailing (m/DropdownButton
+                          .value @theme
+                          .items (map (fn [v] (m/DropdownMenuItem .value v .child (m/Text v))) themes)
+                          .onChanged (fn [v]
+                                       (reset! theme v)
+                                       (settings-svc/set-theme-setting v))))
+              (mgl/MongolListTile
+               .title (mgl/MongolText "Font size")
+               .trailing (m/DropdownButton
+                          .value @font-size
+                          .items (map (fn [v] (m/DropdownMenuItem .value v .child (m/Text v))) font-sizes)
+                          .onChanged (fn [v]
+                                       (reset! font-size v)
+                                       (settings-svc/set-font-size-setting v))))])))))
+

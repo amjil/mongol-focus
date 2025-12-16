@@ -1,0 +1,25 @@
+(ns minii-focus.utils.datetime
+  "Date time utility functions"
+  (:require
+   ["dart:core" :as dart-core]))
+
+;; Get current time
+(defn now []
+  (dart-core/DateTime.now))
+
+;; Format date (simple version)
+(defn format-date [date]
+  (when date
+    (let [year (.year date)
+          month (.month date)
+          day (.day date)]
+      (str year "-" (when (< month 10) "0") month "-" (when (< day 10) "0") day))))
+
+;; Check if date is today or before
+(defn is-today-or-before? [date]
+  (when date
+    (let [today (now)
+          today-start (dart-core/DateTime. (.year today) (.month today) (.day today))
+          date-start (dart-core/DateTime. (.year date) (.month date) (.day date))]
+      (<= (.millisecondsSinceEpoch date-start) (.millisecondsSinceEpoch today-start)))))
+

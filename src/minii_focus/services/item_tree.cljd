@@ -1,0 +1,156 @@
+(ns minii-focus.services.item-tree
+  "ItemTree management service - task hierarchy relationship management"
+  (:require
+   ["dart:core" :as dart-core]
+   ["package:drift/drift.dart" :as d]
+   ;; Corresponds to package name `cljd_mongol_focus` in pubspec.yaml
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.database :as db]))
+
+;; =============================================================================
+;; ItemTree CRUD operations
+;; =============================================================================
+
+(defn create-item-tree-relation
+  "Create parent-child relationship"
+  [parent-id child-id position]
+  (let [^drift/AppDatabase database (db/get-database)
+        companion (drift/ItemTreeCompanion.insert
+                   .parentId parent-id
+                   .childId child-id
+                   .position position)]
+    (.insert
+     (.into database (.-itemTree database))
+     companion)))
+
+(defn delete-item-tree-relation
+  "Delete parent-child relationship"
+  [parent-id child-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.go
+     (doto (.delete database (.-itemTree database))
+       (.where (fn [^drift/ItemTree tbl]
+                 (and (.equals (.-parentId tbl) parent-id)
+                      (.equals (.-childId tbl) child-id))))))))
+
+(defn update-item-position
+  "Update task position among siblings"
+  [parent-id child-id new-position]
+  (let [^drift/AppDatabase database (db/get-database)
+        query (doto (.update database (.-itemTree database))
+                (.where (fn [^drift/ItemTree tbl]
+                          (and (.equals (.-parentId tbl) parent-id)
+                               (.equals (.-childId tbl) child-id)))))
+        companion (drift/ItemTreeCompanion.
+                   .position (d/Value new-position))]
+    (.write query companion)))
+
+;; =============================================================================
+;; Query operations
+;; =============================================================================
+
+(defn get-children
+  "Get all child tasks of specified parent task"
+  [parent-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-itemTree database))
+       (.where (fn [^drift/ItemTree tbl] (.equals (.-parentId tbl) parent-id)))
+       (.orderBy [(fn [tbl] (.asc (.-position tbl)))])))))
+
+(defn get-children-with-items
+  "Get child tasks of parent task and their item records, sorted by position"
+  [parent-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (-> (get-children parent-id)
+        (.then (fn [relations]
+                 (let [child-ids (map (fn [rel] (.-childId rel)) relations)]
+                   (if (empty? child-ids)
+                     []
+                     (-> (doto (.select database (.-items database))
+                           (.where (fn [^drift/Items tbl] (.isIn (.-id tbl) child-ids))))
+                         (.get)
+                         (.then (fn [items]
+                                  (let [pos-map (into {} (map (fn [rel] [(.-childId rel) (.-position rel)]) relations))]
+                                    (->> items
+                                         (sort-by (fn [it] (get pos-map (.-id it) 0)))
+                                         (map (fn [it] {:item it
+                                                        :position (get pos-map (.-id it))}))))))))))))))
+
+(defn get-parent
+  "Get parent task of specified task"
+  [child-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getSingleOrNull
+     (doto (.select database (.-itemTree database))
+       (.where (fn [^drift/ItemTree tbl] (.equals (.-childId tbl) child-id)))))))
+
+(defn get-task-hierarchy
+  "Get complete hierarchy structure of task (recursive)"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)
+        children (get-children task-id)]
+    (-> children
+        (.then (fn [child-relations]
+                 (let [child-ids (map (fn [rel] (.-childId rel)) child-relations)]
+                   (if (empty? child-ids)
+                     []
+                     (-> (doto (.select database (.-items database))
+                           (.where (fn [^drift/Items tbl]
+                                     (.isIn (.-id tbl) child-ids))))
+                         (.get)
+                         (.then (fn [child-items]
+                                  ;; Recursively get children of each child task
+                                  (-> (dart-core/Future.wait
+                                       (map (fn [item]
+                                              (get-task-hierarchy (.-id item)))
+                                            child-items))
+                                      (.then (fn [nested-hierarchies]
+                                               (map (fn [item hierarchy]
+                                                      {:item item
+                                                       :children hierarchy})
+                                                    child-items
+                                                    nested-hierarchies))))))))))))))
+
+(defn is-task-blocked?
+  "Check if task is blocked by parent task"
+  [task-id]
+  (let [parent-relation (get-parent task-id)]
+    (-> parent-relation
+        (.then (fn [parent-rel]
+                 (if parent-rel
+                   (let [^drift/AppDatabase database (db/get-database)
+                         parent-id (.-parentId parent-rel)]
+                     (-> (.getSingleOrNull
+                          (doto (.select database (.-items database))
+                            (.where (fn [^drift/Items tbl] (.equals (.-id tbl) parent-id)))))
+                         (.then (fn [parent-item]
+                                  (if parent-item
+                                    (not= (.-status parent-item) "completed")
+                                    false)))))
+                   false))))))
+
+;; =============================================================================
+;; Hierarchy operations
+;; =============================================================================
+
+(defn move-task
+  "Move task under new parent task"
+  [task-id new-parent-id position]
+  (let [old-parent (get-parent task-id)]
+    (-> old-parent
+        (.then (fn [old-parent-rel]
+                 ;; Delete old relationship
+                 (when old-parent-rel
+                   (delete-item-tree-relation (.-parentId old-parent-rel) task-id))
+                 ;; Create new relationship
+                 (create-item-tree-relation new-parent-id task-id position))))))
+
+(defn reorder-siblings
+  "Reorder sibling tasks"
+  [parent-id child-ids]
+  (let [updates (map-indexed (fn [index child-id]
+                               (update-item-position parent-id child-id index))
+                             child-ids)]
+    (dart-core/Future.wait updates)))
+

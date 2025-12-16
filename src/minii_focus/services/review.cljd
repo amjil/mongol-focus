@@ -1,0 +1,124 @@
+(ns minii-focus.services.review
+  "Review service"
+  (:require
+   ["dart:core" :as dart-core]
+  ["package:drift/drift.dart" :as d]
+  ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.database :as db]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.ids :as ids]))
+
+;; =============================================================================
+;; Review record CRUD operations
+;; =============================================================================
+
+(defn create-review
+  "Create review record"
+  [{:keys [type target-id content]}]
+  (let [^drift/AppDatabase database (db/get-database)
+        review-id (ids/generate-id)
+        now (dart-core/DateTime.now)
+        companion (drift/ReviewsCompanion.insert
+                   .id review-id
+                   .type type
+                   .targetId (when target-id (d/Value target-id))
+                   .content content
+                   .createdAt now)]
+    (.insert
+     (.into database (.-reviews database))
+     companion)
+    review-id))
+
+(defn get-review-by-id
+  "Get review record by ID"
+  [id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getSingleOrNull
+     (doto (.select database (.-reviews database))
+       (.where (fn [^drift/Reviews tbl] (.equals (.-id tbl) id)))))))
+
+(defn get-reviews-by-type
+  "Get review records by type"
+  [type]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-reviews database))
+       (.where (fn [^drift/Reviews tbl] (.equals (.-type tbl) type)))
+       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+
+(defn get-reviews-by-date-range
+  "Get review records by date range"
+  [start-date end-date]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-reviews database))
+       (.where (fn [^drift/Reviews tbl]
+                 (and (.isBiggerOrEqual (.-createdAt tbl) start-date)
+                      (.isSmallerOrEqual (.-createdAt tbl) end-date))))
+       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+
+(defn get-daily-reviews
+  "Get daily review records"
+  [date]
+  (let [start-date (dart-core/DateTime. (.year date) (.month date) (.day date))
+        end-date (dart-core/DateTime. (.year date) (.month date) (.day date) 23 59 59)]
+    (get-reviews-by-date-range start-date end-date)))
+
+(defn get-weekly-reviews
+  "Get weekly review records"
+  [week-start-date]
+  (let [end-date (.add week-start-date (dart-core/Duration .days 6))
+        end-date (dart-core/DateTime. (.year end-date) (.month end-date) (.day end-date) 23 59 59)]
+    (get-reviews-by-date-range week-start-date end-date)))
+
+(defn get-project-reviews
+  "Get project review records"
+  [project-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-reviews database))
+       (.where (fn [^drift/Reviews tbl]
+                 (and (.equals (.-type tbl) "project")
+                      (.equals (.-targetId tbl) project-id))))
+       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+
+;; =============================================================================
+;; Convenience functions
+;; =============================================================================
+
+(defn create-daily-review
+  "Create daily review"
+  [content]
+  (create-review {:type "daily"
+                  :content content}))
+
+(defn create-weekly-review
+  "Create weekly review"
+  [content]
+  (create-review {:type "weekly"
+                  :content content}))
+
+(defn create-project-review
+  "Create project review"
+  [project-id content]
+  (create-review {:type "project"
+                  :target-id project-id
+                  :content content}))
+
+;; =============================================================================
+;; Page data loading/refresh (side effects in services, pages only trigger)
+;; =============================================================================
+
+(defn refresh-reviews!
+  "Refresh review list by type and write to app-state"
+  [type]
+  (state/set-reviews-loading! true)
+  (-> (get-reviews-by-type type)
+      (.then (fn [rows]
+               (state/set-reviews! rows)
+               (state/set-reviews-loading! false)
+               rows))
+      (.catchError (fn [e]
+                     (dart-core/print (str "Error refreshing reviews: " e))
+                     (state/set-reviews-loading! false)))))
+

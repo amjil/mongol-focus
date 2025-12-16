@@ -1,0 +1,50 @@
+(ns minii-focus.components.focus
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]))
+
+;; ============================================
+;; 5.1 FocusContainer
+;; Container for Focus state UI
+;; ============================================
+
+(defn focus-container
+  "Auto-hide non-essential components, reduce background contrast"
+  [{:keys [child is-focused]}]
+  (f/widget
+   :let [bg-color (if is-focused
+                    (m/Colors.grey.shade100)
+                    m/Colors.white)]
+   (m/AnimatedContainer
+    .duration (dart:core/Duration .milliseconds 300)
+    .curve m/Curves.easeOut
+    .color bg-color
+    .child child)))
+
+;; ============================================
+;; 5.2 FocusDepthBar
+;; Non-time-based focus depth indicator
+;; ============================================
+
+(defn focus-depth-bar
+  "Vertical growth, does not display minutes"
+  [{:keys [depth-score max-score]}]
+  (f/widget
+   :let [score (or depth-score 0)
+         max-s (or max-score 100)
+         percentage (/ score max-s)]
+   (m/Container
+    .width 8
+    .height 200
+    .decoration (m/BoxDecoration
+                 .color m/Colors.grey.shade300
+                 .borderRadius (m/BorderRadius.circular 4))
+    .child (m/Align
+            .alignment m/Alignment.bottomCenter
+            .child (m/Container
+                    .width 8
+                    .height (* 200 percentage)
+                    .decoration (m/BoxDecoration
+                                 .color m/Colors.blue.shade400
+                                 .borderRadius (m/BorderRadius.circular 4)))))))
+

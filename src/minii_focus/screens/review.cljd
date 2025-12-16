@@ -1,0 +1,70 @@
+(ns minii-focus.screens.review
+  "Review page - view and create review records"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.services.review :as review-svc]
+   [minii-focus.utils.datetime :as dt]))
+
+(defn review-screen []
+  (let [content (atom "")
+        review-type (atom "daily")]
+    (f/widget
+     :context _ctx
+     :watch [{reviews :reviews loading :reviews-loading} state/app-state
+             _ct content
+             _tp review-type]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                       {:text "Review"
+                        :style (m/TextStyle .fontSize (comp/font-size :l))}))
+      .body
+      (m/Padding
+       .padding (m/EdgeInsets.all (comp/space :m))
+       .child
+       (m/Row
+        .children
+        [(m/Column
+          .children
+          [(m/DropdownButton
+            .value @review-type
+            .items [(m/DropdownMenuItem .value "daily" .child (m/Text "Daily"))
+                    (m/DropdownMenuItem .value "weekly" .child (m/Text "Weekly"))]
+            .onChanged (fn [v]
+                         (reset! review-type v)
+                         (review-svc/refresh-reviews! v)))
+           (m/SizedBox .height (comp/space :s))
+           (m/Expanded
+            .child (mgl/MongolTextField
+                    .decoration (m/InputDecoration .labelText "New review")
+                    .onChanged (fn [v] (reset! content v))))
+           (m/SizedBox .height (comp/space :s))
+           (m/ElevatedButton
+            .onPressed (fn []
+                         (when (seq @content)
+                           (-> (review-svc/create-review {:type @review-type
+                                                          :content @content})
+                               (.then (fn [_]
+                                        (reset! content "")
+                                        (review-svc/refresh-reviews! @review-type))))))
+            .child (m/Text "Save"))])
+         (m/SizedBox .width (comp/space :l))
+         (cond
+           loading (m/Center .child (m/CircularProgressIndicator))
+           (empty? reviews) (comp/mongol-text-block
+                             {:text "No reviews"
+                              :style (m/TextStyle .color (comp/color :text-weak))})
+           :else (m/ListView.builder
+                  .itemCount (count reviews)
+                  .itemBuilder (fn [_ idx]
+                                 (let [r (nth reviews idx)]
+                                   (mgl/MongolListTile
+                                    .title (mgl/MongolText (.-content r))
+                                    .subtitle (mgl/MongolText (dt/format-date (.-createdAt r))))))))]))))))
+
+;; NOTE: Loading/refresh is handled by services; pages only subscribe to state and trigger refresh via buttons.
+

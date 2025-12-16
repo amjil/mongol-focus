@@ -1,0 +1,70 @@
+(ns minii-focus.screens.project-list
+  "Project list page - display projects and subtask hierarchy"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.services.task :as task-svc]
+   [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.states.app-state :as state]))
+
+(defn- load-children [parent-id]
+  (tree-svc/get-children-with-items parent-id))
+
+(defn project-list-screen []
+  (let [expanded (atom #{})
+        children-map (atom {})]
+    (f/widget
+     :context _ctx
+     :watch [{projects :projects loading :projects-loading} state/app-state
+             _exp expanded
+             _cm children-map]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .actions [(m/IconButton
+                          .tooltip "Refresh"
+                          .icon (m/Icon m/Icons.refresh)
+                          .onPressed (fn [] (task-svc/refresh-projects!)))])
+      .body (cond
+              loading (m/Center .child (m/CircularProgressIndicator))
+              (empty? projects) (m/Center
+                                 .child (comp/mongol-text-block
+                                         {:text "No projects"
+                                          :style (m/TextStyle .color (comp/color :text-weak))}))
+              :else
+              (m/ListView
+               .children
+               (map (fn [proj]
+                      (let [pid (.-id proj)
+                            is-open (contains? @expanded pid)
+                            child-items (get @children-map pid)]
+                        (m/ExpansionTile
+                         .title (comp/mongol-text-block
+                                 {:text (.-content proj)
+                                  :style (m/TextStyle .fontSize (comp/font-size :l))})
+                         .initiallyExpanded is-open
+                         .onExpansionChanged (fn [v]
+                                               (if v
+                                                 (do
+                                                   (swap! expanded conj pid)
+                                                   (when (nil? child-items)
+                                                     (-> (load-children pid)
+                                                         (.then (fn [res]
+                                                                  (swap! children-map assoc pid res)))
+                                                         (.catchError (fn [e]
+                                                                        (dart-core/print (str "Load children error: " e)))))))
+                                                 (swap! expanded disj pid)))
+                         .children
+                         [(if (and child-items (seq child-items))
+                            (m/Column
+                             .children
+                             (map (fn [row]
+                                    (let [item (:item row)]
+                                      (m/ListTile
+                                       .title (m/Text (.-content item))
+                                       .subtitle (m/Text (str "Position " (:position row))))))
+                                  child-items))
+                            (m/ListTile .title (m/Text "No subtasks"))])))
+                    projects)))))))
+

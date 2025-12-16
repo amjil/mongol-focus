@@ -1,0 +1,91 @@
+(ns minii-focus.components.text
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mongol]
+   [cljd.flutter :as f]))
+
+;; ============================================
+;; 3.1 MongolTextBlock
+;; Basic vertical text block
+;; ============================================
+
+(defn mongol-text-block
+  "Auto vertical layout, supports block selection, supports Focus highlighting"
+  [{:keys [text style is-focused on-tap]}]
+  (f/widget
+   :let [base-style (m/TextStyle
+                     .fontSize 16
+                     .fontFamily "OnonSoninSans"
+                     .height 1.6)
+         ;; TextStyle is not a map, use copyWith/merge chaining
+         final-style (-> base-style
+                         (cond-> is-focused
+                           (.copyWith .color m/Colors.blue.shade300))
+                         (.merge style))]
+   (m/GestureDetector
+    .onTap on-tap
+    .child (mongol/MongolText
+            text
+            .style final-style
+            .textAlign mongol/MongolTextAlign.top))))
+
+;; ============================================
+;; 3.2 MongolTaskItem
+;; Task / subtask display component
+;; ============================================
+
+(def task-status-colors
+  {:idle m/Colors.grey
+   :active m/Colors.blue
+   :blocked m/Colors.red
+   :completed m/Colors.green})
+
+(defn mongol-task-item
+  "Status: idle, active, blocked, completed
+   Swipe left: Enter Focus
+   Long press: Structure adjustment"
+  [{:keys [content status on-long-press on-tap on-swipe-left]}]
+  (f/widget
+   :let [status-color (get task-status-colors (or status :idle) m/Colors.grey)]
+   (m/GestureDetector
+    .onLongPress on-long-press
+    .onTap on-tap
+    .onHorizontalDragEnd (when on-swipe-left
+                          (fn [details]
+                            (let [velocity (.primaryVelocity details)]
+                              (when (and (< velocity -500) on-swipe-left)
+                                (on-swipe-left)))))
+    .child (m/Container
+            .padding (m/EdgeInsets.all 12)
+            .decoration (m/BoxDecoration
+                        .border (m/Border
+                                 .left (m/BorderSide
+                                        .color status-color
+                                        .width 3)))
+            .child (mongol-text-block
+                    {:text content
+                     :is-focused (= status :active)})))))
+
+;; ============================================
+;; 3.3 MongolNoteBlock
+;; Thought / note block component
+;; ============================================
+
+(defn mongol-note-block
+  "Nestable, can link tasks/projects"
+  [{:keys [content nested-blocks]}]
+  (f/widget
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.start
+    .children
+    [(m/Container
+      .padding (m/EdgeInsets.all 8)
+      .child (mongol-text-block {:text content}))
+     (when (seq nested-blocks)
+       (m/Container
+        .padding (m/EdgeInsets.only .left 20)
+        .child (m/Column
+                .children (map (fn [block]
+                                 (mongol-note-block block))
+                               nested-blocks))))])))
+

@@ -1,0 +1,29 @@
+(ns minii-focus.components.status
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mongol]
+   [cljd.flutter :as f]))
+
+;; ============================================
+;; 7.1 MongolStatusText
+;; Status change text prompt, prohibits Toast popup
+;; ============================================
+
+(defn mongol-status-text
+  [{:keys [message visible]}]
+  (f/widget
+   (when visible
+     (m/Positioned
+      .bottom 20
+      .left 20
+      .child (m/Container
+              .padding (m/EdgeInsets.all 12)
+              .decoration (m/BoxDecoration
+                           .color m/Colors.black87
+                           .borderRadius (m/BorderRadius.circular 8))
+              .child (mongol/MongolText
+                      message
+                      .style (m/TextStyle
+                              .color m/Colors.white
+                              .fontSize 14)))))))
+

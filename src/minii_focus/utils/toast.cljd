@@ -1,0 +1,71 @@
+(ns minii-focus.utils.toast
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]))
+
+;; Toast helper methods, reference mgl-notes-app
+
+(defn ^:private build-toast [color msg]
+  (m/Container
+   .padding (m/EdgeInsets.all 18)
+   .decoration (m/BoxDecoration
+                .borderRadius (.all m/BorderRadius (.circular m/Radius 20))
+                .color color)
+   .child
+   (mgl/MongolText msg)))
+
+(defn show-error-toast [ctx msg]
+  (styled-toast/showToastWidget
+   (build-toast m/Colors.redAccent msg)
+   .context ctx
+   .reverseAnimation styled-toast/StyledToastAnimation.fade
+   .animation styled-toast/StyledToastAnimation.fade
+   .position styled-toast/StyledToastPosition.center))
+
+(defn show-success-toast [ctx msg]
+  (styled-toast/showToastWidget
+   (build-toast m/Colors.greenAccent msg)
+   .context ctx
+   .reverseAnimation styled-toast/StyledToastAnimation.fade
+   .animation styled-toast/StyledToastAnimation.fade
+   .position styled-toast/StyledToastPosition.center))
+
+(defn show-info-toast [ctx msg]
+  (styled-toast/showToastWidget
+   (build-toast m/Colors.blueAccent msg)
+   .context ctx
+   .reverseAnimation styled-toast/StyledToastAnimation.fade
+   .animation styled-toast/StyledToastAnimation.fade
+   .position styled-toast/StyledToastPosition.center))
+
+(defn show-warning-toast [ctx msg]
+  (styled-toast/showToastWidget
+   (build-toast m/Colors.orangeAccent msg)
+   .context ctx
+   .reverseAnimation styled-toast/StyledToastAnimation.fade
+   .animation styled-toast/StyledToastAnimation.fade
+   .position styled-toast/StyledToastPosition.center))
+
+(defn show-toast [ctx msg & [type]]
+  (let [toast-fn (case type
+                   :error show-error-toast
+                   :success show-success-toast
+                   :warning show-warning-toast
+                   show-info-toast)]
+    (toast-fn ctx msg)))
+
+(defn handle-error-with-toast
+  [ctx error & [fallback-msg]]
+  (let [error-msg (if (string? error) error (or fallback-msg "Алдаа гарлаа"))]
+    (show-error-toast ctx error-msg)))
+
+(defn handle-success-with-toast [ctx msg]
+  (show-success-toast ctx msg))
+
+(defn handle-info-with-toast [ctx msg]
+  (show-info-toast ctx msg))
+
+(defn handle-warning-with-toast [ctx msg]
+  (show-warning-toast ctx msg))
+

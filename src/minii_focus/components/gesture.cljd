@@ -1,0 +1,44 @@
+(ns minii-focus.components.gesture
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]))
+
+;; ============================================
+;; 4.1 MongolGestureLayer
+;; Middle layer for unified handling of vertical gesture conflicts
+;; ============================================
+
+(defn mongol-gesture-layer
+  "Priority: 1. Text input 2. Structure operations 3. Page switching"
+  [{:keys [child on-text-input on-structure-op]}]
+  (f/widget
+   (m/GestureDetector
+    .onTap (when on-text-input
+             (fn []
+               (on-text-input)))
+    .onLongPress (when on-structure-op
+                   (fn []
+                     (on-structure-op)))
+    .child child)))
+
+;; ============================================
+;; 4.2 MongolActionSwipe
+;; Swipe operation component with vertical semantics
+;; ============================================
+
+(defn mongol-action-swipe
+  "Swipe left: Enter state/link
+   Swipe right: Return/move"
+  [{:keys [child on-swipe-left on-swipe-right]}]
+  (f/widget
+   (m/GestureDetector
+    .onHorizontalDragEnd (fn [details]
+                           (let [velocity (.primaryVelocity details)]
+                             (cond
+                               (and (< velocity -500) on-swipe-left)
+                               (on-swipe-left)
+                               
+                               (and (> velocity 500) on-swipe-right)
+                               (on-swipe-right))))
+    .child child)))
+

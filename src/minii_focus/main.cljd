@@ -1,0 +1,136 @@
+(ns minii-focus.main
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [virtual-keyboard.options :as keyboard-options]
+   [virtual-keyboard.input-control :as control]
+   [virtual-keyboard.keyboard-candidates :as kc]
+   [virtual-keyboard.zip-utils :as zip-utils]
+   [virtual-keyboard.fst-reader :as fst-reader]
+   [minii-focus.services.database :as db]
+   [minii-focus.services.task :as task]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.components.core :as comp]
+   [minii-focus.screens.today :as today]
+   [minii-focus.screens.focus :as focus]
+   [minii-focus.screens.inbox :as inbox]
+   [minii-focus.screens.forecast :as forecast]
+   [minii-focus.screens.project-list :as project-list]
+   [minii-focus.screens.tags :as tags]
+   [minii-focus.screens.review :as review]
+   [minii-focus.screens.focus-stats :as focus-stats]
+   [minii-focus.screens.settings :as settings]))
+
+;; Initialize application
+(defn init-app! []
+  ;; Set input control
+  (control/set-control)
+  
+  ;; Load keyboard resources
+  (zip-utils/read-json-from-asset-zip kc/next "assets/next.zip")
+  (fst-reader/ensure-loaded)
+  
+  ;; Initialize database (call only once), and trigger initial data load after initialization
+  (-> (db/initialize-database!)
+      (.then (fn [database]
+               (state/set-database! database)
+               (dart-core/print "Database initialized successfully")
+        ;;        (task/refresh-inbox-tasks!)
+        ;;        (task/refresh-today-tasks!)
+        ;;        (task/refresh-focus-tasks!)
+        ;;        (task/refresh-forecast-items!)
+               ))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Database initialization error: " error))))))
+
+(defn main []
+  ;; Ensure Flutter binding is initialized
+  (m.WidgetsFlutterBinding/ensureInitialized)
+  
+  ;; Initialize application
+  (init-app!)
+  
+  ;; Start Flutter application
+  (f/run
+   (f/widget
+    :context ctx
+    :let [info (merge keyboard-options/keyboard-option
+                      {:keyboard/key-cap-border-radius 6
+                       :keyboard/font-size 18
+                       :keyboard/key-container-color m/Colors.grey.shade500
+                       :keyboard/mongol-font-family "OnonSoninSans"})
+          current-index (atom 0)
+          pages [(today/today-screen)
+                 (inbox/inbox-screen)
+                 (focus/focus-screen)
+                 (forecast/forecast-screen)
+                 (project-list/project-list-screen)
+                 (tags/tags-screen)
+                 (review/review-screen)
+                 (focus-stats/focus-stats-screen)
+                 (settings/settings-screen)]
+          page-titles ["Today" "Inbox" "Focus" "Forecast" "Projects" "Tags" "Review" "Stats" "Settings"]
+          ;; Bottom navigation only shows the 4 most important entries
+          bottom-items [{:title "Today" :icon m/Icons.calendar_today :idx 0}
+                        {:title "Inbox" :icon m/Icons.inbox :idx 1}
+                        {:title "Focus" :icon m/Icons.timer :idx 2}
+                        {:title "Forecast" :icon m/Icons.timeline :idx 3}]
+          drawer-items [{:title "Today" :idx 0}
+                        {:title "Inbox" :idx 1}
+                        {:title "Focus" :idx 2}
+                        {:title "Forecast" :idx 3}
+                        {:title "Projects" :idx 4}
+                        {:title "Tags" :idx 5}
+                        {:title "Review" :idx 6}
+                        {:title "Stats" :idx 7}
+                        {:title "Settings" :idx 8}]
+          set-page! (fn [idx]
+                      (reset! current-index idx)
+                      (-> (m/Navigator.of ctx) (.maybePop)))]
+    :bind {:info info}
+    :watch [_tab current-index]
+
+    (m/MaterialApp
+     .theme (m/ThemeData
+             .primarySwatch m/Colors.blue
+             .useMaterial3 true)
+     .routes {"/today" today/today-screen
+              "/inbox" inbox/inbox-screen
+              "/focus" focus/focus-screen
+              "/forecast" forecast/forecast-screen
+              "/projects" project-list/project-list-screen
+              "/tags" tags/tags-screen
+              "/review" review/review-screen
+              "/stats" focus-stats/focus-stats-screen
+              "/settings" settings/settings-screen}
+     .home (m/Scaffold
+            .drawer (m/Drawer
+                     .child (m/ListView
+                             .scrollDirection m/Axis.horizontal
+                             .padding (m/EdgeInsets.zero)
+                             .children
+                             (into [(m/DrawerHeader
+                                     .decoration (m/BoxDecoration .color m/Colors.blue)
+                                     .child (comp/mongol-text-block
+                                             {:text "Navigation"
+                                              :style (m/TextStyle .fontSize (comp/font-size :l)
+                                                                  .color m/Colors.white)}))]
+                                   (for [{:keys [title idx]} drawer-items]
+                                     (m/ListTile
+                                      .title (comp/mongol-text-block
+                                              {:text title
+                                               :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                      .onTap (fn [] (set-page! idx) nil))))))
+            .body (m/IndexedStack
+                   .index @current-index
+                   .children pages)
+            .bottomNavigationBar (m/BottomNavigationBar
+                                  .type m/BottomNavigationBarType.fixed
+                                  .currentIndex @current-index
+                                  .onTap (fn [idx] (set-page! idx) nil)
+                                  .items (into []
+                                               (for [{:keys [title icon]} bottom-items]
+                                                 (m/BottomNavigationBarItem
+                                                  .icon (m/Icon icon)
+                                                 .label title)))))))))

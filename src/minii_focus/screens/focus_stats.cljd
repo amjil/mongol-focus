@@ -1,0 +1,69 @@
+(ns minii-focus.screens.focus-stats
+  "Focus statistics view"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.services.task :as task-svc]))
+
+(defn- duration-mins [start end]
+  (when (and start end)
+    (let [diff (.difference end start)]
+      (.inMinutes diff))))
+
+(defn focus-stats-screen []
+  (f/widget
+   :watch [{sessions :focus-sessions loading :focus-sessions-loading} state/app-state]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .actions [(m/IconButton
+                        .tooltip "Refresh"
+                        .icon (m/Icon m/Icons.refresh)
+                        .onPressed (fn [] (task-svc/refresh-focus-sessions!)))])
+    .body
+    (cond
+      loading
+      (m/Center .child (m/CircularProgressIndicator))
+
+      (empty? sessions)
+      (m/Center
+       .child (comp/mongol-text-block
+               {:text "No focus records"
+                :style (m/TextStyle .color (comp/color :text-weak))}))
+
+      :else
+      (let [total-depth (reduce (fn [acc s] (+ acc (.-depthScore s))) 0 sessions)
+            finished (filter #(.-endAt %) sessions)
+            total-mins (reduce (fn [acc s]
+                                 (+ acc (or (duration-mins (.-startAt s) (.-endAt s)) 0)))
+                               0
+                               finished)]
+        (m/ListView
+         .scrollDirection m/Axis.horizontal
+         .padding (m/EdgeInsets.all (comp/space :m))
+         .children
+         [(mgl/MongolListTile
+           .title (mgl/MongolText (str "Total records: " (count sessions))))
+          (mgl/MongolListTile
+           .title (mgl/MongolText (str "Cumulative depth score: " total-depth)))
+          (mgl/MongolListTile
+           .title (mgl/MongolText (str "Finished session minutes: " total-mins)))
+          (m/Divider)
+          (mgl/MongolText "Recent sessions")
+          (m/ListView.builder
+           .scrollDirection m/Axis.horizontal
+           .shrinkWrap true
+           .physics (m/NeverScrollableScrollPhysics)
+           .itemCount (count sessions)
+           .itemBuilder
+           (fn [_ idx]
+             (let [s (nth sessions idx)]
+               (mgl/MongolListTile
+                .title (mgl/MongolText (str "Task " (.-itemId s)))
+                .subtitle (mgl/MongolText (str "Start " (.toString (.-startAt s))
+                                       (when (.-endAt s)
+                                         (str " End " (.toString (.-endAt s))))))
+                .trailing (mgl/MongolText (str "Depth " (.-depthScore s)))))))]))))))
+

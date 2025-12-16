@@ -1,0 +1,100 @@
+(ns minii-focus.components.dialog
+  "Dialog component with input field and virtual keyboard"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mongol]
+   [cljd.flutter :as f]
+   [virtual-keyboard.options :as keyboard-options]
+   [virtual-keyboard.keyboard :as keyboard]
+   [minii-focus.components.tokens :as tokens]))
+
+;; ============================================
+;; Input Dialog Component
+;; Input field on top, virtual keyboard below
+;; ============================================
+
+(defn mongol-input-dialog
+  "Input dialog component
+  Parameters:
+  - controller: TextEditingController (required, passed from outside)
+  - title: Dialog title (optional)
+  - on-submit: Submit callback function that receives input value (optional)
+  - on-cancel: Cancel callback function (optional)
+  - keyboard-options: Keyboard configuration options (optional)
+  
+  Note: The virtual keyboard section needs to be integrated according to the actual API of the virtual-keyboard package.
+  Currently using a placeholder, please replace with the actual keyboard widget."
+  [{:keys [controller title _on-submit on-cancel keyboard-options]}]
+  (f/widget
+   :context ctx
+   :let [_keyboard-info (merge keyboard-options/keyboard-option
+                               (or keyboard-options
+                                   {:keyboard/key-cap-border-radius 6
+                                    :keyboard/font-size 18
+                                    :keyboard/key-container-color m/Colors.grey.shade500
+                                    :keyboard/mongol-font-family "OnonSoninSans"}))]
+   (m/Dialog
+    .child (m/FractionallySizedBox
+            .widthFactor 1.0
+            .heightFactor 0.9
+            .child (m/Container
+                    .padding (m/EdgeInsets.all (tokens/space :m))
+              .child (m/Column
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      (into []
+                            (concat
+                             (when title
+                               [(m/Row
+                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                 .children
+                                 [(m/SizedBox)
+                                  (m/IconButton
+                                   .icon (m/Icon m/Icons.close)
+                                   .onPressed (fn []
+                                               (when on-cancel (on-cancel))
+                                               (-> (m/Navigator.of ctx) (.pop))
+                                               nil))])
+                                (m/SizedBox .height (tokens/space :m))])
+                             [(m/Expanded
+                               .flex 1
+                               .child (m/Container
+                                      .padding (m/EdgeInsets.all (tokens/space :s))
+                                      .decoration (m/BoxDecoration
+                                                  .border (m/Border.all
+                                                          .color m/Colors.grey.shade300
+                                                          .width 1)
+                                                  .borderRadius (m/BorderRadius.circular 4))
+                                      .child (mongol/MongolTextField
+                                             .controller controller
+                                             .decoration (m/InputDecoration
+                                                        .border m/InputBorder.none
+                                                        .hintText "Please enter...")
+                                             .autofocus true)))
+                              (m/SizedBox .height (tokens/space :m))
+                              (keyboard/keyboard {:custom-fns {}})]))))))))
+
+;; ============================================
+;; Helper function to show dialog
+;; ============================================
+
+(defn show-mongol-input-dialog
+  "Show input dialog
+  Parameters:
+  - context: BuildContext
+  - controller: TextEditingController (required, passed from outside)
+  - title: Dialog title (optional)
+  - on-submit: Submit callback function that receives input value (optional)
+  - on-cancel: Cancel callback function (optional)
+  - keyboard-options: Keyboard configuration options (optional)"
+  [context {:keys [controller title on-submit on-cancel keyboard-options]}]
+  (m/showDialog
+       .context context
+       .builder (fn [_ctx]
+                 (mongol-input-dialog
+                  {:controller controller
+                   :title title
+                   :on-submit on-submit
+                   :on-cancel on-cancel
+                   :keyboard-options keyboard-options}))))
+

@@ -1,0 +1,69 @@
+(ns minii-focus.screens.tags
+  "Tags page - manage tags and simple filtering"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.services.tag :as tag-svc]))
+
+(defn tags-screen []
+  (let [name-state (atom "")]
+    (f/widget
+     :context _ctx
+     :watch [_nm name-state
+             {tags :tags loading :tags-loading} state/app-state]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                       {:text "Tags"
+                        :style (m/TextStyle .fontSize (comp/font-size :l))})
+               .actions [(m/IconButton
+                          .tooltip "Refresh"
+                          .icon (m/Icon m/Icons.refresh)
+                          .onPressed (fn [] (tag-svc/refresh-tags!)))])
+      .body (m/Padding
+             .padding (m/EdgeInsets.all (comp/space :m))
+             .child
+             (cond
+               loading (m/Center .child (m/CircularProgressIndicator))
+               :else
+               (m/Row
+                .crossAxisAlignment m/CrossAxisAlignment.start
+                .children
+                [(m/Column
+                  .children
+                  [(m/Expanded
+                    .child (mgl/MongolTextField
+                            .decoration (m/InputDecoration .labelText "New tag")
+                            .onChanged (fn [v] (reset! name-state v))))
+                   (m/SizedBox .height (comp/space :s))
+                   (m/ElevatedButton
+                    .onPressed (fn []
+                                 (when (seq @name-state)
+                                   (-> (tag-svc/create-tag {:name @name-state})
+                                       (.then (fn [_]
+                                                (reset! name-state "")
+                                                (tag-svc/refresh-tags!))))))
+                    .child (mgl/MongolText "Add"))])
+                 (m/SizedBox .height (comp/space :l))
+                 (if (empty? tags)
+                   (comp/mongol-text-block
+                    {:text "No tags"
+                     :style (m/TextStyle .color (comp/color :text-weak))})
+                   (m/ListView.builder
+                    .scrollDirection m/Axis.horizontal
+                    .shrinkWrap true
+                    .itemCount (count tags)
+                    .itemBuilder (fn [_ctx idx]
+                                   (let [t (nth tags idx)]
+                                     (mgl/MongolListTile
+                                      .title (mgl/MongolText (.-name t))
+                                      .trailing (m/IconButton
+                                                 .icon (m/Icon m/Icons.delete)
+                                                 .onPressed (fn []
+                                                              (-> (tag-svc/delete-tag (.-id t))
+                                                                  (.then (fn []
+                                                                           (tag-svc/refresh-tags!)))))))))))])))))))
+

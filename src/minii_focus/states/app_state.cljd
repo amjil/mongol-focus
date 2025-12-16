@@ -1,0 +1,151 @@
+(ns minii-focus.states.app-state
+  "Application state management"
+  (:require
+   [clojure.core :as core]))
+
+;; Global application state
+(defonce app-state
+  (atom {:database nil
+         :current-page :today
+         :focused-task nil
+         :focus-session-id nil
+         :focus-depth 0
+         :focus-sessions []
+         ;; Page data (avoid writing loading side effects in widget render)
+         :today-tasks []
+         :focus-tasks []
+         :inbox-tasks []
+         :forecast-items []
+         :projects []
+         :reviews []
+         ;; Task detail page data
+         :task-detail nil
+         :task-detail-tags #{}
+         :task-detail-all-tags []
+         :task-detail-parent nil
+         :task-detail-loading false
+         :today-loading false
+         :focus-loading false
+         :inbox-loading false
+         :forecast-loading false
+         :projects-loading false
+         :reviews-loading false
+         :tags []
+         :tags-loading false
+         :focus-sessions-loading false
+         ;; Compatible with old fields (gradual migration)
+         :tasks []
+         :loading false}))
+
+;; Update state
+(defn update-state! [& args]
+  (if (= 1 (count args))
+    (swap! app-state (first args))
+    (apply swap! app-state args)))
+
+;; Get state
+(defn get-state
+  ([]
+   @app-state)
+  ([key]
+   (get @app-state key)))
+
+;; Set database
+(defn set-database! [db]
+  (update-state! assoc :database db))
+
+;; Set current page
+(defn set-current-page! [page]
+  (update-state! assoc :current-page page))
+
+;; Set Focus task
+(defn set-focused-task! [task]
+  (update-state! assoc :focused-task task))
+
+;; Set Focus session ID
+(defn set-focus-session-id! [session-id]
+  (update-state! assoc :focus-session-id session-id))
+
+;; Update Focus depth
+(defn update-focus-depth! [depth]
+  (update-state! assoc :focus-depth depth))
+
+;; Set task list
+(defn set-tasks! [tasks]
+  (update-state! assoc :tasks tasks))
+
+;; Set loading state
+(defn set-loading! [loading]
+  (update-state! assoc :loading loading))
+
+;; Today page task list
+(defn set-today-tasks! [tasks]
+  (update-state! assoc :today-tasks tasks))
+
+(defn set-today-loading! [loading]
+  (update-state! assoc :today-loading loading))
+
+;; Focus page task list
+(defn set-focus-tasks! [tasks]
+  (update-state! assoc :focus-tasks tasks))
+
+(defn set-focus-loading! [loading]
+  (update-state! assoc :focus-loading loading))
+
+;; Inbox page task list
+(defn set-inbox-tasks! [tasks]
+  (update-state! assoc :inbox-tasks tasks))
+
+(defn set-inbox-loading! [loading]
+  (update-state! assoc :inbox-loading loading))
+
+;; Forecast page data
+(defn set-forecast-items! [items]
+  (update-state! assoc :forecast-items items))
+
+(defn set-forecast-loading! [loading]
+  (update-state! assoc :forecast-loading loading))
+
+;; Projects page data
+(defn set-projects! [projects]
+  (update-state! assoc :projects projects))
+
+(defn set-projects-loading! [loading]
+  (update-state! assoc :projects-loading loading))
+
+(defn set-reviews! [reviews]
+  (update-state! assoc :reviews reviews))
+
+(defn set-reviews-loading! [loading]
+  (update-state! assoc :reviews-loading loading))
+
+(defn set-tags! [tags]
+  (update-state! assoc :tags tags))
+
+(defn set-tags-loading! [loading]
+  (update-state! assoc :tags-loading loading))
+
+;; Task detail page
+(defn set-task-detail! [task]
+  (update-state! assoc :task-detail task))
+
+(defn set-task-detail-tags! [tag-ids]
+  (update-state! assoc :task-detail-tags tag-ids))
+
+(defn set-task-detail-all-tags! [tags]
+  (update-state! assoc :task-detail-all-tags tags))
+
+(defn set-task-detail-parent! [parent]
+  (update-state! assoc :task-detail-parent parent))
+
+(defn set-task-detail-loading! [loading]
+  (update-state! assoc :task-detail-loading loading))
+
+;; Focus session statistics
+(defn set-focus-sessions! [sessions]
+  (update-state! assoc :focus-sessions sessions))
+
+(defn set-focus-sessions-loading! [loading]
+  (update-state! assoc :focus-sessions-loading loading))
+
+
