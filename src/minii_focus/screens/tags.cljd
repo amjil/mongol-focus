@@ -16,9 +16,6 @@
              {tags :tags loading :tags-loading} state/app-state]
      (m/Scaffold
       .appBar (m/AppBar
-               .title (comp/mongol-text-block
-                       {:text "Tags"
-                        :style (m/TextStyle .fontSize (comp/font-size :l))})
                .actions [(m/IconButton
                           .tooltip "Refresh"
                           .icon (m/Icon m/Icons.refresh)

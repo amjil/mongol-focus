@@ -18,10 +18,6 @@
              _ct content
              _tp review-type]
      (m/Scaffold
-      .appBar (m/AppBar
-               .title (comp/mongol-text-block
-                       {:text "Review"
-                        :style (m/TextStyle .fontSize (comp/font-size :l))}))
       .body
       (m/Padding
        .padding (m/EdgeInsets.all (comp/space :m))
