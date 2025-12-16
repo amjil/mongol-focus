@@ -70,7 +70,6 @@
                  (review/review-screen)
                  (focus-stats/focus-stats-screen)
                  (settings/settings-screen)]
-          page-titles ["Today" "Inbox" "Focus" "Forecast" "Projects" "Tags" "Review" "Stats" "Settings"]
           ;; Bottom navigation only shows the 4 most important entries
           bottom-items [{:title "Today" :icon m/Icons.calendar_today :idx 0}
                         {:title "Inbox" :icon m/Icons.inbox :idx 1}

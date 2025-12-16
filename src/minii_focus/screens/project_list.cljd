@@ -65,6 +65,6 @@
                                        .title (m/Text (.-content item))
                                        .subtitle (m/Text (str "Position " (:position row))))))
                                   child-items))
-                            (m/ListTile .title (m/Text "No subtasks"))])))
+                            (m/ListTile .title (m/Text "No subtasks")))])))
                     projects)))))))
 
