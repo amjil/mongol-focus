@@ -74,7 +74,7 @@
                    .padding (m/EdgeInsets.all (comp/space :m))
                    .child (m/Column
                            .crossAxisAlignment m/CrossAxisAlignment.center
-                           .mainAxisSize m/MainAxisSize.min
+                           .mainAxisSize m/MainAxisSize.max
                            .children
                            (concat
                             [(comp/mongol-text-block
@@ -129,7 +129,6 @@
 (defn- nav-card [{:keys [title icon on-tap]}]
   (m/Card
    .elevation 1
-   .margin (m/EdgeInsets.all (comp/space :s))
    .child (m/InkWell
            .onTap on-tap
            .child (m/Padding
@@ -204,7 +203,7 @@
             (m/Column
              .children
              [(m/Flexible
-               .flex 3
+               .flex 5
                .child
                (m/ListView
                 .scrollDirection m/Axis.horizontal
@@ -219,6 +218,7 @@
 
                  ;; Overview cards row
                  (m/Row
+                  .crossAxisAlignment m/CrossAxisAlignment.start
                   .children
                   [(overview-card
                     {:title "Today's Tasks"
@@ -233,13 +233,9 @@
                      :subtitle (if (> inbox-count 0) "Pending" "Empty")
                      :icon-color m/Colors.orange
                      :on-tap (fn []
-                               (navigate-to-page 2))})])
+                               (navigate-to-page 2))})
 
-                 (m/SizedBox .width (comp/space :m))
-
-                 (m/Row
-                  .children
-                  [(overview-card
+                   (overview-card
                     {:title "Due Soon"
                      :value upcoming-count
                      :subtitle "Next 24 hours"
@@ -253,6 +249,7 @@
                      :icon-color m/Colors.green
                      :on-tap (fn []
                                (navigate-to-page 8))})])
+
 
                  (m/SizedBox .width (comp/space :l))
 
@@ -293,7 +290,7 @@
                                                         (dart-core/print (str "Error entering focus: " error)))))))))})])]))
               (m/SizedBox .height (comp/space :l))
               (m/Flexible
-               .flex 1
+               .flex 2
                .child
                (m/ListView
                 .scrollDirection m/Axis.horizontal
@@ -312,18 +309,19 @@
                   .spacing (comp/space :m)
                   .runSpacing (comp/space :m)
                   .children
-                  [(nav-card
-                    {:title "Today"
-                     :icon m/Icons.calendar_today
-                     :on-tap (fn [] (navigate-to-page 1))})
-                   (nav-card
-                    {:title "Inbox"
-                     :icon m/Icons.inbox
-                     :on-tap (fn [] (navigate-to-page 2))})
-                   (nav-card
-                    {:title "Focus"
-                     :icon m/Icons.timer
-                     :on-tap (fn [] (navigate-to-page 3))})
+                  [
+                  ;;  (nav-card
+                  ;;   {:title "Today"
+                  ;;    :icon m/Icons.calendar_today
+                  ;;    :on-tap (fn [] (navigate-to-page 1))})
+                  ;;  (nav-card
+                  ;;   {:title "Inbox"
+                  ;;    :icon m/Icons.inbox
+                  ;;    :on-tap (fn [] (navigate-to-page 2))})
+                  ;;  (nav-card
+                  ;;   {:title "Focus"
+                  ;;    :icon m/Icons.timer
+                  ;;    :on-tap (fn [] (navigate-to-page 3))})
                    (nav-card
                     {:title "Forecast"
                      :icon m/Icons.timeline
