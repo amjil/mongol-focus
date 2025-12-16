@@ -2,6 +2,7 @@
   "Forecast / Calendar view (based on defer/due)"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
@@ -19,8 +20,8 @@
      (fn [acc item]
        (let [due (.-dueAt item)
              defer (.-deferAt item)
-             ts (or (when due (.millisecondsSinceEpoch due))
-                    (when defer (.millisecondsSinceEpoch defer)))]
+             ts (or (when due (.-millisecondsSinceEpoch due))
+                    (when defer (.-millisecondsSinceEpoch defer)))]
          (cond
            (and ts (< ts ms-start)) (update acc :overdue conj item)
            (and ts (<= ms-start ts) (<= ts ms-end)) (update acc :today conj item)
@@ -33,110 +34,122 @@
   (let [tasks-with-info (atom [])
         bucket-filter (atom :all)]
     (f/widget
-     :watch [_app state/app-state _bf bucket-filter _twi tasks-with-info]
+     :watch [_app state/app-state
+             _bf bucket-filter
+             _twi tasks-with-info]
      :let [loading (:forecast-loading @state/app-state)
            items (:forecast-items @state/app-state)]
-   (m/Scaffold
-    .appBar (m/AppBar
-             .actions [(m/IconButton
-                        .tooltip "Refresh"
-                        .icon (m/Icon m/Icons.refresh)
-                        .onPressed (fn [] (task-svc/refresh-forecast-items!)))]))
-   .body
-   (m/SafeArea)
-   (cond
-     loading (m/Center .child (m/CircularProgressIndicator))
-     (empty? items) (m/Center
-                     .child (comp/mongol-text-block
-                             {:text "No tasks with dates"
-                              :style (m/TextStyle .color (comp/color :text-weak))}))
-     :else
-     (do
-       ;; Load blocked info when items change
-       (when (and (not loading) (seq items) (empty? @tasks-with-info))
-         (-> (task-svc/get-tasks-with-blocked-info items)
-             (.then (fn [info-list]
-                     (reset! tasks-with-info info-list)))
-             (.catchError (fn [error]
-                           (dart-core/print (str "Error loading blocked info: " error))))))
-       (let [buckets (classify items)
-             view-data (case @bucket-filter
-                        :overdue (:overdue buckets)
-                        :today (:today buckets)
-                        :upcoming (:upcoming buckets)
-                        (concat (:overdue buckets)
-                                (:today buckets)
-                                (:upcoming buckets)))
-             view {:title (case @bucket-filter
-                           :overdue "Overdue"
-                           :today "Today"
-                           :upcoming "Upcoming"
-                           "All")
-                   :data view-data}
-           side-panel (m/Container
-                       .padding (m/EdgeInsets.all (comp/space :m))
-                       .child (m/Column
-                               .crossAxisAlignment m/CrossAxisAlignment.start
-                               .children
-                               [(comp/mongol-text-block
-                                 {:text "Time buckets"
-                                  :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                (m/SizedBox .height (comp/space :s))
-                                (comp/mongol-text-block
-                                 {:text (str "Overdue " (count (:overdue buckets)))
-                                  :style (m/TextStyle .color (comp/color :text-weak))})
-                                (comp/mongol-text-block
-                                 {:text (str "Today " (count (:today buckets)))
-                                  :style (m/TextStyle .color (comp/color :text-weak))})
-                                (comp/mongol-text-block
-                                 {:text (str "Upcoming " (count (:upcoming buckets)))
-                                  :style (m/TextStyle .color (comp/color :text-weak))})]))]
-       (comp/mongol-column-layout
-        {:main-column
-         (m/ListView
-          .padding (m/EdgeInsets.all (comp/space :m))
-          .children
-          [(m/Wrap
-            .spacing (comp/space :s)
-            .children
-            [(m/ChoiceChip
-              .label (m/Text "All")
-              .selected (= @bucket-filter :all)
-              .onSelected (fn [_] (reset! bucket-filter :all)))
-             (m/ChoiceChip
-              .label (m/Text "Overdue")
-              .selected (= @bucket-filter :overdue)
-              .onSelected (fn [_] (reset! bucket-filter :overdue)))
-             (m/ChoiceChip
-              .label (m/Text "Today")
-              .selected (= @bucket-filter :today)
-              .onSelected (fn [_] (reset! bucket-filter :today)))
-             (m/ChoiceChip
-              .label (m/Text "Upcoming")
-              .selected (= @bucket-filter :upcoming)
-              .onSelected (fn [_] (reset! bucket-filter :upcoming)))])
-           (m/SizedBox .height (comp/space :m))
-           (comp/mongol-text-block
-            {:text (:title view)
-             :style (m/TextStyle .fontSize (comp/font-size :m))})
-           (if (empty? (:data view))
-             (m/ListTile .title (comp/mongol-text-block {:text "None"}))
-             (m/Column
+     (m/Scaffold
+      .appBar (m/AppBar
+               .actions [(m/IconButton
+                          .tooltip "Refresh"
+                          .icon (m/Icon m/Icons.refresh)
+                          .onPressed (fn [] (task-svc/refresh-forecast-items!)))]))
+     .body
+     (m/SafeArea)
+     (cond
+       loading (m/Center .child (m/CircularProgressIndicator))
+       (empty? items) (m/Center
+                       .child (comp/mongol-text-block
+                               {:text "No tasks with dates"
+                                :style (m/TextStyle .color (comp/color :text-weak))}))
+       :else
+       (do
+         ;; Load blocked info when items change
+         (when (and (not loading) (seq items) (empty? _twi))
+           (-> (task-svc/get-tasks-with-blocked-info items)
+               (.then (fn [info-list]
+                        (reset! tasks-with-info info-list)))
+               (.catchError (fn [error]
+                              (dart-core/print (str "Error loading blocked info: " error))))))
+         (let [buckets (classify items)
+               view-data (case @bucket-filter
+                           :overdue (:overdue buckets)
+                           :today (:today buckets)
+                           :upcoming (:upcoming buckets)
+                           (concat (:overdue buckets)
+                                   (:today buckets)
+                                   (:upcoming buckets)))
+               view {:title (case _bf
+                              :overdue "Overdue"
+                              :today "Today"
+                              :upcoming "Upcoming"
+                              "All")
+                     :data view-data}
+               side-panel (m/Container
+                           .padding (m/EdgeInsets.all (comp/space :m))
+                           .child (m/Column
+                                   .crossAxisAlignment m/CrossAxisAlignment.start
+                                   .children
+                                   [(comp/mongol-text-block
+                                     {:text "Time buckets"
+                                      :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                    (m/SizedBox .height (comp/space :s))
+                                    (comp/mongol-text-block
+                                     {:text (str "Overdue " (count (:overdue buckets)))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})
+                                    (comp/mongol-text-block
+                                     {:text (str "Today " (count (:today buckets)))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})
+                                    (comp/mongol-text-block
+                                     {:text (str "Upcoming " (count (:upcoming buckets)))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})]))]
+           (comp/mongol-row-layout
+            {:main-row
+             (m/ListView
+              .scrollDirection m/Axis.horizontal
+              .padding (m/EdgeInsets.all (comp/space :m))
               .children
-              (for [it (:data view)]
-                (let [task-info (first (filter #(= (.-id (:task %)) (.-id it)) @tasks-with-info))
-                      blocked? (:blocked task-info)]
-                  (m/ListTile
-                   .title (comp/mongol-text-block
-                           {:text (.-content it)
-                            :style (m/TextStyle
-                                    .fontSize (comp/font-size :m)
-                                    .color (if blocked? m/Colors.red.shade300 nil))})
-                   .subtitle (comp/mongol-text-block
-                              {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
-                                          " / defer "
-                                          (or (dt/format-date (.-deferAt it)) "-")
-                                          (when blocked? " [Blocked]"))
-                               :style (m/TextStyle .color (comp/color :text-weak)
-                                                   .fontSize (comp/font-size :s))}))))))])
-         :side-column side-panel})))))))
+              [(m/Wrap
+                .direction m/Axis.vertical
+                .spacing (comp/space :s)
+                .children
+                [(m/RotatedBox
+                  .quarterTurns 1
+                  .child (m/ChoiceChip
+                          .label (m/Text "All")
+                          .selected (= _bf :all)
+                          .onSelected (fn [_] (reset! bucket-filter :all))))
+                 (m/RotatedBox
+                  .quarterTurns 1
+                  .child (m/ChoiceChip
+                          .label (m/Text "Overdue")
+                          .selected (= _bf :overdue)
+                          .onSelected (fn [_] (reset! bucket-filter :overdue))))
+                 (m/RotatedBox
+                  .quarterTurns 1
+                  .child (m/ChoiceChip
+                          .label (m/Text "Today")
+                          .selected (= _bf :today)
+                          .onSelected (fn [_] (reset! bucket-filter :today))))
+                 (m/RotatedBox
+                  .quarterTurns 1
+                  .child (m/ChoiceChip
+                          .label (m/Text "Upcoming")
+                          .selected (= _bf :upcoming)
+                          .onSelected (fn [_] (reset! bucket-filter :upcoming))))])
+               (m/SizedBox .width (comp/space :m))
+               (comp/mongol-text-block
+                {:text (:title view)
+                 :style (m/TextStyle .fontSize (comp/font-size :m))})
+               (if (empty? (:data view))
+                 (mgl/MongolListTile .title (comp/mongol-text-block {:text "None"}))
+                 (m/Row
+                  .children
+                  (for [it (:data view)]
+                    (let [task-info (first (filter #(= (.-id (:task %)) (.-id it)) _twi))
+                          blocked? (:blocked task-info)]
+                      (mgl/MongolListTile
+                       .title (comp/mongol-text-block
+                               {:text (.-content it)
+                                :style (m/TextStyle
+                                        .fontSize (comp/font-size :m)
+                                        .color (if blocked? m/Colors.red.shade300 nil))})
+                       .subtitle (comp/mongol-text-block
+                                  {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
+                                              " / defer "
+                                              (or (dt/format-date (.-deferAt it)) "-")
+                                              (when blocked? " [Blocked]"))
+                                   :style (m/TextStyle .color (comp/color :text-weak)
+                                                       .fontSize (comp/font-size :s))}))))))])
+             :side-row side-panel})))))))
