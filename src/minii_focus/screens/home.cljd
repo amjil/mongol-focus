@@ -193,144 +193,157 @@
                         .tooltip "Refresh"
                         .icon (m/Icon m/Icons.refresh)
                         .onPressed (fn []
-                                     (task/refresh-today-tasks!)
-                                     (task/refresh-inbox-tasks!)
-                                     (task/refresh-forecast-items!)
-                                     (task/refresh-focus-sessions!)))])
+                                     (dart-core/print "Refresh")
+                                     ;;  (task/refresh-today-tasks!)
+                                     ;;  (task/refresh-inbox-tasks!)
+                                     ;;  (task/refresh-forecast-items!)
+                                     ;;  (task/refresh-focus-sessions!)
+                                     ))])
     .body (comp/mongol-row-layout
            {:main-row
-            (m/ListView
-             .scrollDirection m/Axis.horizontal
-             .padding (m/EdgeInsets.all (comp/space :m))
+            (m/Column
              .children
-             [(comp/mongol-text-block
-               {:text "Overview"
-                :style (m/TextStyle
-                        .fontSize (comp/font-size :l)
-                        .fontWeight m/FontWeight.bold)})
-              (m/SizedBox .height (comp/space :s))
-              
-              ;; Overview cards row
-              (m/Row
-               .children
-               [(overview-card
-                 {:title "Today's Tasks"
-                  :value today-total
-                  :subtitle (str today-completed " completed, " today-active " in progress")
-                  :icon-color m/Colors.blue
-                  :on-tap (fn []
-                            (navigate-to-page 1))})
-                (overview-card
-                 {:title "Inbox"
-                  :value inbox-count
-                  :subtitle (if (> inbox-count 0) "Pending" "Empty")
-                  :icon-color m/Colors.orange
-                  :on-tap (fn []
-                            (navigate-to-page 2))})])
-              
-              (m/SizedBox .height (comp/space :m))
-              
-              (m/Row
-               .children
-               [                (overview-card
-                 {:title "Due Soon"
-                  :value upcoming-count
-                  :subtitle "Next 24 hours"
-                  :icon-color m/Colors.red
-                  :on-tap (fn []
-                            (navigate-to-page 4))})
-                (overview-card
-                 {:title "Today's Focus"
-                  :value (str (:total-mins focus-stats) " minutes")
-                  :subtitle (str (:sessions focus-stats) " sessions")
-                  :icon-color m/Colors.green
-                  :on-tap (fn []
-                            (navigate-to-page 8))})])
-              
+             [(m/Flexible
+               .flex 3
+               .child
+               (m/ListView
+                .scrollDirection m/Axis.horizontal
+                .padding (m/EdgeInsets.all (comp/space :m))
+                .children
+                [(comp/mongol-text-block
+                  {:text "Overview"
+                   :style (m/TextStyle
+                           .fontSize (comp/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+                 (m/SizedBox .width (comp/space :s))
+
+                 ;; Overview cards row
+                 (m/Row
+                  .children
+                  [(overview-card
+                    {:title "Today's Tasks"
+                     :value today-total
+                     :subtitle (str today-completed " completed, " today-active " in progress")
+                     :icon-color m/Colors.blue
+                     :on-tap (fn []
+                               (navigate-to-page 1))})
+                   (overview-card
+                    {:title "Inbox"
+                     :value inbox-count
+                     :subtitle (if (> inbox-count 0) "Pending" "Empty")
+                     :icon-color m/Colors.orange
+                     :on-tap (fn []
+                               (navigate-to-page 2))})])
+
+                 (m/SizedBox .width (comp/space :m))
+
+                 (m/Row
+                  .children
+                  [(overview-card
+                    {:title "Due Soon"
+                     :value upcoming-count
+                     :subtitle "Next 24 hours"
+                     :icon-color m/Colors.red
+                     :on-tap (fn []
+                               (navigate-to-page 4))})
+                   (overview-card
+                    {:title "Today's Focus"
+                     :value (str (:total-mins focus-stats) " minutes")
+                     :subtitle (str (:sessions focus-stats) " sessions")
+                     :icon-color m/Colors.green
+                     :on-tap (fn []
+                               (navigate-to-page 8))})])
+
+                 (m/SizedBox .width (comp/space :l))
+
+                 ;; Quick actions section
+                 (comp/mongol-text-block
+                  {:text "Quick Actions"
+                   :style (m/TextStyle
+                           .fontSize (comp/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+
+                 (m/SizedBox .width (comp/space :s))
+
+                 (m/Column
+                  .mainAxisSize m/MainAxisSize.min
+                  .children
+                  [(quick-action-button
+                    {:title "Quick Add Task"
+                     :icon m/Icons.add_circle_outline
+                     :on-tap (fn []
+                               (navigate-to-page 2))})
+                   (quick-action-button
+                    {:title (if has-active-focus "Continue Focus" "Start Focus")
+                     :icon m/Icons.timer
+                     :icon-color (if has-active-focus m/Colors.green m/Colors.blue)
+                     :on-tap (fn []
+                               (if has-active-focus
+                                 (navigate-to-page 3)
+                                 (when (seq today-tasks)
+                                   (let [first-task (first today-tasks)]
+                                     (-> (task/enter-focus (.-id first-task))
+                                         (.then (fn [session-id]
+                                                  (state/set-focused-task! first-task)
+                                                  (state/set-focus-session-id! session-id)
+                                                  (task/refresh-today-tasks!)
+                                                  (task/refresh-focus-tasks!)
+                                                  (navigate-to-page 3)))
+                                         (.catchError (fn [error]
+                                                        (dart-core/print (str "Error entering focus: " error)))))))))})])]))
               (m/SizedBox .height (comp/space :l))
-              
-              ;; Quick actions section
-              (comp/mongol-text-block
-               {:text "Quick Actions"
-                :style (m/TextStyle
-                        .fontSize (comp/font-size :l)
-                        .fontWeight m/FontWeight.bold)})
-              (m/SizedBox .height (comp/space :s))
-              
-              (m/Column
-               .mainAxisSize m/MainAxisSize.min
-               .children
-               [                (quick-action-button
-                 {:title "Quick Add Task"
-                  :icon m/Icons.add_circle_outline
-                  :on-tap (fn []
-                            (navigate-to-page 2))})
-                (quick-action-button
-                 {:title (if has-active-focus "Continue Focus" "Start Focus")
-                  :icon m/Icons.timer
-                  :icon-color (if has-active-focus m/Colors.green m/Colors.blue)
-                  :on-tap (fn []
-                            (if has-active-focus
-                              (navigate-to-page 3)
-                              (when (seq today-tasks)
-                                (let [first-task (first today-tasks)]
-                                  (-> (task/enter-focus (.-id first-task))
-                                      (.then (fn [session-id]
-                                               (state/set-focused-task! first-task)
-                                               (state/set-focus-session-id! session-id)
-                                               (task/refresh-today-tasks!)
-                                               (task/refresh-focus-tasks!)
-                                               (navigate-to-page 3)))
-                                      (.catchError (fn [error]
-                                                     (dart-core/print (str "Error entering focus: " error)))))))))})])
-              
-              (m/SizedBox .height (comp/space :l))
-              
-              ;; Main views navigation section
-              (comp/mongol-text-block
-               {:text "Main Views"
-                :style (m/TextStyle
-                        .fontSize (comp/font-size :l)
-                        .fontWeight m/FontWeight.bold)})
-              (m/SizedBox .height (comp/space :s))
-              
-              ;; Navigation cards grid (2 columns)
-              (m/Wrap
-               .spacing (comp/space :m)
-               .runSpacing (comp/space :m)
-               .children
-               [                (nav-card
-                 {:title "Today"
-                  :icon m/Icons.calendar_today
-                  :on-tap (fn [] (navigate-to-page 1))})
-                (nav-card
-                 {:title "Inbox"
-                  :icon m/Icons.inbox
-                  :on-tap (fn [] (navigate-to-page 2))})
-                (nav-card
-                 {:title "Focus"
-                  :icon m/Icons.timer
-                  :on-tap (fn [] (navigate-to-page 3))})
-                (nav-card
-                 {:title "Forecast"
-                  :icon m/Icons.timeline
-                  :on-tap (fn [] (navigate-to-page 4))})
-                (nav-card
-                 {:title "Projects"
-                  :icon m/Icons.folder
-                  :on-tap (fn [] (navigate-to-page 5))})
-                (nav-card
-                 {:title "Tags"
-                  :icon m/Icons.label
-                  :on-tap (fn [] (navigate-to-page 6))})
-                (nav-card
-                 {:title "Review"
-                  :icon m/Icons.history
-                  :on-tap (fn [] (navigate-to-page 7))})
-                (nav-card
-                 {:title "Statistics"
-                  :icon m/Icons.bar_chart
-                  :on-tap (fn [] (navigate-to-page 8))})])])
+              (m/Flexible
+               .flex 1
+               .child
+               (m/ListView
+                .scrollDirection m/Axis.horizontal
+                .children
+                [;; Main views navigation section
+                 (comp/mongol-text-block
+                  {:text "Main Views"
+                   :style (m/TextStyle
+                           .fontSize (comp/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+
+                 (m/SizedBox .width (comp/space :s))
+
+                 ;; Navigation cards grid (2 columns)
+                 (m/Wrap
+                  .spacing (comp/space :m)
+                  .runSpacing (comp/space :m)
+                  .children
+                  [(nav-card
+                    {:title "Today"
+                     :icon m/Icons.calendar_today
+                     :on-tap (fn [] (navigate-to-page 1))})
+                   (nav-card
+                    {:title "Inbox"
+                     :icon m/Icons.inbox
+                     :on-tap (fn [] (navigate-to-page 2))})
+                   (nav-card
+                    {:title "Focus"
+                     :icon m/Icons.timer
+                     :on-tap (fn [] (navigate-to-page 3))})
+                   (nav-card
+                    {:title "Forecast"
+                     :icon m/Icons.timeline
+                     :on-tap (fn [] (navigate-to-page 4))})
+                   (nav-card
+                    {:title "Projects"
+                     :icon m/Icons.folder
+                     :on-tap (fn [] (navigate-to-page 5))})
+                   (nav-card
+                    {:title "Tags"
+                     :icon m/Icons.label
+                     :on-tap (fn [] (navigate-to-page 6))})
+                   (nav-card
+                    {:title "Review"
+                     :icon m/Icons.history
+                     :on-tap (fn [] (navigate-to-page 7))})
+                   (nav-card
+                    {:title "Statistics"
+                     :icon m/Icons.bar_chart
+                     :on-tap (fn [] (navigate-to-page 8))})])]))])
             
             :side-row
             (m/Container
