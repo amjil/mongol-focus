@@ -53,6 +53,6 @@
     .children
     [(m/Expanded
       .child main-row)
-     (when side-row
-       (m/Expanded
-        .child side-row))])))
+     (if side-row
+       side-row
+       (m/SizedBox))])))
