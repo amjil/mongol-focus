@@ -113,31 +113,33 @@
                       (comp/mongol-text-block
                        {:text "None"
                         :style (m/TextStyle .color (comp/color :text-weak))}))])
-                  (m/SizedBox .height (comp/space :l))
+                  (m/SizedBox .width (comp/space :l))
                   (m/Column
-                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .crossAxisAlignment m/CrossAxisAlignment.center
                    .children
                    [(comp/mongol-text-block
                      {:text "Status"
                       :style (m/TextStyle .fontSize (comp/font-size :m))})
                     (m/SizedBox .height (comp/space :s))
-                    (m/SegmentedButton
-                     .segments [(m/ButtonSegment .value :idle .label (m/Text "Idle"))
-                                (m/ButtonSegment .value :active .label (m/Text "Active"))
-                                (m/ButtonSegment .value :completed .label (m/Text "Completed"))
-                                (m/ButtonSegment .value :blocked .label (m/Text "Blocked"))]
-                     .selected #{(display-status)}
-                     .onSelectionChanged (fn [selection]
-                                           (let [new-status (first selection)]
-                                             (if @editing-state
-                                               (reset! status-state new-status)
-                                               (-> (task/update-task (.-id task-detail) {:status (name new-status)})
-                                                   (.then (fn [] (task/refresh-task-detail! task-id)))
-                                                   (.catchError (fn [error]
-                                                                  (dart-core/print (str "Error updating status: " error)))))))))])
-                  (m/SizedBox .height (comp/space :l))
+                    (m/RotatedBox
+                     .quarterTurns 1
+                     .child (m/SegmentedButton
+                             .segments [(m/ButtonSegment .value :idle .label (m/Text "Idle"))
+                                        (m/ButtonSegment .value :active .label (m/Text "Active"))
+                                        (m/ButtonSegment .value :completed .label (m/Text "Completed"))
+                                        (m/ButtonSegment .value :blocked .label (m/Text "Blocked"))]
+                             .selected #{(display-status)}
+                             .onSelectionChanged (fn [selection]
+                                                   (let [new-status (first selection)]
+                                                     (if @editing-state
+                                                       (reset! status-state new-status)
+                                                       (-> (task/update-task (.-id task-detail) {:status (name new-status)})
+                                                           (.then (fn [] (task/refresh-task-detail! task-id)))
+                                                           (.catchError (fn [error]
+                                                                          (dart-core/print (str "Error updating status: " error))))))))))])
+                  (m/SizedBox .width (comp/space :l))
                   (m/Column
-                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .crossAxisAlignment m/CrossAxisAlignment.center
                    .children
                    [(comp/mongol-text-block
                      {:text "Start (defer)"
@@ -158,7 +160,7 @@
                                                        (.catchError (fn [error]
                                                                       (dart-core/print (str "Error updating defer: " error))))))))))
                                   nil)
-                     .child (m/Text (or (dt/format-date (display-defer)) "Not set")))
+                     .child (mgl/MongolText (or (dt/format-date (display-defer)) "Not set")))
                     (m/SizedBox .height (comp/space :s))
                     (comp/mongol-text-block
                      {:text "Due (due)"
@@ -179,10 +181,11 @@
                                                        (.catchError (fn [error]
                                                                       (dart-core/print (str "Error updating due: " error))))))))))
                                   nil)
-                     .child (m/Text (or (dt/format-date (display-due)) "Not set")))])
-                  (m/SizedBox .height (comp/space :l))
+                     .child (mgl/MongolText (or (dt/format-date (display-due)) "Not set")))])
+                  (m/SizedBox .width (comp/space :l))
                   (m/Column
-                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .crossAxisAlignment m/CrossAxisAlignment.center
+                   .mainAxisAlignment m/MainAxisAlignment.start
                    .children
                    [(comp/mongol-text-block
                      {:text "Tags"
@@ -195,19 +198,21 @@
                             (let [tid (.-id tag-row)
                                   name (.-name tag-row)
                                   selected? (contains? tag-ids tid)]
-                              (m/FilterChip
-                               .label (m/Text name)
-                               .selected selected?
-                               .onSelected (fn [v]
-                                             (if v
-                                               (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
-                                                   (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))))
-                                               (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
-                                                   (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))))))
+                              (m/RotatedBox
+                               .quarterTurns 1
+                               .child (m/FilterChip
+                                       .label (m/Text name)
+                                       .selected selected?
+                                       .onSelected (fn [v]
+                                                     (if v
+                                                       (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
+                                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))
+                                                       (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
+                                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))))))))
                           all-tags))])
                   (m/Column
                    .children
-                   [(m/ElevatedButton
+                   [(mgl/MongolElevatedButton
                      .onPressed (fn []
                                   (if (= (display-status) :completed)
                                     (task/mark-task-active (.-id task-detail))
@@ -215,20 +220,20 @@
                                   (-> (task/refresh-task-detail! (.-id task-detail))
                                       (.catchError (fn [error]
                                                      (dart-core/print (str "Error toggling status: " error))))))
-                     .child (m/Text (if (= (display-status) :completed)
+                     .child (mgl/MongolText (if (= (display-status) :completed)
                                       "Mark as active"
                                       "Mark as completed")))
                     (m/SizedBox .height (comp/space :s))
-                    (m/ElevatedButton
+                    (mgl/MongolElevatedButton
                      .onPressed (fn []
                                   (-> (task/enter-focus (.-id task-detail))
                                       (.then (fn [session-id]
                                                (state/set-focused-task! task-detail)
                                                (state/set-focus-session-id! session-id)
                                                (dart-core/print "Entered focus")))))
-                     .child (m/Text "Enter Focus"))
+                     .child (mgl/MongolText "Enter Focus"))
                     (m/SizedBox .height (comp/space :s))
-                    (m/ElevatedButton
+                    (mgl/MongolElevatedButton
                      .onPressed (fn []
                                   (-> (task/delete-task (.-id task-detail))
                                       (.then (fn []
@@ -236,4 +241,4 @@
                                                (m/Navigator.pop ctx)))))
                      .style (m/ButtonStyle
                              .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                     .child (m/Text "Delete task"))])]))))))
+                     .child (mgl/MongolText "Delete task"))])]))))))
