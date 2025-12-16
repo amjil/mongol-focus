@@ -4,6 +4,7 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
+   ["package:drift/drift.dart" :as d]
    [cljd.flutter :as f]
    [virtual-keyboard.keyboard :as keyboard]
    [minii-focus.components.core :as comp]
@@ -46,16 +47,26 @@
                      .onPressed (fn []
                                   ;; Optimistic update: update local state immediately
                                   (when task-detail
-                                    (swap! state/app-state
-                                           (fn [s]
-                                             (if-let [td (:task-detail s)]
-                                               (assoc s :task-detail
-                                                      (-> td
-                                                          (assoc :content @content-state)
-                                                          (assoc :status (name @status-state))
-                                                          (assoc :deferAt @defer-state)
-                                                          (assoc :dueAt @due-state)))
-                                               s))))
+                                    (let [^dart-core/DateTime? defer-dt @defer-state
+                                          ^dart-core/DateTime? due-dt @due-state
+                                          ^#/(d/Value dart-core/DateTime?) 
+                                          defer-value (if defer-dt
+                                                       (d/Value defer-dt)
+                                                       (d/Value nil))
+                                          ^#/(d/Value dart-core/DateTime?) 
+                                          due-value (if due-dt
+                                                     (d/Value due-dt)
+                                                     (d/Value nil))]
+                                      (swap! state/app-state
+                                             (fn [s]
+                                               (if-let [td (:task-detail s)]
+                                                 (assoc s :task-detail
+                                                        (.copyWith td
+                                                                   .content @content-state
+                                                                   .status (name @status-state)
+                                                                   .deferAt defer-value
+                                                                   .dueAt due-value))
+                                                 s)))))
                                   (reset! editing-state false)
                                   ;; Then persist to database (auto-refresh happens in update-task)
                                   (-> (task/update-task (.-id task-detail)
@@ -63,7 +74,7 @@
                                                         (name @status-state)
                                                         @defer-state
                                                         @due-state)
-                                      (.then (fn [x]
+                                      (.then (fn [_]
                                                (task/refresh-task-detail! (.-id task-detail))))
                                       (.catchError (fn [error]
                                                      (dart-core/print (str "Error saving task: " error))
@@ -174,7 +185,7 @@
                                 .onPressed (fn []
                                              (-> (m/showDatePicker
                                                   .context ctx
-                                                  .initialDate (or display-defer (dt/now))
+                                                  .initialDate (or (display-defer) (dt/now))
                                                   .firstDate (dart-core/DateTime. 2000)
                                                   .lastDate (dart-core/DateTime. 2100))
                                                  (.then (fn [picked]

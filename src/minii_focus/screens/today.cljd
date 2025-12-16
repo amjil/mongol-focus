@@ -36,7 +36,7 @@
                                              .fontSize (comp/font-size :m))}))]
                           (->> _twi
                                (filter (fn [info]
-                                         (or @show-blocked
+                                         (or _sb
                                              (not (:blocked info)))))
                                (map (fn [info]
                                       (let [task-row (:task info)
@@ -91,57 +91,57 @@
                                                                         (dart-core/print (str "Entered focus: " task-id))))
                                                                (.catchError (fn [error]
                                                                               (dart-core/print (str "Error entering focus: " error))))))}))))))))]
-     ;;  (do
-     ;;    (when (and (not loading) (seq tasks) (empty? @tasks-with-info))
-     ;;      (-> (task/get-tasks-with-blocked-info tasks)
-     ;;          (.then (fn [info-list]
-     ;;                  (reset! tasks-with-info info-list)))
-     ;;          (.catchError (fn [error]
-     ;;                        (dart-core/print (str "Error loading blocked info: " error)))))))
-     (m/Scaffold
-      .appBar (m/AppBar
-               .actions [(m/IconButton
-                          .tooltip "Toggle blocked tasks"
-                          .icon (m/Icon (if @show-blocked m/Icons.visibility_off m/Icons.visibility))
-                          .onPressed (fn []
-                                       (swap! show-blocked not)))
-                         (m/IconButton
-                          .tooltip "Refresh"
-                          .icon (m/Icon m/Icons.refresh)
-                          .onPressed (fn []
-                                       (reset! tasks-with-info [])
-                                       (task/refresh-today-tasks!)
-                                       ;; Reload blocked info after refresh
-                                       (-> (task/get-today-tasks)
-                                           (.then (fn [refreshed-tasks]
-                                                    (when (seq refreshed-tasks)
-                                                      (-> (task/get-tasks-with-blocked-info refreshed-tasks)
-                                                          (.then (fn [info-list]
-                                                                   (reset! tasks-with-info info-list)))
-                                                          (.catchError (fn [error]
-                                                                         (dart-core/print (str "Error loading blocked info: " error)))))))))))])
-      .body (comp/mongol-row-layout
-             {:main-row (comp/vertical-reveal-motion
-                         {:child main-view})
-              :side-row (m/Container
-                         .padding (m/EdgeInsets.all (comp/space :m))
-                         .child (m/Column
-                                 .crossAxisAlignment m/CrossAxisAlignment.start
-                                 .children
-                                 [(comp/mongol-text-block
-                                   {:text "Today overview"
-                                    :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                  (m/SizedBox .height (comp/space :s))
-                                  (comp/mongol-text-block
-                                   {:text (str "Total " (count tasks))
-                                    :style (m/TextStyle .color (comp/color :text-weak))})
-                                  (m/SizedBox .height (comp/space :s))
-                                  (comp/mongol-text-block
-                                   {:text (str "Active " (count (filter #(= "active" (.-status %)) tasks)))
-                                    :style (m/TextStyle .color (comp/color :text-weak))})
-                                  (m/SizedBox .height (comp/space :s))
-                                  (comp/mongol-text-block
-                                   {:text (str "Blocked " (count (filter :blocked @tasks-with-info)))
-                                    :style (m/TextStyle .color (comp/color :text-weak))})]))})))))
+     (do
+       (when (and (not loading) (seq tasks) (empty? _twi))
+         (-> (task/get-tasks-with-blocked-info tasks)
+             (.then (fn [info-list]
+                      (reset! tasks-with-info info-list)))
+             (.catchError (fn [error]
+                            (dart-core/print (str "Error loading blocked info: " error))))))
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .actions [(m/IconButton
+                            .tooltip "Toggle blocked tasks"
+                            .icon (m/Icon (if _sb m/Icons.visibility_off m/Icons.visibility))
+                            .onPressed (fn []
+                                         (swap! show-blocked not)))
+                           (m/IconButton
+                            .tooltip "Refresh"
+                            .icon (m/Icon m/Icons.refresh)
+                            .onPressed (fn []
+                                         (reset! tasks-with-info [])
+                                         (task/refresh-today-tasks!)
+                                         ;; Reload blocked info after refresh
+                                         (-> (task/get-today-tasks)
+                                             (.then (fn [refreshed-tasks]
+                                                      (when (seq refreshed-tasks)
+                                                        (-> (task/get-tasks-with-blocked-info refreshed-tasks)
+                                                            (.then (fn [info-list]
+                                                                     (reset! tasks-with-info info-list)))
+                                                            (.catchError (fn [error]
+                                                                           (dart-core/print (str "Error loading blocked info: " error)))))))))))])
+        .body (comp/mongol-row-layout
+               {:main-row (comp/vertical-reveal-motion
+                           {:child main-view})
+                :side-row (m/Container
+                           .padding (m/EdgeInsets.all (comp/space :m))
+                           .child (m/Column
+                                   .crossAxisAlignment m/CrossAxisAlignment.center
+                                   .children
+                                   [(comp/mongol-text-block
+                                     {:text "Today overview"
+                                      :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                    (m/SizedBox .height (comp/space :s))
+                                    (comp/mongol-text-block
+                                     {:text (str "Total " (count tasks))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})
+                                    (m/SizedBox .height (comp/space :s))
+                                    (comp/mongol-text-block
+                                     {:text (str "Active " (count (filter #(= "active" (.-status %)) tasks)))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})
+                                    (m/SizedBox .height (comp/space :s))
+                                    (comp/mongol-text-block
+                                     {:text (str "Blocked " (count (filter :blocked @tasks-with-info)))
+                                      :style (m/TextStyle .color (comp/color :text-weak))})]))}))))))
 
 

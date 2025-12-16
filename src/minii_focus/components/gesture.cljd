@@ -33,12 +33,12 @@
   (f/widget
    (m/GestureDetector
     .onHorizontalDragEnd (fn [details]
-                           (let [velocity (.primaryVelocity details)]
+                           (let [velocity (.-primaryVelocity details)]
                              (cond
-                               (and (< velocity -500) on-swipe-left)
+                               (and velocity (< velocity -500) on-swipe-left)
                                (on-swipe-left)
                                
-                               (and (> velocity 500) on-swipe-right)
+                               (and velocity (> velocity 500) on-swipe-right)
                                (on-swipe-right))))
     .child child)))
 

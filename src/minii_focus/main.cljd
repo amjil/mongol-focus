@@ -148,6 +148,14 @@
                                                  (task/refresh-forecast-items!)
                                                  (task/refresh-focus-sessions!)
                                                  nil)
+                                             1 (-> (task/refresh-today-tasks!)
+                                                   (.then (fn [x]
+                                                            (dart-core/print (str "today tasks: " x))
+                                                            (swap! state/app-state assoc :today-tasks x)
+                                                            (swap! state/app-state assoc :today-loading false)))
+                                                   (.catchError (fn [e]
+                                                                  (dart-core/print e)
+                                                                  (swap! state/app-state assoc :today-loading false))))
                                              2 (-> (task/get-inbox-tasks)
                                                    (.then (fn [x]
                                                             (dart-core/print (str "inbox tasks: " x))
@@ -156,7 +164,7 @@
                                                    (.catchError (fn [e]
                                                                   (dart-core/print e)
                                                                   (swap! state/app-state assoc :inbox-loading false))))
-                                                                  
+
                                              3 (-> (task/refresh-focus-tasks!)
                                                    (.then (fn [x]
                                                             (dart-core/print (str "focus tasks: " x))
