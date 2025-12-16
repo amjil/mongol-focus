@@ -3,10 +3,13 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mongol]
+   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.keyboard :as keyboard]
-   [minii-focus.components.tokens :as tokens]))
+   [minii-focus.components.tokens :as tokens]
+   [minii-focus.components.text :as text]
+   [minii-focus.services.task :as task]))
 
 ;; ============================================
 ;; Input Dialog Component
@@ -21,10 +24,13 @@
   - on-submit: Submit callback function that receives input value (optional)
   - on-cancel: Cancel callback function (optional)
   - keyboard-options: Keyboard configuration options (optional)
+  - defer-date: Atom for defer date (optional)
+  - due-date: Atom for due date (optional)
+  - content: Atom for content (optional)
   
   Note: The virtual keyboard section needs to be integrated according to the actual API of the virtual-keyboard package.
   Currently using a placeholder, please replace with the actual keyboard widget."
-  [{:keys [controller title _on-submit on-cancel keyboard-options]}]
+  [{:keys [controller title _on-submit on-cancel keyboard-options defer-date due-date content]}]
   (f/widget
    :context ctx
    :let [_keyboard-info (merge keyboard-options/keyboard-option
@@ -33,46 +39,111 @@
                                     :keyboard/font-size 18
                                     :keyboard/key-container-color m/Colors.grey.shade500
                                     :keyboard/mongol-font-family "OnonSoninSans"}))]
-   (m/Dialog
-    .child (m/FractionallySizedBox
-            .widthFactor 1.0
-            .heightFactor 0.9
-            .child (m/Container
-                    .padding (m/EdgeInsets.all (tokens/space :m))
-              .child (m/Column
-                      .mainAxisSize m/MainAxisSize.min
+   (m/AlertDialog
+    .insetPadding (m/EdgeInsets.zero)
+    .contentPadding (m/EdgeInsets.zero)
+    .content
+    (m/Container
+     .padding (m/EdgeInsets.only .top (tokens/space :m) .left (tokens/space :m) .right (tokens/space :m))
+     .child (m/Column
+             .mainAxisSize m/MainAxisSize.max
+             .children
+             (into []
+                   (concat
+                    [(m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                       .children
-                      (into []
-                            (concat
-                             (when title
-                               [(m/Row
-                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                 .children
-                                 [(m/SizedBox)
-                                  (m/IconButton
-                                   .icon (m/Icon m/Icons.close)
+                      [(m/SizedBox)
+                       (m/IconButton
+                        .icon (m/Icon m/Icons.close)
+                        .onPressed (fn []
+                                     (when on-cancel (on-cancel))
+                                     (-> (m/Navigator.of ctx) (.pop))
+                                     nil))])]
+                    [(m/Expanded
+                      .child
+                      (m/Row
+                       .mainAxisSize m/MainAxisSize.max
+                       .children
+                       [(m/Container
+                         .padding (m/EdgeInsets.all (tokens/space :s))
+                         .decoration (m/BoxDecoration
+                                      .border (m/Border.all
+                                               .color m/Colors.grey.shade300
+                                               .width 1)
+                                      .borderRadius (m/BorderRadius.circular 4))
+                         .child (mongol/MongolTextField
+                                 .controller controller
+                                 .decoration nil
+                                 ;;        .decoration (m/InputDecoration
+                                 ;;                     .border m/InputBorder.none
+                                 ;;                     .hintText "Please enter...")
+                                 .onChanged (fn [v] (when content (reset! content v)))
+                                 .autofocus true))
+                        (m/SizedBox .width (tokens/space :s))
+                        (m/Column
+                         .mainAxisSize m/MainAxisSize.min
+                         .children
+                         [(m/Flexible
+                           .fit m/FlexFit.loose
+                           .child (m/TextButton
                                    .onPressed (fn []
-                                               (when on-cancel (on-cancel))
-                                               (-> (m/Navigator.of ctx) (.pop))
-                                               nil))])
-                                (m/SizedBox .height (tokens/space :m))])
-                             [(m/Expanded
-                               .flex 1
-                               .child (m/Container
-                                      .padding (m/EdgeInsets.all (tokens/space :s))
-                                      .decoration (m/BoxDecoration
-                                                  .border (m/Border.all
-                                                          .color m/Colors.grey.shade300
-                                                          .width 1)
-                                                  .borderRadius (m/BorderRadius.circular 4))
-                                      .child (mongol/MongolTextField
-                                             .controller controller
-                                             .decoration (m/InputDecoration
-                                                        .border m/InputBorder.none
-                                                        .hintText "Please enter...")
-                                             .autofocus true)))
-                              (m/SizedBox .height (tokens/space :m))
-                              (keyboard/keyboard {:custom-fns {}})]))))))))
+                                                (-> (m/showDatePicker
+                                                     .context ctx
+                                                     .initialDate (dart-core/DateTime.now)
+                                                     .firstDate (dart-core/DateTime. 2000)
+                                                     .lastDate (dart-core/DateTime. 2100))
+                                                    (.then (fn [picked]
+                                                             (when defer-date (reset! defer-date picked)))))
+                                                nil)
+                                   .child (text/mongol-text-block
+                                           {:text (if (and defer-date @defer-date)
+                                                    (str "Start " (.toString @defer-date))
+                                                    "Start Not set")
+                                            :style (m/TextStyle .fontSize (tokens/font-size :s))})))
+                          (m/SizedBox .height (tokens/space :s))
+                          (m/Flexible
+                           .fit m/FlexFit.loose
+                           .child (m/TextButton
+                                   .onPressed (fn []
+                                                (-> (m/showDatePicker
+                                                     .context ctx
+                                                     .initialDate (dart-core/DateTime.now)
+                                                     .firstDate (dart-core/DateTime. 2000)
+                                                     .lastDate (dart-core/DateTime. 2100))
+                                                    (.then (fn [picked]
+                                                             (when due-date (reset! due-date picked)))))
+                                                nil)
+                                   .child (text/mongol-text-block
+                                           {:text (if (and due-date @due-date)
+                                                    (str "Due " (.toString @due-date))
+                                                    "Due Not set")
+                                            :style (m/TextStyle .fontSize (tokens/font-size :s))})))])
+                        (m/SizedBox .width (tokens/space :s))
+                        (mongol/MongolElevatedButton
+                         .onPressed (fn []
+                                      (let [content-value (if content @content (.-text controller))
+                                            defer-value (when defer-date @defer-date)
+                                            due-value (when due-date @due-date)]
+                                        (if (empty? content-value)
+                                          (task/show-toast ctx "Please enter content" :warning)
+                                          (-> (task/create-task content-value "task" "active" defer-value due-value)
+                                              (.then (fn [_]
+                                                       (when content (reset! content ""))
+                                                       (when defer-date (reset! defer-date nil))
+                                                       (when due-date (reset! due-date nil))
+                                                       (set! (.-text controller) "")
+                                                       (task/reload-inbox! ctx)
+                                                       (task/show-toast ctx "Added to inbox" :success)
+                                                       (-> (m/Navigator.of ctx) (.pop))))
+                                              (.catchError (fn [e]
+                                                             (dart-core/print e)
+                                                             (task/show-toast ctx "Add failed" :error)))))))
+                         .child (text/mongol-text-block
+                                 {:text "Add"
+                                  :style (m/TextStyle .fontSize (tokens/font-size :m))}))]))
+                     (m/SizedBox .height (tokens/space :m))
+                     (keyboard/keyboard {:custom-fns {}})])))))))
 
 ;; ============================================
 ;; Helper function to show dialog
@@ -86,8 +157,11 @@
   - title: Dialog title (optional)
   - on-submit: Submit callback function that receives input value (optional)
   - on-cancel: Cancel callback function (optional)
-  - keyboard-options: Keyboard configuration options (optional)"
-  [context {:keys [controller title on-submit on-cancel keyboard-options]}]
+  - keyboard-options: Keyboard configuration options (optional)
+  - defer-date: Atom for defer date (optional)
+  - due-date: Atom for due date (optional)
+  - content: Atom for content (optional)"
+  [context {:keys [controller title on-submit on-cancel keyboard-options defer-date due-date content]}]
   (m/showDialog
        .context context
        .builder (fn [_ctx]
@@ -96,5 +170,8 @@
                    :title title
                    :on-submit on-submit
                    :on-cancel on-cancel
-                   :keyboard-options keyboard-options}))))
+                   :keyboard-options keyboard-options
+                   :defer-date defer-date
+                   :due-date due-date
+                   :content content}))))
 

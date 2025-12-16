@@ -2,11 +2,12 @@
   "Inbox / Quick Entry"
   (:require
    ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
-   [minii-focus.services.task :as task-svc]
+   [minii-focus.components.dialog :as dialog]
+   [minii-focus.screens.task-detail :as task-detail]
+   [minii-focus.services.task :as task]
    [minii-focus.states.app-state :as state]))
 
 (defn- side-panel [tasks defer-date due-date]
@@ -38,7 +39,8 @@
 (defn inbox-screen []
   (let [content (atom "")
         defer-date (atom nil)
-        due-date (atom nil)]
+        due-date (atom nil)
+        controller (m/TextEditingController.)]
     (f/widget
      :context ctx
      :watch [_ct content
@@ -55,77 +57,61 @@
         .child
         (m/Row
          .mainAxisSize m/MainAxisSize.max
+         .mainAxisAlignment m/MainAxisAlignment.spaceAround
          .children
-         [(mgl/MongolTextField
-           .decoration (m/InputDecoration .labelText "Quick entry")
-           .onChanged (fn [v] (reset! content v)))
+         [(m/InkWell
+           .onTap (fn []
+                    (dialog/show-mongol-input-dialog
+                     ctx
+                     {:controller controller
+                      :defer-date defer-date
+                      :due-date due-date
+                      :content content}))
+           .child (m/Container
+                   .padding (m/EdgeInsets.all (comp/space :s))
+                   .decoration (m/BoxDecoration
+                                .border (m/Border.all
+                                         .color m/Colors.grey.shade300
+                                         .width 1)
+                                .borderRadius (m/BorderRadius.circular 4))
+                   .child (m/Column
+                           .mainAxisSize m/MainAxisSize.max
+                           .mainAxisAlignment m/MainAxisAlignment.center
+                           .children
+                           [(comp/mongol-text-block
+                             {:text (if (empty? @content)
+                                      "Quick entry"
+                                      @content)
+                              :style (m/TextStyle
+                                      .fontSize (comp/font-size :m)
+                                      .color (if (empty? @content)
+                                               m/Colors.grey.shade600
+                                               m/Colors.black))})])))
           (m/SizedBox .width (comp/space :s))
-          ;; (m/Column
-          ;;  .mainAxisSize m/MainAxisSize.min
-          ;;  .children
-          ;;  [(m/Flexible
-          ;;    .fit m/FlexFit.loose
-          ;;    .child (m/TextButton
-          ;;            .onPressed (fn []
-          ;;                         (-> (m/showDatePicker
-          ;;                              .context ctx
-          ;;                              .initialDate (dart-core/DateTime.now)
-          ;;                              .firstDate (dart-core/DateTime. 2000)
-          ;;                              .lastDate (dart-core/DateTime. 2100))
-          ;;                             (.then (fn [picked]
-          ;;                                      (reset! defer-date picked))))
-          ;;                         nil)
-          ;;            .child (comp/mongol-text-block
-          ;;                    {:text (or (str "Start " (when @defer-date (.toString @defer-date))) "Start Not set")
-          ;;                     :style (m/TextStyle .fontSize (comp/font-size :s))})))
-          ;;   (m/SizedBox .height (comp/space :s))
-          ;;   (m/Flexible
-          ;;    .fit m/FlexFit.loose
-          ;;    .child (m/TextButton
-          ;;            .onPressed (fn []
-          ;;                         (-> (m/showDatePicker
-          ;;                              .context ctx
-          ;;                              .initialDate (dart-core/DateTime.now)
-          ;;                              .firstDate (dart-core/DateTime. 2000)
-          ;;                              .lastDate (dart-core/DateTime. 2100))
-          ;;                             (.then (fn [picked]
-          ;;                                      (reset! due-date picked))))
-          ;;                         nil)
-          ;;            .child (comp/mongol-text-block
-          ;;                    {:text (or (str "Due " (when @due-date (.toString @due-date))) "Due Not set")
-          ;;                     :style (m/TextStyle .fontSize (comp/font-size :s))})))])
-          ;; (m/SizedBox .width (comp/space :s))
-          ;; (mgl/MongolElevatedButton
-          ;;  .onPressed (fn []
-          ;;               (if (empty? @content)
-          ;;                 (task-svc/show-toast ctx "Please enter content" :warning)
-          ;;                 (-> (task-svc/create-task @content "task" "active" @defer-date @due-date)
-          ;;                     (.then (fn [_]
-          ;;                              (reset! content "")
-          ;;                              (reset! defer-date nil)
-          ;;                              (reset! due-date nil)
-          ;;                              (task-svc/reload-inbox! ctx)
-          ;;                              (task-svc/show-toast ctx "Added to inbox" :success)))
-          ;;                     (.catchError (fn [e]
-          ;;                                    (dart-core/print e)
-          ;;                                    (task-svc/show-toast ctx "Add failed" :error))))))
-          ;;  .child (comp/mongol-text-block
-          ;;          {:text "Add"
-          ;;           :style (m/TextStyle .fontSize (comp/font-size :m))}))
           (m/Divider)
           (cond
             loading (m/Center .child (m/CircularProgressIndicator))
             (empty? tasks) (comp/mongol-text-block
                             {:text "Inbox is empty"
                              :style (m/TextStyle .color (comp/color :text-weak))})
-            :else (comp/mongol-task-list tasks (fn [task]
-                                                 (-> (task-svc/mark-task-completed (.-id task))
-                                                     (.then (fn []
-                                                              (task-svc/reload-inbox! ctx)
-                                                              (task-svc/show-toast ctx "Completed" :success)))
-                                                     (.catchError (fn [e]
-                                                                    (dart-core/print e)
-                                                                    (task-svc/show-toast ctx "Update failed" :error)))))))]))
+            :else (comp/mongol-task-list
+                   tasks
+                   (fn [task]
+                     (-> (task/mark-task-completed (.-id task))
+                         (.then (fn []
+                                  (task/reload-inbox! ctx)
+                                  (task/show-toast ctx "Completed" :success)))
+                         (.catchError (fn [e]
+                                        (dart-core/print e)
+                                        (task/show-toast ctx "Update failed" :error)))))
+                   (fn [task]
+                     ;; Navigate to task detail page
+                     (task/refresh-task-detail! (.-id task))
+                     (m/Navigator.push
+                      ctx
+                      (m/MaterialPageRoute
+                       .builder (fn [_]
+                                  (task-detail/task-detail-screen (.-id task))))))))]))
        :side-row (side-panel tasks defer-date due-date)}))))
 
 ;; NOTE: Loading/refresh is handled by services; pages only subscribe to state and trigger refresh via buttons.
