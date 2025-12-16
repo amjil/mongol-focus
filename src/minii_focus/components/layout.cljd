@@ -42,3 +42,17 @@
                        (on-page-changed index)))
     .children pages)))
 
+
+(defn mongol-row-layout
+  "Row-first page base container"
+  [{:keys [main-row side-row]}]
+  (f/widget
+   (m/Row
+    .mainAxisSize m/MainAxisSize.max
+    .mainAxisAlignment m/MainAxisAlignment.spaceAround
+    .children
+    [(m/Expanded
+      .child main-row)
+     (when side-row
+       (m/Expanded
+        .child side-row))])))

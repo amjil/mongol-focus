@@ -37,87 +37,86 @@
          items (:forecast-items @state/app-state)]
    (m/Scaffold
     .appBar (m/AppBar
-             .title (comp/mongol-text-block
-                     {:text "Forecast/Calendar"
-                      :style (m/TextStyle .fontSize (comp/font-size :l))})
              .actions [(m/IconButton
                         .tooltip "Refresh"
                         .icon (m/Icon m/Icons.refresh)
-                        .onPressed (fn [] (task-svc/refresh-forecast-items!)))])
-    .body (cond
-            loading (m/Center .child (m/CircularProgressIndicator))
-            (empty? items) (m/Center
-                            .child (comp/mongol-text-block
-                                    {:text "No tasks with dates"
-                                     :style (m/TextStyle .color (comp/color :text-weak))}))
-            :else
-            (let [buckets (classify items)
-                  view (case @bucket-filter
-                         :overdue {:title "Overdue" :data (:overdue buckets)}
-                         :today {:title "Today" :data (:today buckets)}
-                         :upcoming {:title "Upcoming" :data (:upcoming buckets)}
-                         {:title "All" :data (concat (:overdue buckets)
-                                                       (:today buckets)
-                                                       (:upcoming buckets))})
-                  side-panel (m/Container
-                              .padding (m/EdgeInsets.all (comp/space :m))
-                              .child (m/Column
-                                      .crossAxisAlignment m/CrossAxisAlignment.start
-                                      .children
-                                      [(comp/mongol-text-block
-                                        {:text "Time buckets"
-                                         :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                       (m/SizedBox .height (comp/space :s))
-                                       (comp/mongol-text-block
-                                        {:text (str "Overdue " (count (:overdue buckets)))
-                                         :style (m/TextStyle .color (comp/color :text-weak))})
-                                       (comp/mongol-text-block
-                                        {:text (str "Today " (count (:today buckets)))
-                                         :style (m/TextStyle .color (comp/color :text-weak))})
-                                       (comp/mongol-text-block
-                                        {:text (str "Upcoming " (count (:upcoming buckets)))
-                                         :style (m/TextStyle .color (comp/color :text-weak))})]))]
-              (comp/mongol-column-layout
-               {:main-column
-                (m/ListView
-                 .padding (m/EdgeInsets.all (comp/space :m))
-                 .children
-                 [(m/Wrap
-                   .spacing (comp/space :s)
-                   .children
-                   [(m/ChoiceChip
-                     .label (m/Text "All")
-                     .selected (= @bucket-filter :all)
-                     .onSelected (fn [_] (reset! bucket-filter :all)))
-                    (m/ChoiceChip
-                     .label (m/Text "Overdue")
-                     .selected (= @bucket-filter :overdue)
-                     .onSelected (fn [_] (reset! bucket-filter :overdue)))
-                    (m/ChoiceChip
-                     .label (m/Text "Today")
-                     .selected (= @bucket-filter :today)
-                     .onSelected (fn [_] (reset! bucket-filter :today)))
-                    (m/ChoiceChip
-                     .label (m/Text "Upcoming")
-                     .selected (= @bucket-filter :upcoming)
-                     .onSelected (fn [_] (reset! bucket-filter :upcoming)))])
-                  (m/SizedBox .height (comp/space :m))
-                  (comp/mongol-text-block
-                   {:text (:title view)
-                    :style (m/TextStyle .fontSize (comp/font-size :m))})
-                  (if (empty? (:data view))
-                    (m/ListTile .title (comp/mongol-text-block {:text "None"}))
-                    (m/Column
-                     .children
-                     (for [it (:data view)]
-                       (m/ListTile
-                        .title (comp/mongol-text-block
-                                {:text (.-content it)
-                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
-                        .subtitle (comp/mongol-text-block
-                                   {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
-                                               " / defer "
-                                               (or (dt/format-date (.-deferAt it)) "-"))
-                                    :style (m/TextStyle .color (comp/color :text-weak)
-                                                        .fontSize (comp/font-size :s))})))))])
-                :side-column side-panel}))))))
+                        .onPressed (fn [] (task-svc/refresh-forecast-items!)))]))
+   .body
+   (m/SafeArea)
+   (cond
+     loading (m/Center .child (m/CircularProgressIndicator))
+     (empty? items) (m/Center
+                     .child (comp/mongol-text-block
+                             {:text "No tasks with dates"
+                              :style (m/TextStyle .color (comp/color :text-weak))}))
+     :else
+     (let [buckets (classify items)
+           view (case @bucket-filter
+                  :overdue {:title "Overdue" :data (:overdue buckets)}
+                  :today {:title "Today" :data (:today buckets)}
+                  :upcoming {:title "Upcoming" :data (:upcoming buckets)}
+                  {:title "All" :data (concat (:overdue buckets)
+                                              (:today buckets)
+                                              (:upcoming buckets))})
+           side-panel (m/Container
+                       .padding (m/EdgeInsets.all (comp/space :m))
+                       .child (m/Column
+                               .crossAxisAlignment m/CrossAxisAlignment.start
+                               .children
+                               [(comp/mongol-text-block
+                                 {:text "Time buckets"
+                                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                (m/SizedBox .height (comp/space :s))
+                                (comp/mongol-text-block
+                                 {:text (str "Overdue " (count (:overdue buckets)))
+                                  :style (m/TextStyle .color (comp/color :text-weak))})
+                                (comp/mongol-text-block
+                                 {:text (str "Today " (count (:today buckets)))
+                                  :style (m/TextStyle .color (comp/color :text-weak))})
+                                (comp/mongol-text-block
+                                 {:text (str "Upcoming " (count (:upcoming buckets)))
+                                  :style (m/TextStyle .color (comp/color :text-weak))})]))]
+       (comp/mongol-column-layout
+        {:main-column
+         (m/ListView
+          .padding (m/EdgeInsets.all (comp/space :m))
+          .children
+          [(m/Wrap
+            .spacing (comp/space :s)
+            .children
+            [(m/ChoiceChip
+              .label (m/Text "All")
+              .selected (= @bucket-filter :all)
+              .onSelected (fn [_] (reset! bucket-filter :all)))
+             (m/ChoiceChip
+              .label (m/Text "Overdue")
+              .selected (= @bucket-filter :overdue)
+              .onSelected (fn [_] (reset! bucket-filter :overdue)))
+             (m/ChoiceChip
+              .label (m/Text "Today")
+              .selected (= @bucket-filter :today)
+              .onSelected (fn [_] (reset! bucket-filter :today)))
+             (m/ChoiceChip
+              .label (m/Text "Upcoming")
+              .selected (= @bucket-filter :upcoming)
+              .onSelected (fn [_] (reset! bucket-filter :upcoming)))])
+           (m/SizedBox .height (comp/space :m))
+           (comp/mongol-text-block
+            {:text (:title view)
+             :style (m/TextStyle .fontSize (comp/font-size :m))})
+           (if (empty? (:data view))
+             (m/ListTile .title (comp/mongol-text-block {:text "None"}))
+             (m/Column
+              .children
+              (for [it (:data view)]
+                (m/ListTile
+                 .title (comp/mongol-text-block
+                         {:text (.-content it)
+                          :style (m/TextStyle .fontSize (comp/font-size :m))})
+                 .subtitle (comp/mongol-text-block
+                            {:text (str "due " (or (dt/format-date (.-dueAt it)) "-")
+                                        " / defer "
+                                        (or (dt/format-date (.-deferAt it)) "-"))
+                             :style (m/TextStyle .color (comp/color :text-weak)
+                                                 .fontSize (comp/font-size :s))})))))])
+         :side-column side-panel})))))

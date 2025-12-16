@@ -13,6 +13,7 @@
 
 ;; Export all components for easy use
 (def mongol-column-layout layout/mongol-column-layout)
+(def mongol-row-layout layout/mongol-row-layout)
 (def vertical-page-view layout/vertical-page-view)
 
 (def mongol-text-block text/mongol-text-block)

@@ -44,7 +44,7 @@
     (.get
      (doto (.select database (.-reviews database))
        (.where (fn [^drift/Reviews tbl] (.equals (.-type tbl) type)))
-       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))])))))
 
 (defn get-reviews-by-date-range
   "Get review records by date range"
@@ -55,7 +55,7 @@
        (.where (fn [^drift/Reviews tbl]
                  (and (.isBiggerOrEqual (.-createdAt tbl) start-date)
                       (.isSmallerOrEqual (.-createdAt tbl) end-date))))
-       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))])))))
 
 (defn get-daily-reviews
   "Get daily review records"
@@ -80,7 +80,7 @@
        (.where (fn [^drift/Reviews tbl]
                  (and (.equals (.-type tbl) "project")
                       (.equals (.-targetId tbl) project-id))))
-       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))])))))
 
 ;; =============================================================================
 ;; Convenience functions

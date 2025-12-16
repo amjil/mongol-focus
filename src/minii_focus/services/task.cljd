@@ -18,21 +18,21 @@
 
 (defn create-task
   "Create new task"
-  [{:keys [content type status defer-at due-at]}]
+  [^String content type status defer-at due-at]
   (let [^drift/AppDatabase database (db/get-database)
-        task-id (ids/generate-id)
-        task-type (or type "task")
-        task-status (or status "active")
+        ^String task-id (ids/generate-id)
+        ^String task-type (or type "task")
+        ^String task-status (or status "active")
         now (dart-core/DateTime.now)
         companion (drift/ItemsCompanion.insert
                    .id task-id
                    .type task-type
-                   .content (or content "")
-                   .status task-status
-                   .deferAt (when defer-at (d/Value defer-at))
-                   .dueAt (when due-at (d/Value due-at))
-                   .createdAt now
-                   .updatedAt now)]
+                   .content content
+                   .status (d/Value task-status)
+                   .deferAt (if defer-at (d/Value defer-at) (d/Value nil))
+                   .dueAt (if due-at (d/Value due-at) (d/Value nil))
+                   .createdAt (d/Value now)
+                   .updatedAt (d/Value now))]
     (.insert
      (.into database (.-items database))
      companion)))
@@ -75,7 +75,7 @@
     (.get
      (doto (.select database (.-items database))
        (.where (fn [^drift/Items tbl] (.equals (.-type tbl) "project")))
-       (.orderBy [(fn [tbl] (.asc (.-createdAt tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.asc (.-createdAt tbl)))])))))
 
 ;; =============================================================================
 ;; Task query operations
@@ -108,8 +108,8 @@
        (.where (fn [^drift/Items tbl]
                  (and (.isNull (.-deferAt tbl))
                       (.isNull (.-dueAt tbl))
-                      (.notEquals (.-status tbl) "completed"))))
-       (.orderBy [(fn [tbl] (.desc (.-createdAt tbl)))])))))
+                      (.isNotValue (.-status tbl) "completed"))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))])))))
 
 (defn get-forecast-items
   "Get tasks to display in Forecast (has defer or due, and incomplete)"
@@ -120,8 +120,8 @@
        (.where (fn [^drift/Items tbl]
                  (and (or (.isNotNull (.-dueAt tbl))
                           (.isNotNull (.-deferAt tbl)))
-                      (.notEquals (.-status tbl) "completed"))))
-       (.orderBy [(fn [tbl] (.asc (.-dueAt tbl)))])))))
+                      (.isNotValue (.-status tbl) "completed"))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.asc (.-dueAt tbl)))])))))
 
 (defn get-focus-sessions
   "Get all Focus sessions (ordered by time descending)"
@@ -129,7 +129,7 @@
   (let [^drift/AppDatabase database (db/get-database)]
     (.get
      (doto (.select database (.-focusSessions database))
-       (.orderBy [(fn [tbl] (.desc (.-startAt tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-startAt tbl)))])))))
 
 ;; =============================================================================
 ;; Page data loading/refresh (side effects in services, pages only trigger)

@@ -1,6 +1,7 @@
 (ns minii-focus.main
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
@@ -85,8 +86,7 @@
                         {:title "Stats" :idx 7}
                         {:title "Settings" :idx 8}]
           set-page! (fn [idx]
-                      (reset! current-index idx)
-                      (-> (m/Navigator.of ctx) (.maybePop)))]
+                      (reset! current-index idx))]
     :bind {:info info}
     :watch [_tab current-index]
 
@@ -94,6 +94,10 @@
      .theme (m/ThemeData
              .primarySwatch m/Colors.blue
              .useMaterial3 true)
+     .darkTheme (m/ThemeData
+                 .primarySwatch m/Colors.blue
+                 .useMaterial3 true
+                 .brightness m/Brightness.dark)
      .routes {"/today" today/today-screen
               "/inbox" inbox/inbox-screen
               "/focus" focus/focus-screen
@@ -105,31 +109,46 @@
               "/settings" settings/settings-screen}
      .home (m/Scaffold
             .drawer (m/Drawer
-                     .child (m/ListView
-                             .scrollDirection m/Axis.horizontal
-                             .padding (m/EdgeInsets.zero)
-                             .children
-                             (into [(m/DrawerHeader
-                                     .decoration (m/BoxDecoration .color m/Colors.blue)
-                                     .child (comp/mongol-text-block
-                                             {:text "Navigation"
-                                              :style (m/TextStyle .fontSize (comp/font-size :l)
-                                                                  .color m/Colors.white)}))]
-                                   (for [{:keys [title idx]} drawer-items]
-                                     (m/ListTile
-                                      .title (comp/mongol-text-block
-                                              {:text title
-                                               :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                      .onTap (fn [] (set-page! idx) nil))))))
+                     .child (m/SafeArea
+                             .child
+                             (m/ListView
+                              .scrollDirection m/Axis.horizontal
+                              .padding (m/EdgeInsets.zero)
+                              .children
+                              (into [(m/DrawerHeader
+                                      .decoration (m/BoxDecoration .color m/Colors.blue)
+                                      .child (comp/mongol-text-block
+                                              {:text "Navigation"
+                                               :style (m/TextStyle .fontSize (comp/font-size :l)
+                                                                   .color m/Colors.white)}))]
+                                    (for [{:keys [title idx]} drawer-items]
+                                      (mgl/MongolListTile
+                                       .title (comp/mongol-text-block
+                                               {:text title
+                                                :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                       .onTap (fn [] 
+                                                (set-page! idx) 
+                                                nil)))))))
             .body (m/IndexedStack
                    .index @current-index
                    .children pages)
             .bottomNavigationBar (m/BottomNavigationBar
                                   .type m/BottomNavigationBarType.fixed
                                   .currentIndex @current-index
-                                  .onTap (fn [idx] (set-page! idx) nil)
+                                  .onTap (fn [idx] (set-page! idx)
+                                           (condp = idx
+                                             1 (-> (task/get-inbox-tasks)
+                                                   (.then (fn [x]
+                                                            (dart-core/print (str "inbox tasks: " x))
+                                                            (swap! state/app-state assoc :inbox-tasks x)
+                                                            (swap! state/app-state assoc :inbox-loading false)))
+                                                   (.catchError (fn [e]
+                                                                  (dart-core/print e)
+                                                                  (swap! state/app-state :inbox-loading false))))
+                                             nil)
+                                           nil)
                                   .items (into []
                                                (for [{:keys [title icon]} bottom-items]
                                                  (m/BottomNavigationBarItem
                                                   .icon (m/Icon icon)
-                                                 .label title)))))))))
+                                                  .label title)))))))))

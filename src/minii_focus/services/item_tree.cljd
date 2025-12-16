@@ -56,7 +56,7 @@
     (.get
      (doto (.select database (.-itemTree database))
        (.where (fn [^drift/ItemTree tbl] (.equals (.-parentId tbl) parent-id)))
-       (.orderBy [(fn [tbl] (.asc (.-position tbl)))])))))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.asc (.-position tbl)))])))))
 
 (defn get-children-with-items
   "Get child tasks of parent task and their item records, sorted by position"

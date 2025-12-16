@@ -13,19 +13,21 @@
    .trailing trailing))
    
 (defn mongol-task-list [tasks on-check]
-  (m/ListView.builder
-   .scrollDirection m/Axis.horizontal
-   .itemCount (count tasks)
-   .itemBuilder (fn [_context index]
-                  (let [task (nth tasks index)]
-                    (mongol-list-tile
-                     (text/mongol-text-block
-                      {:text (.-content task)
-                       :style (m/TextStyle .fontSize (tokens/font-size :m))})
-                     (text/mongol-text-block
-                      {:text (str "Created at " (.toString (.-createdAt task)))
-                       :style (m/TextStyle .color (tokens/color :text-weak)
-                                           .fontSize (tokens/font-size :s))})
-                     (m/IconButton
-                      .icon (m/Icon m/Icons.check)
-                      .onPressed (fn [] (on-check task))))))))
+  (m/Expanded
+   .child
+   (m/ListView.builder
+    .scrollDirection m/Axis.horizontal
+    .itemCount (count tasks)
+    .itemBuilder (fn [_context index]
+                   (let [task (nth tasks index)]
+                     (mongol-list-tile
+                      (text/mongol-text-block
+                       {:text (.-content task)
+                        :style (m/TextStyle .fontSize (tokens/font-size :m))})
+                      (text/mongol-text-block
+                       {:text (str "Created at " (.toString (.-createdAt task)))
+                        :style (m/TextStyle .color (tokens/color :text-weak)
+                                            .fontSize (tokens/font-size :s))})
+                      (m/IconButton
+                       .icon (m/Icon m/Icons.check)
+                       .onPressed (fn [] (on-check task)))))))))
