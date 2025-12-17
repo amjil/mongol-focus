@@ -5,6 +5,7 @@
   ["package:drift/drift.dart" :as d]
   ["package:cljd_mongol_focus/database/database.dart" :as drift]
    [minii-focus.services.database :as db]
+   [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]))
 
@@ -121,4 +122,80 @@
       (.catchError (fn [e]
                      (dart-core/print (str "Error refreshing reviews: " e))
                      (state/set-reviews-loading! false)))))
+
+(defn- next-review-date
+  "Compute next review date for a project item given interval days.
+   If lastReviewedAt is nil, use createdAt as base."
+  [^drift/Item project]
+  (let [interval-days (.-reviewIntervalDays project)
+        base-date (or (.-lastReviewedAt project)
+                      (.-createdAt project))]
+    (when (and interval-days base-date)
+      (.add base-date (dart-core/Duration .days interval-days)))))
+
+(defn get-due-review-projects
+  "Return projects that are due for review (now >= next-review-date) and still active."
+  []
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)]
+    (-> (doto (.select database (.-items database))
+          (.where (fn [^drift/Items tbl]
+                    (and
+                     (.equals (.-type tbl) "project")
+                     (.isNotNull (.-reviewIntervalDays tbl))
+                     (.isNotValue (.-status tbl) "completed")))))
+        (.get)
+        (.then (fn [projects]
+                 (->> projects
+                      (filter (fn [p]
+                                (when-let [next-date (next-review-date p)]
+                                  (or (.isBefore next-date now)
+                                      (.isAtSameMomentAs next-date now)))))
+                      (into [])))))))
+
+(defn refresh-due-review-projects!
+  "Refresh list of projects that are due for review and write to app-state."
+  []
+  (-> (get-due-review-projects)
+      (.then (fn [projects]
+               (state/set-review-due-projects! projects)
+               projects))
+      (.catchError (fn [e]
+                     (dart-core/print (str "Error refreshing due review projects: " e))
+                     (dart-core/Future.value [])))))
+
+(defn schedule-project-review-reminder
+  "Schedule a notification for a specific project review at its next review date.
+   If next review date is in the past, schedule it 5 minutes from now."
+  [^drift/Item project]
+  (let [now (dart-core/DateTime.now)
+        title (str "Review project: " (.-content project))
+        base-next (next-review-date project)
+        reminder-time (if (and base-next (.isAfter base-next now))
+                        base-next
+                        (.add now (dart-core/Duration .minutes 5)))]
+    (notif/schedule-task-reminder
+     (.-id project)
+     reminder-time
+     title
+     "It's time to review this project.")))
+
+(defn refresh-project-review-reminders!
+  "Scan all projects and schedule review reminders based on their review settings.
+   Can be called on app startup or when project review settings change."
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (-> (.get
+         (doto (.select database (.-items database))
+           (.where (fn [^drift/Items tbl]
+                     (and
+                      (.equals (.-type tbl) "project")
+                      (.isNotNull (.-reviewIntervalDays tbl))
+                      (.isNotValue (.-status tbl) "completed"))))))
+        (.then (fn [projects]
+                 (dart-core/Future.wait
+                  (map schedule-project-review-reminder projects))))
+        (.catchError (fn [e]
+                       (dart-core/print (str "Error refreshing project review reminders: " e))
+                       (dart-core/Future.value nil))))))
 

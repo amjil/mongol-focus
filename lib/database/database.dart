@@ -41,6 +41,12 @@ class Items extends Table {
   // recurrence end date (optional)
   DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
 
+  // last time this item (typically a project) was reviewed
+  DateTimeColumn get lastReviewedAt => dateTime().nullable()();
+
+  // preferred review interval in days (e.g. 7, 30); null means no automatic review reminder
+  IntColumn get reviewIntervalDays => integer().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -173,7 +179,7 @@ class AppDatabase extends _$AppDatabase {
       _perspectivesDao ??= PerspectivesDao(this);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -190,6 +196,12 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(items, items.recurrenceEndDate);
           // Create Perspectives table
           await m.createTable(perspectives);
+        }
+        if (from < 3) {
+          // Migration from version 2 to 3
+          // Add review-related fields to Items table
+          await m.addColumn(items, items.lastReviewedAt);
+          await m.addColumn(items, items.reviewIntervalDays);
         }
       },
     );

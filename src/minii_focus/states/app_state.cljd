@@ -21,6 +21,7 @@
          :forecast-items []
          :projects []
          :reviews []
+         :review-due-projects []
          ;; Task detail page data
          :task-detail nil
          :task-detail-tags #{}
@@ -126,6 +127,9 @@
 
 (defn set-reviews-loading! [loading]
   (update-state! assoc :reviews-loading loading))
+
+(defn set-review-due-projects! [projects]
+  (update-state! assoc :review-due-projects projects))
 
 (defn set-tags! [tags]
   (update-state! assoc :tags tags))

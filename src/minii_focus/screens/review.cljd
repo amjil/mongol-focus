@@ -14,7 +14,9 @@
         review-type (atom "daily")]
     (f/widget
      :context _ctx
-     :watch [{reviews :reviews loading :reviews-loading} state/app-state
+     :watch [{reviews :reviews
+              loading :reviews-loading
+              due-projects :review-due-projects} state/app-state
              _ct content
              _tp review-type]
      (m/Scaffold
@@ -38,6 +40,28 @@
             .child (mgl/MongolTextField
                     .decoration (m/InputDecoration .labelText "New review")
                     .onChanged (fn [v] (reset! content v))))
+           (m/SizedBox .height (comp/space :s))
+           ;; Due projects section (simple textual list for now)
+           (if (seq due-projects)
+             (m/Column
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [(comp/mongol-text-block
+                {:text "Projects due for review"
+                 :style (m/TextStyle
+                         .fontSize (comp/font-size :s)
+                         .color (comp/color :text-weak))})
+               (m/SizedBox .height (comp/space :xs))
+               (m/Container
+                .height 120
+                .child
+                (m/ListView.builder
+                 .itemCount (count due-projects)
+                 .itemBuilder (fn [_ idx]
+                                (let [p (nth due-projects idx)]
+                                  (mgl/MongolListTile
+                                   .title (mgl/MongolText (.-content p)))))))])
+             (m/SizedBox))
            (m/SizedBox .height (comp/space :s))
            (m/ElevatedButton
             .onPressed (fn []

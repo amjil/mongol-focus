@@ -120,6 +120,28 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _lastReviewedAtMeta = const VerificationMeta(
+    'lastReviewedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastReviewedAt =
+      GeneratedColumn<DateTime>(
+        'last_reviewed_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _reviewIntervalDaysMeta =
+      const VerificationMeta('reviewIntervalDays');
+  @override
+  late final GeneratedColumn<int> reviewIntervalDays = GeneratedColumn<int>(
+    'review_interval_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -156,6 +178,8 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     isFlagged,
     recurrenceRule,
     recurrenceEndDate,
+    lastReviewedAt,
+    reviewIntervalDays,
     createdAt,
     updatedAt,
   ];
@@ -240,6 +264,24 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         ),
       );
     }
+    if (data.containsKey('last_reviewed_at')) {
+      context.handle(
+        _lastReviewedAtMeta,
+        lastReviewedAt.isAcceptableOrUnknown(
+          data['last_reviewed_at']!,
+          _lastReviewedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('review_interval_days')) {
+      context.handle(
+        _reviewIntervalDaysMeta,
+        reviewIntervalDays.isAcceptableOrUnknown(
+          data['review_interval_days']!,
+          _reviewIntervalDaysMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -301,6 +343,14 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}recurrence_end_date'],
       ),
+      lastReviewedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_reviewed_at'],
+      ),
+      reviewIntervalDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}review_interval_days'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -329,6 +379,8 @@ class Item extends DataClass implements Insertable<Item> {
   final bool isFlagged;
   final String? recurrenceRule;
   final DateTime? recurrenceEndDate;
+  final DateTime? lastReviewedAt;
+  final int? reviewIntervalDays;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Item({
@@ -342,6 +394,8 @@ class Item extends DataClass implements Insertable<Item> {
     required this.isFlagged,
     this.recurrenceRule,
     this.recurrenceEndDate,
+    this.lastReviewedAt,
+    this.reviewIntervalDays,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -365,6 +419,12 @@ class Item extends DataClass implements Insertable<Item> {
     }
     if (!nullToAbsent || recurrenceEndDate != null) {
       map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate);
+    }
+    if (!nullToAbsent || lastReviewedAt != null) {
+      map['last_reviewed_at'] = Variable<DateTime>(lastReviewedAt);
+    }
+    if (!nullToAbsent || reviewIntervalDays != null) {
+      map['review_interval_days'] = Variable<int>(reviewIntervalDays);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -391,6 +451,12 @@ class Item extends DataClass implements Insertable<Item> {
       recurrenceEndDate: recurrenceEndDate == null && nullToAbsent
           ? const Value.absent()
           : Value(recurrenceEndDate),
+      lastReviewedAt: lastReviewedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastReviewedAt),
+      reviewIntervalDays: reviewIntervalDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reviewIntervalDays),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -414,6 +480,8 @@ class Item extends DataClass implements Insertable<Item> {
       recurrenceEndDate: serializer.fromJson<DateTime?>(
         json['recurrenceEndDate'],
       ),
+      lastReviewedAt: serializer.fromJson<DateTime?>(json['lastReviewedAt']),
+      reviewIntervalDays: serializer.fromJson<int?>(json['reviewIntervalDays']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -432,6 +500,8 @@ class Item extends DataClass implements Insertable<Item> {
       'isFlagged': serializer.toJson<bool>(isFlagged),
       'recurrenceRule': serializer.toJson<String?>(recurrenceRule),
       'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
+      'lastReviewedAt': serializer.toJson<DateTime?>(lastReviewedAt),
+      'reviewIntervalDays': serializer.toJson<int?>(reviewIntervalDays),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -448,6 +518,8 @@ class Item extends DataClass implements Insertable<Item> {
     bool? isFlagged,
     Value<String?> recurrenceRule = const Value.absent(),
     Value<DateTime?> recurrenceEndDate = const Value.absent(),
+    Value<DateTime?> lastReviewedAt = const Value.absent(),
+    Value<int?> reviewIntervalDays = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Item(
@@ -465,6 +537,12 @@ class Item extends DataClass implements Insertable<Item> {
     recurrenceEndDate: recurrenceEndDate.present
         ? recurrenceEndDate.value
         : this.recurrenceEndDate,
+    lastReviewedAt: lastReviewedAt.present
+        ? lastReviewedAt.value
+        : this.lastReviewedAt,
+    reviewIntervalDays: reviewIntervalDays.present
+        ? reviewIntervalDays.value
+        : this.reviewIntervalDays,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -484,6 +562,12 @@ class Item extends DataClass implements Insertable<Item> {
       recurrenceEndDate: data.recurrenceEndDate.present
           ? data.recurrenceEndDate.value
           : this.recurrenceEndDate,
+      lastReviewedAt: data.lastReviewedAt.present
+          ? data.lastReviewedAt.value
+          : this.lastReviewedAt,
+      reviewIntervalDays: data.reviewIntervalDays.present
+          ? data.reviewIntervalDays.value
+          : this.reviewIntervalDays,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -502,6 +586,8 @@ class Item extends DataClass implements Insertable<Item> {
           ..write('isFlagged: $isFlagged, ')
           ..write('recurrenceRule: $recurrenceRule, ')
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
+          ..write('lastReviewedAt: $lastReviewedAt, ')
+          ..write('reviewIntervalDays: $reviewIntervalDays, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -520,6 +606,8 @@ class Item extends DataClass implements Insertable<Item> {
     isFlagged,
     recurrenceRule,
     recurrenceEndDate,
+    lastReviewedAt,
+    reviewIntervalDays,
     createdAt,
     updatedAt,
   );
@@ -537,6 +625,8 @@ class Item extends DataClass implements Insertable<Item> {
           other.isFlagged == this.isFlagged &&
           other.recurrenceRule == this.recurrenceRule &&
           other.recurrenceEndDate == this.recurrenceEndDate &&
+          other.lastReviewedAt == this.lastReviewedAt &&
+          other.reviewIntervalDays == this.reviewIntervalDays &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -552,6 +642,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
   final Value<bool> isFlagged;
   final Value<String?> recurrenceRule;
   final Value<DateTime?> recurrenceEndDate;
+  final Value<DateTime?> lastReviewedAt;
+  final Value<int?> reviewIntervalDays;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -566,6 +658,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.isFlagged = const Value.absent(),
     this.recurrenceRule = const Value.absent(),
     this.recurrenceEndDate = const Value.absent(),
+    this.lastReviewedAt = const Value.absent(),
+    this.reviewIntervalDays = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -581,6 +675,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.isFlagged = const Value.absent(),
     this.recurrenceRule = const Value.absent(),
     this.recurrenceEndDate = const Value.absent(),
+    this.lastReviewedAt = const Value.absent(),
+    this.reviewIntervalDays = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -598,6 +694,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Expression<bool>? isFlagged,
     Expression<String>? recurrenceRule,
     Expression<DateTime>? recurrenceEndDate,
+    Expression<DateTime>? lastReviewedAt,
+    Expression<int>? reviewIntervalDays,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -613,6 +711,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       if (isFlagged != null) 'is_flagged': isFlagged,
       if (recurrenceRule != null) 'recurrence_rule': recurrenceRule,
       if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
+      if (lastReviewedAt != null) 'last_reviewed_at': lastReviewedAt,
+      if (reviewIntervalDays != null)
+        'review_interval_days': reviewIntervalDays,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -630,6 +731,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Value<bool>? isFlagged,
     Value<String?>? recurrenceRule,
     Value<DateTime?>? recurrenceEndDate,
+    Value<DateTime?>? lastReviewedAt,
+    Value<int?>? reviewIntervalDays,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -645,6 +748,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       isFlagged: isFlagged ?? this.isFlagged,
       recurrenceRule: recurrenceRule ?? this.recurrenceRule,
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
+      reviewIntervalDays: reviewIntervalDays ?? this.reviewIntervalDays,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -684,6 +789,12 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     if (recurrenceEndDate.present) {
       map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate.value);
     }
+    if (lastReviewedAt.present) {
+      map['last_reviewed_at'] = Variable<DateTime>(lastReviewedAt.value);
+    }
+    if (reviewIntervalDays.present) {
+      map['review_interval_days'] = Variable<int>(reviewIntervalDays.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -709,6 +820,8 @@ class ItemsCompanion extends UpdateCompanion<Item> {
           ..write('isFlagged: $isFlagged, ')
           ..write('recurrenceRule: $recurrenceRule, ')
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
+          ..write('lastReviewedAt: $lastReviewedAt, ')
+          ..write('reviewIntervalDays: $reviewIntervalDays, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -2956,6 +3069,8 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<bool> isFlagged,
       Value<String?> recurrenceRule,
       Value<DateTime?> recurrenceEndDate,
+      Value<DateTime?> lastReviewedAt,
+      Value<int?> reviewIntervalDays,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -2972,6 +3087,8 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<bool> isFlagged,
       Value<String?> recurrenceRule,
       Value<DateTime?> recurrenceEndDate,
+      Value<DateTime?> lastReviewedAt,
+      Value<int?> reviewIntervalDays,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -3032,6 +3149,16 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<DateTime> get recurrenceEndDate => $composableBuilder(
     column: $table.recurrenceEndDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reviewIntervalDays => $composableBuilder(
+    column: $table.reviewIntervalDays,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3105,6 +3232,16 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reviewIntervalDays => $composableBuilder(
+    column: $table.reviewIntervalDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3159,6 +3296,16 @@ class $$ItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get lastReviewedAt => $composableBuilder(
+    column: $table.lastReviewedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reviewIntervalDays => $composableBuilder(
+    column: $table.reviewIntervalDays,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -3204,6 +3351,8 @@ class $$ItemsTableTableManager
                 Value<bool> isFlagged = const Value.absent(),
                 Value<String?> recurrenceRule = const Value.absent(),
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
+                Value<DateTime?> lastReviewedAt = const Value.absent(),
+                Value<int?> reviewIntervalDays = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3218,6 +3367,8 @@ class $$ItemsTableTableManager
                 isFlagged: isFlagged,
                 recurrenceRule: recurrenceRule,
                 recurrenceEndDate: recurrenceEndDate,
+                lastReviewedAt: lastReviewedAt,
+                reviewIntervalDays: reviewIntervalDays,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -3234,6 +3385,8 @@ class $$ItemsTableTableManager
                 Value<bool> isFlagged = const Value.absent(),
                 Value<String?> recurrenceRule = const Value.absent(),
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
+                Value<DateTime?> lastReviewedAt = const Value.absent(),
+                Value<int?> reviewIntervalDays = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3248,6 +3401,8 @@ class $$ItemsTableTableManager
                 isFlagged: isFlagged,
                 recurrenceRule: recurrenceRule,
                 recurrenceEndDate: recurrenceEndDate,
+                lastReviewedAt: lastReviewedAt,
+                reviewIntervalDays: reviewIntervalDays,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

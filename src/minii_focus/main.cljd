@@ -130,9 +130,10 @@
                             true
                             (tag-svc/refresh-tags!))
                         7 (do
-                            ;; Review page - refresh reviews
+                            ;; Review page - refresh reviews and due projects
                             true
-                            (review-svc/refresh-reviews! "daily"))
+                            (review-svc/refresh-reviews! "daily")
+                            (review-svc/refresh-due-review-projects!))
                         8 (task/refresh-focus-sessions!)
                         9 (do
                             ;; Settings page - refresh settings
