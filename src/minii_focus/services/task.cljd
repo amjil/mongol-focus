@@ -8,6 +8,7 @@
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.tag :as tag-svc]
    [minii-focus.services.database :as db]
+   [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]
    [minii-focus.utils.toast :as toast]))
@@ -15,6 +16,9 @@
 ;; =============================================================================
 ;; Task CRUD operations
 ;; =============================================================================
+
+;; Forward declaration so that reminder helpers can be defined later
+(declare update-task-reminders)
 
 (defn create-task
   "Create new task"
@@ -41,24 +45,44 @@
                    .dueAt due-value
                    .createdAt (d/Value now)
                    .updatedAt (d/Value now))]
-    (.insert
-     (.into database (.-items database))
-     companion)))
+    (-> (.insert
+         (.into database (.-items database))
+         companion)
+        (.then (fn [_]
+                 ;; Schedule reminders for new task
+                 (update-task-reminders task-id)
+                 nil))
+        (.catchError (fn [error]
+                      (dart-core/print (str "Error creating task: " error))
+                      (dart-core/Future.value nil))))))
 
 (defn update-task
   "Update task with automatic refresh of related pages"
   [id content status defer-at due-at]
-  (let [^drift/AppDatabase database (db/get-database) ]
-    (.updateTask database id content status defer-at due-at)))
+  (let [^drift/AppDatabase database (db/get-database)]
+    (-> (.updateTask database id content status defer-at due-at)
+        (.then (fn [_]
+                 ;; Update reminders when task is modified
+                 (update-task-reminders id)
+                 nil))
+        (.catchError (fn [error]
+                      (dart-core/print (str "Error updating task: " error))
+                      (dart-core/Future.value nil))))))
 
 (defn delete-task
   "Delete task"
   [id]
   (let [^drift/AppDatabase database (db/get-database)]
-    (.go
-     (doto
-      (.delete database (.-items database))
-       (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+    ;; Cancel reminders before deleting task
+    (-> (notif/cancel-task-reminder id)
+        (.then (fn [_]
+                 (.go
+                  (doto
+                   (.delete database (.-items database))
+                    (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+        (.catchError (fn [error]
+                      (dart-core/print (str "Error deleting task: " error))
+                      (dart-core/Future.value nil))))))
 
 (defn get-task-by-id
   "Get task by ID"
@@ -67,6 +91,46 @@
     (.getSingleOrNull
      (doto (.select database (.-items database))
        (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+
+;; =============================================================================
+;; Reminders for tasks (delegating to notification service)
+;; =============================================================================
+
+(defn- schedule-due-date-reminder
+  "Schedule reminder for task due date"
+  [task]
+  (when-let [due-at (.-dueAt task)]
+    (let [reminder-time (.subtract due-at (dart-core/Duration .hours 1))
+          now (dart-core/DateTime.now)]
+      (when (.isAfter reminder-time now)
+        (notif/schedule-task-reminder
+         (.-id task)
+         reminder-time
+         (str "Task due: " (.-content task))
+         (str "Due at: " (.toString due-at)))))))
+
+(defn- schedule-defer-date-reminder
+  "Schedule reminder for task defer date (start date)"
+  [task]
+  (when-let [defer-at (.-deferAt task)]
+    (let [reminder-time defer-at
+          now (dart-core/DateTime.now)]
+      (when (.isAfter reminder-time now)
+        (notif/schedule-defer-reminder
+         (.-id task)
+         reminder-time
+         (str "Task starts: " (.-content task))
+         (str "Start at: " (.toString defer-at)))))))
+
+(defn update-task-reminders
+  "Update reminders for a task when it's modified"
+  [task-id]
+  (-> (get-task-by-id task-id)
+      (.then (fn [task]
+               (when task
+                 (notif/cancel-task-reminder task-id)
+                 (schedule-due-date-reminder task)
+                 (schedule-defer-date-reminder task))))))
 
 (defn get-projects
   "Get all projects (type = project)"
@@ -352,7 +416,14 @@
   "Mark task as completed with automatic refresh"
   [id]
   (let [^drift/AppDatabase database (db/get-database)]
-    (.updateTask database id nil "completed" nil nil)))
+    (-> (.updateTask database id nil "completed" nil nil)
+        (.then (fn [_]
+                 ;; Cancel reminders for completed tasks
+                 (notif/cancel-task-reminder id)
+                 nil))
+        (.catchError (fn [error]
+                      (dart-core/print (str "Error marking task as completed: " error))
+                      (dart-core/Future.value nil))))))
 
 (defn mark-task-active
   "Mark task as active"

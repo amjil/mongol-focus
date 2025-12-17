@@ -2,85 +2,203 @@
   "Notifications and reminders service"
   (:require
    ["dart:core" :as dart-core]
-   ["package:cljd_mongol_focus/database/database.dart" :as drift]
-   [minii-focus.services.database :as db]
-   [minii-focus.services.task :as task]))
+   ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]
+   ["package:timezone/timezone.dart" :as tz]
+   ["package:timezone/data/latest.dart" :as tzdata]))
 
 ;; =============================================================================
-;; Notification service (placeholder for future implementation)
+;; Notification service implementation
 ;; =============================================================================
-;; 
-;; To fully implement notifications, you would need to:
-;; 1. Add flutter_local_notifications package to pubspec.yaml
-;; 2. Initialize notification plugin in main.dart
-;; 3. Request notification permissions
-;; 4. Schedule notifications for task due dates and defer dates
-;; 5. Handle notification taps and actions
-;;
-;; This is a placeholder service that provides the interface
-;; for future notification implementation.
+
+;; Notification plugin instance
+(defonce ^fln/FlutterLocalNotificationsPlugin notification-plugin
+  (fln/FlutterLocalNotificationsPlugin.))
+
+;; App-level handler for notification taps (set from app entry)
+(defonce on-notification-tap (atom nil))
+
+;; Register tap handler so we don't introduce a circular dependency with task services
+(defn set-on-notification-tap!
+  "Provide a handler fn that accepts task-id string when notification is tapped."
+  [handler-fn]
+  (reset! on-notification-tap handler-fn))
+
+;; Convert task-id to notification ID (use hash code for stable integer ID)
+(defn- task-id->notification-id
+  "Convert task-id string to integer notification ID"
+  [task-id]
+  (let [base-id (.hashCode (str task-id))]
+    ;; Use different IDs for due and defer reminders by adding offset
+    ;; Due reminders: base-id, Defer reminders: base-id + 1000000
+    base-id))
+
+(defn- task-id->defer-notification-id
+  "Convert task-id to notification ID for defer date reminder"
+  [task-id]
+  (+ (task-id->notification-id task-id) 1000000))
 
 (defn schedule-task-reminder
   "Schedule a reminder notification for a task"
   [task-id reminder-time title body]
-  ;; TODO: Implement with flutter_local_notifications
-  (dart-core/print (str "Would schedule reminder for task " task-id " at " reminder-time))
-  (dart-core/Future.value nil))
+  (try
+    (let [notification-id (task-id->notification-id task-id)
+          android-details (fln/AndroidNotificationDetails.
+                           "tasks_channel"
+                           "Task Reminders"
+                           .channelDescription "Reminders for task due dates and start dates"
+                           .importance fln/Importance.max
+                           .priority fln/Priority.high
+                           .showWhen true)
+          ios-details (fln/DarwinNotificationDetails.)
+          details (fln/NotificationDetails.
+                   .android android-details
+                   .iOS ios-details)]
+      (-> (.zonedSchedule
+           notification-plugin
+           notification-id
+           title
+           body
+           (tz/TZDateTime.from reminder-time (.-local tz/timeZoneDatabase))
+           details
+           ;; Use AndroidScheduleMode instead of deprecated androidAllowWhileIdle flag
+           .androidScheduleMode fln/AndroidScheduleMode.exactAllowWhileIdle
+           .payload (str task-id))
+          (.then (fn [_]
+                   (dart-core/print (str "Scheduled reminder for task " task-id " at " reminder-time))
+                   nil))
+          (.catchError (fn [error]
+                        (dart-core/print (str "Error scheduling reminder: " error))
+                        (dart-core/Future.value nil)))))
+    (catch Exception e
+      (dart-core/print (str "Exception scheduling reminder: " e))
+      (dart-core/Future.value nil))))
+
+(defn schedule-defer-reminder
+  "Schedule a reminder notification for task defer date (start date)"
+  [task-id reminder-time title body]
+  (try
+    (let [notification-id (task-id->defer-notification-id task-id)
+          android-details (fln/AndroidNotificationDetails.
+                           "tasks_channel"
+                           "Task Reminders"
+                           .channelDescription "Reminders for task due dates and start dates"
+                           .importance fln/Importance.max
+                           .priority fln/Priority.high
+                           .showWhen true)
+          ios-details (fln/DarwinNotificationDetails.)
+          details (fln/NotificationDetails.
+                   .android android-details
+                   .iOS ios-details)]
+      (-> (.zonedSchedule
+           notification-plugin
+           notification-id
+           title
+           body
+           (tz/TZDateTime.from reminder-time (.-local tz/timeZoneDatabase))
+           details
+           .androidScheduleMode fln/AndroidScheduleMode.exactAllowWhileIdle
+           .payload (str task-id))
+          (.then (fn [_]
+                   (dart-core/print (str "Scheduled defer reminder for task " task-id " at " reminder-time))
+                   nil))
+          (.catchError (fn [error]
+                        (dart-core/print (str "Error scheduling defer reminder: " error))
+                        (dart-core/Future.value nil)))))
+    (catch Exception e
+      (dart-core/print (str "Exception scheduling defer reminder: " e))
+      (dart-core/Future.value nil))))
 
 (defn cancel-task-reminder
-  "Cancel a scheduled reminder for a task"
+  "Cancel scheduled reminders for a task (both due and defer)"
   [task-id]
-  ;; TODO: Implement with flutter_local_notifications
-  (dart-core/print (str "Would cancel reminder for task " task-id))
-  (dart-core/Future.value nil))
+  (try
+    (let [due-id (task-id->notification-id task-id)
+          defer-id (task-id->defer-notification-id task-id)]
+      (-> (.cancel notification-plugin due-id)
+          (.then (fn [_] (.cancel notification-plugin defer-id)))
+          (.then (fn [_]
+                   (dart-core/print (str "Cancelled reminders for task " task-id))
+                   nil))
+          (.catchError (fn [error]
+                        (dart-core/print (str "Error cancelling reminders: " error))
+                        (dart-core/Future.value nil)))))
+    (catch Exception e
+      (dart-core/print (str "Exception cancelling reminders: " e))
+      (dart-core/Future.value nil))))
 
-(defn schedule-due-date-reminder
-  "Schedule reminder for task due date"
-  [task]
-  (when-let [due-at (.-dueAt task)]
-    (let [reminder-time (.subtract due-at (dart-core/Duration .hours 1))
-          now (dart-core/DateTime.now)]
-      (when (.isAfter reminder-time now)
-        (schedule-task-reminder
-         (.-id task)
-         reminder-time
-         (str "Task due: " (.-content task))
-         (str "Due at: " (.toString due-at)))))))
-
-(defn schedule-defer-date-reminder
-  "Schedule reminder for task defer date (start date)"
-  [task]
-  (when-let [defer-at (.-deferAt task)]
-    (let [reminder-time defer-at
-          now (dart-core/DateTime.now)]
-      (when (.isAfter reminder-time now)
-        (schedule-task-reminder
-         (.-id task)
-         reminder-time
-         (str "Task starts: " (.-content task))
-         (str "Start at: " (.toString defer-at)))))))
-
-(defn update-task-reminders
-  "Update reminders for a task when it's modified"
-  [task-id]
-  (-> (task/get-task-by-id task-id)
-      (.then (fn [task]
-               (when task
-                 (cancel-task-reminder task-id)
-                 (schedule-due-date-reminder task)
-                 (schedule-defer-date-reminder task))))))
+(defn- handle-notification-payload
+  "Invoke app-level handler with task-id payload."
+  [payload]
+  (if (and payload (not (empty? payload)))
+    (if-let [handler @on-notification-tap]
+      (handler payload)
+      (dart-core/print "No notification tap handler registered"))
+    (dart-core/print "Notification tapped without payload")))
 
 (defn initialize-notifications
-  "Initialize notification service"
-  []
-  ;; TODO: Initialize flutter_local_notifications plugin
-  (dart-core/print "Notifications service initialized (placeholder)")
-  (dart-core/Future.value nil))
+  "Initialize notification service. Optionally provide on-tap handler (task-id -> any)."
+  ([] (initialize-notifications nil))
+  ([on-tap-handler]
+   (when on-tap-handler
+     (set-on-notification-tap! on-tap-handler))
+   ;; Ensure timezone database is loaded for zoned scheduling
+   (tzdata/initializeTimeZones)
+   (let [android-init (fln/AndroidInitializationSettings. "app_icon")
+         ios-init (fln/DarwinInitializationSettings.
+                   .requestAlertPermission true
+                   .requestBadgePermission true
+                   .requestSoundPermission true)
+         init-settings (fln/InitializationSettings.
+                        .android android-init
+                        .iOS ios-init
+                        .linux nil)
+         on-response (fn [^fln/NotificationResponse response]
+                       (handle-notification-payload (.-payload response)))]
+     (-> (.initialize notification-plugin
+                      init-settings
+                      .onDidReceiveNotificationResponse on-response)
+         (.then (fn [initialized?]
+                  (if initialized?
+                    ;; Also handle app launch via notification
+                    (-> (.getNotificationAppLaunchDetails notification-plugin)
+                        (.then (fn [details]
+                                 (when-let [payload (some-> details
+                                                           (.-notificationResponse)
+                                                           (.-payload))]
+                                   (handle-notification-payload payload))))
+                        (.catchError (fn [error]
+                                       (dart-core/print (str "Error handling launch details: " error))
+                                       (dart-core/Future.value nil)))
+                        (.then (fn [_]
+                                 (dart-core/print "Notifications service initialized successfully")
+                                 (dart-core/Future.value nil))))
+                    (do
+                      (dart-core/print "Notifications service initialization returned false")
+                      (dart-core/Future.value nil)))))
+         (.catchError (fn [error]
+                       (dart-core/print (str "Error initializing notifications: " error))
+                       (dart-core/Future.value nil)))))))
 
 (defn request-notification-permission
   "Request notification permissions from user"
   []
-  ;; TODO: Request permissions using flutter_local_notifications
-  (dart-core/print "Would request notification permissions")
-  (dart-core/Future.value true))
+  (try
+    (let [android-plugin (.resolvePlatformSpecificImplementation
+                          notification-plugin
+                          fln/AndroidFlutterLocalNotificationsPlugin)]
+      (if android-plugin
+        (-> (.requestNotificationsPermission android-plugin)
+            (.then (fn [granted?]
+                     (dart-core/print (str "Notification permission granted: " granted?))
+                     (dart-core/Future.value granted?))
+                   (.catchError (fn [error]
+                                  (dart-core/print (str "Error requesting permission: " error))
+                                  (dart-core/Future.value false)))))
+        ;; iOS permissions are requested automatically on first notification
+        (do
+          (dart-core/print "iOS notification permissions will be requested on first notification")
+          (dart-core/Future.value true))))
+    (catch Exception e
+      (dart-core/print (str "Exception requesting notification permission: " e))
+      (dart-core/Future.value false))))
 

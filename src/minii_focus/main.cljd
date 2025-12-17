@@ -16,6 +16,7 @@
    [minii-focus.services.review :as review-svc]
    [minii-focus.services.settings :as settings-svc]
    [minii-focus.services.perspectives :as perspective-svc]
+   [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.components.core :as comp]
    [minii-focus.screens.home :as home]
@@ -28,7 +29,8 @@
    [minii-focus.screens.review :as review]
    [minii-focus.screens.focus-stats :as focus-stats]
    [minii-focus.screens.settings :as settings]
-   [minii-focus.screens.perspectives :as perspectives]))
+   [minii-focus.screens.perspectives :as perspectives]
+   [minii-focus.screens.task-detail :as task-detail]))
 
 ;; Initialize application
 (defn init-app! []
@@ -44,21 +46,32 @@
       (.then (fn [database]
                (state/set-database! database)
                (dart-core/print "Database initialized successfully")
-        ;;        (task/refresh-inbox-tasks!)
-        ;;        (task/refresh-today-tasks!)
-        ;;        (task/refresh-focus-tasks!)
-        ;;        (task/refresh-forecast-items!)
-               ))
+               ;; Initialize notifications service
+               (let [on-notif-tap (fn [task-id]
+                                    ;; Navigate to task detail when user taps notification
+                                    (when task-id
+                                      (task/refresh-task-detail! task-id)
+                                      (when-let [navigator (.-currentState state/navigator-key)]
+                                        (.push navigator
+                                               (m/MaterialPageRoute
+                                                .builder (fn [_]
+                                                           (task-detail/task-detail-screen task-id)))))))]
+                 (-> (notif/initialize-notifications on-notif-tap)
+                     (.then (fn [_]
+                              (dart-core/print "Notifications initialized, requesting permission...")
+                              (notif/request-notification-permission)))
+                     (.catchError (fn [error]
+                                    (dart-core/print (str "Notification initialization error: " error))))))))
       (.catchError (fn [error]
                      (dart-core/print (str "Database initialization error: " error))))))
 
 (defn main []
   ;; Ensure Flutter binding is initialized
   (m.WidgetsFlutterBinding/ensureInitialized)
-  
+
   ;; Initialize application
   (init-app!)
-  
+
   ;; Start Flutter application
   (f/run
    (f/widget
@@ -101,39 +114,40 @@
                       ;; Auto-refresh data when switching pages
                       (condp = idx
                         0 (do
-                           ;; Home page - refresh all overview data
-                           (task/refresh-today-tasks!)
-                           (task/refresh-inbox-tasks!)
-                           (task/refresh-forecast-items!)
-                           (task/refresh-focus-sessions!)
-                           nil)
+                            ;; Home page - refresh all overview data
+                            (task/refresh-today-tasks!)
+                            (task/refresh-inbox-tasks!)
+                            (task/refresh-forecast-items!)
+                            (task/refresh-focus-sessions!)
+                            nil)
                         1 (task/refresh-today-tasks!)
                         2 (task/refresh-inbox-tasks!)
                         3 (task/refresh-focus-tasks!)
                         4 (task/refresh-forecast-items!)
                         5 (task/refresh-projects!)
                         6 (do
-                           ;; Tags page - refresh tags
-                           true
-                           (tag-svc/refresh-tags!))
+                            ;; Tags page - refresh tags
+                            true
+                            (tag-svc/refresh-tags!))
                         7 (do
-                           ;; Review page - refresh reviews
-                           true
-                           (review-svc/refresh-reviews! "daily"))
+                            ;; Review page - refresh reviews
+                            true
+                            (review-svc/refresh-reviews! "daily"))
                         8 (task/refresh-focus-sessions!)
                         9 (do
-                           ;; Settings page - refresh settings
-                           true
-                           (settings-svc/refresh-settings!))
-                        10 (do
-                            ;; Perspectives page - refresh perspectives
+                            ;; Settings page - refresh settings
                             true
-                            (perspective-svc/refresh-perspectives!))
+                            (settings-svc/refresh-settings!))
+                        10 (do
+                             ;; Perspectives page - refresh perspectives
+                             true
+                             (perspective-svc/refresh-perspectives!))
                         nil))]
     :bind {:info info}
     :watch [_tab current-index]
 
     (m/MaterialApp
+     .navigatorKey state/navigator-key
      .theme (m/ThemeData
              .primarySwatch m/Colors.blue
              .useMaterial3 true)
@@ -171,8 +185,8 @@
                                        .title (comp/mongol-text-block
                                                {:text title
                                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                       .onTap (fn [] 
-                                                (set-page! idx) 
+                                       .onTap (fn []
+                                                (set-page! idx)
                                                 nil)))))))
             .body (m/IndexedStack
                    .index @current-index

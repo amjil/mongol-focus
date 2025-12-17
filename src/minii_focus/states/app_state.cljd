@@ -1,7 +1,10 @@
 (ns minii-focus.states.app-state
   "Application state management"
   (:require
+   ["package:flutter/material.dart" :as m]
    [clojure.core :as core]))
+
+(def ^#/(m/GlobalKey m/NavigatorState) navigator-key (#/(m/GlobalKey m/NavigatorState)))
 
 ;; Global application state
 (defonce app-state
