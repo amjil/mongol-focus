@@ -3,7 +3,9 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["package:cljd_mongol_focus/mongol_dropdown_button.dart" :as dropdown]
    ["dart:core" :as dart-core]
+   ["dart:convert" :as convert]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
    [minii-focus.screens.task-detail :as task-detail]
@@ -11,6 +13,86 @@
    [minii-focus.services.perspectives :as perspective-svc]
    [minii-focus.services.task :as task]))
 
+
+(defn- edit-perspective-dialog [dialog-ctx perspective on-save on-cancel]
+  (let [name-state (atom (.-name perspective))
+        sort-by-state (atom (.-sortBy perspective))
+        sort-order-state (atom (.-sortOrder perspective))
+        group-by-state (atom (.-groupBy perspective))
+        filter-conditions-str (.-filterConditions perspective)
+        filter-conditions (try
+                            (when (and filter-conditions-str (not (empty? filter-conditions-str)))
+                              (convert/jsonDecode filter-conditions-str))
+                            (catch Exception _ex
+                              {"status" ["active"]}))
+        name-controller (m/TextEditingController .text (.-name perspective))]
+    (f/widget
+     :context _ctx
+     :watch [_nm name-state
+             _sb sort-by-state
+             _so sort-order-state
+             _gb group-by-state]
+     (m/AlertDialog
+      .insetPadding (m/EdgeInsets.zero)
+      .contentPadding (m/EdgeInsets.zero)
+      ;; .title (mgl/MongolText "Edit Perspective")
+      .content (m/SingleChildScrollView
+                .scrollDirection m/Axis.horizontal
+                .child (m/Row
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/SizedBox
+                          .height (+ (* (comp/font-size :m) 2) (* (comp/space :s) 2))
+                          .child (mgl/MongolTextField
+                                  .decoration (m/InputDecoration .labelText "Name")
+                                  .controller name-controller
+                                  .maxLines 1
+                                  .onChanged (fn [v] (reset! name-state v))))
+                         (m/SizedBox .width (comp/space :s))
+                         (dropdown/MongolSelect
+                          .value @sort-by-state
+                          .items [(dropdown/MongolSelectItem .value "dueDate" .label (mgl/MongolText "Due Date"))
+                                  (dropdown/MongolSelectItem .value "createdAt" .label (mgl/MongolText "Created At"))
+                                  (dropdown/MongolSelectItem .value "updatedAt" .label (mgl/MongolText "Updated At"))
+                                  (dropdown/MongolSelectItem .value "content" .label (mgl/MongolText "Content"))
+                                  (dropdown/MongolSelectItem .value "custom" .label (mgl/MongolText "Custom"))]
+                          .onChanged (fn [v] (reset! sort-by-state v))
+                          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))
+                         (m/SizedBox .width (comp/space :s))
+                         (dropdown/MongolSelect
+                          .value @sort-order-state
+                          .items [(dropdown/MongolSelectItem .value "asc" .label (mgl/MongolText "Ascending"))
+                                  (dropdown/MongolSelectItem .value "desc" .label (mgl/MongolText "Descending"))]
+                          .onChanged (fn [v] (reset! sort-order-state v))
+                          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))
+                         (m/SizedBox .width (comp/space :s))
+                         (dropdown/MongolSelect
+                          .value @group-by-state
+                          .items [(dropdown/MongolSelectItem .value "none" .label (mgl/MongolText "None"))
+                                  (dropdown/MongolSelectItem .value "project" .label (mgl/MongolText "Project"))
+                                  (dropdown/MongolSelectItem .value "tag" .label (mgl/MongolText "Tag"))
+                                  (dropdown/MongolSelectItem .value "dueDate" .label (mgl/MongolText "Due Date"))
+                                  (dropdown/MongolSelectItem .value "deferDate" .label (mgl/MongolText "Defer Date"))]
+                          .onChanged (fn [v] (reset! group-by-state v))
+                          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))]))
+      .actions [(m/TextButton
+                 .onPressed (fn []
+                              (when on-cancel (on-cancel))
+                              (m/Navigator.pop dialog-ctx))
+                 .child (m/Text "Cancel"))
+                (m/TextButton
+                 .onPressed (fn []
+                              (let [name-value (if (empty? @name-state)
+                                                 (.-text name-controller)
+                                                 @name-state)]
+                                (when (and (not (empty? name-value)) on-save)
+                                  (on-save name-value
+                                           filter-conditions
+                                           @sort-by-state
+                                           @sort-order-state
+                                           @group-by-state)
+                                  (m/Navigator.pop dialog-ctx))))
+                 .child (m/Text "Save"))]))))
 
 (defn- perspectives-section [ctx perspectives editing-id]
   (if (empty? perspectives)
@@ -28,21 +110,32 @@
                      .trailing (m/Column
                                 .mainAxisSize m/MainAxisSize.min
                                 .children
-                                [(m/IconButton
+                                [                                 (m/IconButton
                                   .icon (m/Icon m/Icons.edit)
                                   .onPressed (fn []
                                                (reset! editing-id (.-id p))
                                                (m/showDialog
                                                 .context ctx
                                                 .builder (fn [dialog-ctx]
-                                                           (m/AlertDialog
-                                                            .title (mgl/MongolText "Edit Perspective")
-                                                            .content (mgl/MongolText "Edit functionality coming soon")
-                                                            .actions [(m/TextButton
-                                                                       .onPressed (fn []
-                                                                                    (reset! editing-id nil)
-                                                                                    (m/Navigator.pop dialog-ctx))
-                                                                       .child (m/Text "Close"))])))
+                                                           (edit-perspective-dialog
+                                                            dialog-ctx
+                                                            p
+                                                            (fn [name filter-conditions sort-by sort-order group-by]
+                                                              (-> (perspective-svc/update-perspective
+                                                                   (.-id p)
+                                                                   name
+                                                                   filter-conditions
+                                                                   sort-by
+                                                                   sort-order
+                                                                   group-by)
+                                                                  (.then (fn [_]
+                                                                           (reset! editing-id nil)
+                                                                           (perspective-svc/refresh-perspectives!)))
+                                                                  (.catchError (fn [error]
+                                                                                 (dart-core/print (str "Error updating perspective: " error))
+                                                                                 (reset! editing-id nil)))))
+                                                            (fn []
+                                                              (reset! editing-id nil)))))
                                                nil))
                                  (m/IconButton
                                   .icon (m/Icon m/Icons.delete)
@@ -67,7 +160,6 @@
                            .width 1)
                   .borderRadius (m/BorderRadius.circular 4))
      .child (m/SizedBox
-            ;;  .width (+ (* (comp/font-size :m) 20) (* (comp/space :s) 2))
              .height (+ (* (comp/font-size :m) 2) (* (comp/space :s) 2))
              .child (mgl/MongolTextField
                      .decoration nil
@@ -164,14 +256,7 @@
 
 (defn- perspective-tasks-section [ctx selected-perspective perspective-tasks tasks-with-info]
   (if (and @selected-perspective (seq @perspective-tasks))
-    (do
-      (when (and (seq @perspective-tasks) (empty? @tasks-with-info))
-        (-> (task/get-tasks-with-blocked-info @perspective-tasks)
-            (.then (fn [info-list]
-                     (reset! tasks-with-info info-list)))
-            (.catchError (fn [e]
-                           (dart-core/print (str "Error loading blocked info: " e))))))
-      (m/ListView
+    (m/ListView
        .shrinkWrap true
        .scrollDirection m/Axis.horizontal
        .children
@@ -190,7 +275,7 @@
                              (m/MaterialPageRoute
                               .builder (fn [_]
                                          (task-detail/task-detail-screen item-id)))))})))
-            @perspective-tasks)))
+            @perspective-tasks))
     (if @selected-perspective
       (comp/mongol-text-block
        {:text "No tasks found"
@@ -202,7 +287,8 @@
         editing-id (atom nil)
         selected-perspective (atom nil)
         perspective-tasks (atom [])
-        tasks-with-info (atom [])]
+        tasks-with-info (atom [])
+        loading-info (atom false)]
     (f/widget
      :context ctx
      :watch [_nm name-state
@@ -210,8 +296,21 @@
              _sp selected-perspective
              _pt perspective-tasks
              _twi tasks-with-info
+             _li loading-info
              {perspectives :perspectives} state/app-state]
-     (m/DefaultTabController
+     (do
+       (when (and (seq @perspective-tasks) (empty? @tasks-with-info) (not @loading-info))
+         (reset! loading-info true)
+         (m/WidgetsBinding.instance.addPostFrameCallback
+          (fn [_]
+            (-> (task/get-tasks-with-blocked-info @perspective-tasks)
+                (.then (fn [info-list]
+                         (reset! tasks-with-info info-list)
+                         (reset! loading-info false)))
+                (.catchError (fn [e]
+                               (dart-core/print (str "Error loading blocked info: " e))
+                               (reset! loading-info false)))))))
+       (m/DefaultTabController
       .length 2
       .child (m/Scaffold
               .appBar (m/AppBar
@@ -311,5 +410,5 @@
                    (m/SizedBox .height (comp/space :s))
                    (comp/mongol-text-block
                     {:text (str "Tasks: " (count @perspective-tasks))
-                     :style (m/TextStyle .color (comp/color :text-weak))})]))})]))))))
+                     :style (m/TextStyle .color (comp/color :text-weak))})]))})])))))))
 
