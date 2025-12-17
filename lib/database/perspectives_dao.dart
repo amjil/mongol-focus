@@ -105,8 +105,57 @@ class PerspectivesDao {
       query = query..where((tbl) => tbl.isFlagged.equals(isFlagged));
     }
 
-    // Apply tags filter (simplified - would need join with ItemTags in production)
-    // TODO: Implement proper tags filtering with join
+    // Apply tags filter
+    if (filterConditions.containsKey('tags')) {
+      final tagsValue = filterConditions['tags'];
+      if (tagsValue is List && tagsValue.isNotEmpty) {
+        // tags: ["tagId1", "tagId2", ...]
+        final tagIds = tagsValue.cast<String>();
+
+        // tagsMode: "and" | "or" (default "or")
+        final tagsMode = (filterConditions['tagsMode'] as String?) ?? 'or';
+
+        final itemTags = _db.itemTags;
+
+        switch (tagsMode) {
+          case 'and':
+            // Items that have ALL specified tags:
+            // SELECT items.*
+            // FROM items
+            // JOIN item_tags ON items.id = item_tags.item_id
+            // WHERE item_tags.tag_id IN (...)
+            // GROUP BY items.id
+            // HAVING COUNT(DISTINCT item_tags.tag_id) = tagIds.length
+            final joined = query.join([
+              innerJoin(
+                itemTags,
+                itemTags.itemId.equalsExp(_db.items.id),
+              ),
+            ])
+              ..where(itemTags.tagId.isIn(tagIds))
+              ..groupBy([_db.items.id])
+              ..having(itemTags.tagId.count(distinct: true).equals(tagIds.length));
+
+            final rows = await joined.get();
+            return rows.map((row) => row.readTable(_db.items)).toList();
+
+          case 'or':
+          default:
+            // Items that have ANY of the specified tags
+            final joined = query.join([
+              innerJoin(
+                itemTags,
+                itemTags.itemId.equalsExp(_db.items.id),
+              ),
+            ])
+              ..where(itemTags.tagId.isIn(tagIds))
+              ..groupBy([_db.items.id]);
+
+            final rows = await joined.get();
+            return rows.map((row) => row.readTable(_db.items)).toList();
+        }
+      }
+    }
 
     // Apply date range filters
     if (filterConditions.containsKey('dueSoon')) {
