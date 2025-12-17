@@ -14,12 +14,14 @@
 
 (defn project-list-screen []
   (let [expanded (atom #{})
-        children-map (atom {})]
+        children-map (atom {})
+        tasks-with-info (atom [])]
     (f/widget
      :context _ctx
      :watch [{projects :projects loading :projects-loading} state/app-state
              _exp expanded
-             _cm children-map]
+             _cm children-map
+             _twi tasks-with-info]
      (m/Scaffold
       .appBar (m/AppBar
                .actions [(m/IconButton
@@ -58,37 +60,59 @@
                                                  (swap! expanded disj pid)))
                          .children
                          [(if (and child-items (seq child-items))
-                            (m/ReorderableListView
-                             .scrollDirection m/Axis.horizontal
-                             .onReorder (fn [old-index new-index]
-                                         (let [reordered-items (vec child-items)
-                                               item (nth reordered-items old-index)
-                                               without-item (concat (subvec reordered-items 0 old-index)
-                                                                    (subvec reordered-items (inc old-index)))
-                                               new-items (vec (concat (take new-index without-item)
-                                                                     [item]
-                                                                     (drop new-index without-item)))
-                                               new-child-ids (map (fn [row] (.-id (:item row))) new-items)]
-                                           ;; Optimistic update
-                                           (swap! children-map assoc pid new-items)
-                                           ;; Persist to database
-                                           (-> (tree-svc/reorder-siblings pid new-child-ids)
-                                               (.then (fn []
-                                                       (dart-core/print (str "Reordered children of " pid))))
-                                               (.catchError (fn [e]
-                                                             (dart-core/print (str "Error reordering: " e))
-                                                             ;; Rollback on error
-                                                             (swap! children-map assoc pid child-items))))))
-                             .children
-                             (map (fn [row]
-                                    (let [item (:item row)
-                                          item-id (.-id item)]
-                                      (m/ListTile
-                                       .key (m/ValueKey item-id)
-                                       .leading (m/Icon m/Icons.drag_handle)
-                                       .title (m/Text (.-content item))
-                                       .subtitle (m/Text (str "Position " (:position row))))))
-                                  child-items))
+                            (do
+                              ;; Load blocked info when children are shown
+                              (when (and (seq child-items) (empty? @tasks-with-info))
+                                (let [child-tasks (map :item child-items)]
+                                  (-> (task-svc/get-tasks-with-blocked-info child-tasks)
+                                      (.then (fn [info-list]
+                                              (reset! tasks-with-info info-list)))
+                                      (.catchError (fn [e]
+                                                     (dart-core/print (str "Error loading blocked info: " e)))))))
+                              (m/ReorderableListView
+                               .scrollDirection m/Axis.horizontal
+                               .onReorder (fn [old-index new-index]
+                                           (let [reordered-items (vec child-items)
+                                                 item (nth reordered-items old-index)
+                                                 without-item (concat (subvec reordered-items 0 old-index)
+                                                                      (subvec reordered-items (inc old-index)))
+                                                 new-items (vec (concat (take new-index without-item)
+                                                                       [item]
+                                                                       (drop new-index without-item)))
+                                                 new-child-ids (map (fn [row] (.-id (:item row))) new-items)]
+                                             ;; Optimistic update
+                                             (swap! children-map assoc pid new-items)
+                                             ;; Persist to database
+                                             (-> (tree-svc/reorder-siblings pid new-child-ids)
+                                                 (.then (fn []
+                                                         (dart-core/print (str "Reordered children of " pid))
+                                                         (reset! tasks-with-info [])))
+                                                 (.catchError (fn [e]
+                                                               (dart-core/print (str "Error reordering: " e))
+                                                               ;; Rollback on error
+                                                               (swap! children-map assoc pid child-items))))))
+                               .children
+                               (map (fn [row]
+                                      (let [item (:item row)
+                                            item-id (.-id item)
+                                            task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
+                                            blocked? (:blocked task-info false)]
+                                        (m/ListTile
+                                         .key (m/ValueKey item-id)
+                                         .leading (m/Icon m/Icons.drag_handle)
+                                         .title (m/Row
+                                                 .children
+                                                 [(m/Text (.-content item))
+                                                  (when blocked?
+                                                    (m/Container
+                                                     .margin (m/EdgeInsets.only .left 8)
+                                                     .padding (m/EdgeInsets.symmetric .horizontal 8 .vertical 4)
+                                                     .decoration (m/BoxDecoration
+                                                                 .color m/Colors.red.shade100
+                                                                 .borderRadius (m/BorderRadius.circular 4))
+                                                     .child (m/Text "Blocked" .style (m/TextStyle .fontSize 12 .color m/Colors.red.shade700))))])
+                                         .subtitle (m/Text (str "Position " (:position row))))))
+                                    child-items)))
                             (m/ListTile .title (m/Text "No subtasks")))])))
                     projects)))))))
 

@@ -165,3 +165,33 @@
                              child-ids)]
     (dart-core/Future.wait updates)))
 
+(defn set-parent-task
+  "Set or change parent task for a task. If new-parent-id is nil, remove parent relationship."
+  [task-id new-parent-id]
+  (let [old-parent (get-parent task-id)]
+    (-> old-parent
+        (.then (fn [old-parent-rel]
+                 ;; Delete old relationship if exists
+                 (when old-parent-rel
+                   (delete-item-tree-relation (.-parentId old-parent-rel) task-id))
+                 ;; Create new relationship if new-parent-id is provided
+                 (if new-parent-id
+                   (do
+                     ;; Get current children count of new parent to determine position
+                     (-> (get-children new-parent-id)
+                         (.then (fn [children]
+                                 (let [position (count children)]
+                                   (create-item-tree-relation new-parent-id task-id position)))))
+                     (dart-core/Future.value nil))
+                   (dart-core/Future.value nil)))))))
+
+(defn remove-parent-task
+  "Remove parent relationship for a task"
+  [task-id]
+  (let [old-parent (get-parent task-id)]
+    (-> old-parent
+        (.then (fn [old-parent-rel]
+                 (if old-parent-rel
+                   (delete-item-tree-relation (.-parentId old-parent-rel) task-id)
+                   (dart-core/Future.value nil)))))))
+

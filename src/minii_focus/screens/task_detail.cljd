@@ -10,6 +10,7 @@
    [minii-focus.components.core :as comp]
    [minii-focus.services.tag :as tag-svc]
    [minii-focus.services.task :as task]
+   [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
 
@@ -140,12 +141,79 @@
                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
                               (m/SizedBox .height (comp/space :s))
                               (if parent-rel
-                                (comp/mongol-text-block
-                                 {:text (.-parentId parent-rel)
-                                  :style (m/TextStyle .color (comp/color :text-weak))})
+                                (m/Column
+                                 .crossAxisAlignment m/CrossAxisAlignment.center
+                                 .children
+                                 [(comp/mongol-text-block
+                                   {:text (str "Parent: " (.-parentId parent-rel))
+                                    :style (m/TextStyle .color (comp/color :text-weak))})
+                                  (m/SizedBox .height (comp/space :s))
+                                  (mgl/MongolTextButton
+                                   .onPressed (fn []
+                                               (-> (tree-svc/remove-parent-task (.-id task-detail))
+                                                   (.then (fn []
+                                                           (task/refresh-task-detail! (.-id task-detail))
+                                                           (dart-core/print "Parent removed")))
+                                                   (.catchError (fn [error]
+                                                                  (dart-core/print (str "Error removing parent: " error))))))
+                                   .child (mgl/MongolText "Remove parent"))])
                                 (comp/mongol-text-block
                                  {:text "None"
-                                  :style (m/TextStyle .color (comp/color :text-weak))}))])
+                                  :style (m/TextStyle .color (comp/color :text-weak))}))
+                              (m/SizedBox .height (comp/space :s))
+                              (mgl/MongolTextButton
+                               .onPressed (fn []
+                                           (let [all-tasks-promise (task/get-all-tasks)]
+                                             (-> all-tasks-promise
+                                                 (.then (fn [all-tasks]
+                                                         ;; Filter out current task and its descendants
+                                                         (let [current-id (.-id task-detail)
+                                                               available-tasks (filter (fn [t]
+                                                                                         (not= (.-id t) current-id))
+                                                                                       all-tasks)]
+                                                           (m/showDialog
+                                                            .context ctx
+                                                            .builder (fn [dialog-ctx]
+                                                                       (m/AlertDialog
+                                                                        .title (mgl/MongolText "Select Parent Task")
+                                                                        .content (m/Container
+                                                                                 .width 300
+                                                                                 .height 400
+                                                                                 .child (m/ListView
+                                                                                         .children
+                                                                                         (concat
+                                                                                          [(m/ListTile
+                                                                                            .title (mgl/MongolText "None (Remove parent)")
+                                                                                            .onTap (fn []
+                                                                                                    (m/Navigator.pop dialog-ctx)
+                                                                                                    (-> (tree-svc/remove-parent-task current-id)
+                                                                                                        (.then (fn []
+                                                                                                                (task/refresh-task-detail! current-id)
+                                                                                                                (dart-core/print "Parent removed")))
+                                                                                                        (.catchError (fn [error]
+                                                                                                                       (dart-core/print (str "Error removing parent: " error)))))))]
+                                                                                          (map (fn [t]
+                                                                                                 (let [tid (.-id t)
+                                                                                                       tcontent (.-content t)]
+                                                                                                   (m/ListTile
+                                                                                                    .title (mgl/MongolText tcontent)
+                                                                                                    .subtitle (mgl/MongolText (str "ID: " tid))
+                                                                                                    .onTap (fn []
+                                                                                                            (m/Navigator.pop dialog-ctx)
+                                                                                                            (-> (tree-svc/set-parent-task current-id tid)
+                                                                                                                (.then (fn []
+                                                                                                                        (task/refresh-task-detail! current-id)
+                                                                                                                        (dart-core/print (str "Parent set to: " tid))))
+                                                                                                                (.catchError (fn [error]
+                                                                                                                               (dart-core/print (str "Error setting parent: " error)))))))))
+                                                                                               available-tasks))))
+                                                                        .actions [(m/TextButton
+                                                                                   .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                                                   .child (m/Text "Cancel"))]))))
+                                                 (.catchError (fn [error]
+                                                                (dart-core/print (str "Error loading tasks: " error)))))))))
+                               .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))])
+                            (m/SizedBox .width (comp/space :l))
                             (m/SizedBox .width (comp/space :l))
                             (m/SingleChildScrollView
                              .child

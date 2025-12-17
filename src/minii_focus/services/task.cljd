@@ -77,6 +77,14 @@
        (.where (fn [^drift/Items tbl] (.equals (.-type tbl) "project")))
        (.orderBy [(fn [tbl] (d/OrderingTerm.asc (.-createdAt tbl)))])))))
 
+(defn get-all-tasks
+  "Get all tasks (for parent selection, etc.)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-items database))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))])))))
+
 ;; =============================================================================
 ;; Task query operations
 ;; =============================================================================

@@ -8,17 +8,20 @@
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.states.app-state :as state]
    [minii-focus.services.tag :as tag-svc]
-   [minii-focus.services.task :as task]))
+   [minii-focus.services.task :as task]
+   ["dart:core" :as dart-core]))
 
 (defn tags-screen []
   (let [name-state (atom "")
         selected-tags (atom #{})
-        filter-mode (atom :or)]
+        filter-mode (atom :or)
+        tasks-with-info (atom [])]
     (f/widget
      :context ctx
      :watch [_nm name-state
              _st selected-tags
              _fm filter-mode
+             _twi tasks-with-info
              {tags :tags tagged-items :tagged-items} state/app-state]
      (m/Scaffold
       .appBar (m/AppBar
@@ -119,24 +122,35 @@
                 (comp/mongol-text-block
                  {:text "No tasks found"
                   :style (m/TextStyle .color (comp/color :text-weak))})
-                (m/Expanded
-                 .child (m/ListView
-                         .shrinkWrap true
-                         .scrollDirection m/Axis.horizontal
-                         .children
-                         (map (fn [item]
-                                (let [item-id (.-id item)]
-                                  (comp/mongol-task-item
-                                   {:content (.-content item)
-                                    :status (keyword (.-status item))
-                                    :on-tap (fn []
-                                              (task/refresh-task-detail! item-id)
-                                              (m/Navigator.push
-                                               ctx
-                                               (m/MaterialPageRoute
-                                                .builder (fn [_]
-                                                           (task-detail/task-detail-screen item-id)))))})))
-                              tagged-items))))
+                (do
+                  ;; Load blocked info when tagged items change
+                  (when (and (seq tagged-items) (empty? @tasks-with-info))
+                    (-> (task/get-tasks-with-blocked-info tagged-items)
+                        (.then (fn [info-list]
+                                (reset! tasks-with-info info-list)))
+                        (.catchError (fn [e]
+                                       (dart-core/print (str "Error loading blocked info: " e))))))
+                  (m/Expanded
+                   .child (m/ListView
+                           .shrinkWrap true
+                           .scrollDirection m/Axis.horizontal
+                           .children
+                           (map (fn [item]
+                                  (let [item-id (.-id item)
+                                        task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
+                                        blocked? (:blocked task-info false)]
+                                    (comp/mongol-task-item
+                                     {:content (.-content item)
+                                      :status (keyword (.-status item))
+                                      :blocked? blocked?
+                                      :on-tap (fn []
+                                                (task/refresh-task-detail! item-id)
+                                                (m/Navigator.push
+                                                 ctx
+                                                 (m/MaterialPageRoute
+                                                  .builder (fn [_]
+                                                             (task-detail/task-detail-screen item-id)))))})))
+                                tagged-items)))))
               (comp/mongol-text-block
                {:text "Select tags above to see filtered tasks"
                 :style (m/TextStyle .color (comp/color :text-weak))}))])))

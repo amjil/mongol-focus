@@ -11,6 +11,10 @@
    [virtual-keyboard.fst-reader :as fst-reader]
    [minii-focus.services.database :as db]
    [minii-focus.services.task :as task]
+   [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.tag :as tag-svc]
+   [minii-focus.services.review :as review-svc]
+   [minii-focus.services.settings :as settings-svc]
    [minii-focus.states.app-state :as state]
    [minii-focus.components.core :as comp]
    [minii-focus.screens.home :as home]
@@ -89,7 +93,35 @@
                         {:title "Stats" :idx 8}
                         {:title "Settings" :idx 9}]
           set-page! (fn [idx]
-                      (reset! current-index idx))]
+                      (reset! current-index idx)
+                      ;; Auto-refresh data when switching pages
+                      (condp = idx
+                        0 (do
+                           ;; Home page - refresh all overview data
+                           (task/refresh-today-tasks!)
+                           (task/refresh-inbox-tasks!)
+                           (task/refresh-forecast-items!)
+                           (task/refresh-focus-sessions!)
+                           nil)
+                        1 (task/refresh-today-tasks!)
+                        2 (task/refresh-inbox-tasks!)
+                        3 (task/refresh-focus-tasks!)
+                        4 (task/refresh-forecast-items!)
+                        5 (task/refresh-projects!)
+                        6 (do
+                           ;; Tags page - refresh tags
+                           true
+                           (tag-svc/refresh-tags!))
+                        7 (do
+                           ;; Review page - refresh reviews
+                           true
+                           (review-svc/refresh-reviews! "daily"))
+                        8 (task/refresh-focus-sessions!)
+                        9 (do
+                           ;; Settings page - refresh settings
+                           true
+                           (settings-svc/refresh-settings!))
+                        nil))]
     :bind {:info info}
     :watch [_tab current-index]
 
