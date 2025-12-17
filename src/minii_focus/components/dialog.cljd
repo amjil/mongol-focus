@@ -123,9 +123,22 @@
                          .onPressed (fn []
                                       (let [content-value (if content @content (.-text controller))
                                             ^dart-core/DateTime? defer-value (when defer-date @defer-date)
-                                            ^dart-core/DateTime? due-value (when due-date @due-date)]
-                                        (if (empty? content-value)
-                                          (task/show-toast ctx "Please enter content" :warning)
+                                            ^dart-core/DateTime? due-value (when due-date @due-date)
+                                            error-msg (cond
+                                                        (empty? content-value)
+                                                        "Please enter content"
+
+                                                        (> (count content-value) 1000)
+                                                        "Content is too long (max 1000 characters)"
+
+                                                        (and defer-value
+                                                             due-value
+                                                             (.isAfter defer-value due-value))
+                                                        "Start date must be before or equal to due date"
+
+                                                        :else nil)]
+                                        (if error-msg
+                                          (task/show-toast ctx error-msg :warning)
                                           (-> (task/create-task content-value "task" "active" defer-value due-value)
                                               (.then (fn [_]
                                                        (when content (reset! content ""))
