@@ -9,13 +9,14 @@ class TagsDao {
   TagsDao(this._db);
 
   /// Create a new tag
-  Future<void> createTag(String id, String name, {String? parentId}) async {
+  Future<Null> createTag(String id, String name, {String? parentId}) async {
     final companion = TagsCompanion.insert(
       id: id,
       name: name,
       parentId: parentId != null ? Value(parentId) : const Value.absent(),
     );
     await (_db.into(_db.tags)).insert(companion);
+    return null;
   }
 
   /// Update an existing tag

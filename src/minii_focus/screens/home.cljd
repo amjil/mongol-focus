@@ -13,7 +13,8 @@
    [minii-focus.screens.review :as review]
    [minii-focus.screens.focus-stats :as focus-stats]
    [minii-focus.screens.settings :as settings]
-   [minii-focus.screens.perspectives :as perspectives]))
+   [minii-focus.screens.perspectives :as perspectives]
+   [minii-focus.screens.search :as search]))
 
 ;; =============================================================================
 ;; Helper functions for statistics
@@ -175,7 +176,8 @@
                      7 review/review-screen
                      8 focus-stats/focus-stats-screen
                      9 settings/settings-screen
-                     10 perspectives/perspectives-screen}
+                     10 perspectives/perspectives-screen
+                     11 search/search-screen}
          ;; Navigation handler - use Navigator for pages not in bottom nav, otherwise use callback
          navigate-to-page (fn [idx]
                             (if (and (>= idx 4) (contains? screen-map idx))
@@ -347,7 +349,11 @@
                    (nav-card
                     {:title "Perspectives"
                      :icon m/Icons.filter_list
-                     :on-tap (fn [] (navigate-to-page 10))})])]))])
+                     :on-tap (fn [] (navigate-to-page 10))})
+                   (nav-card
+                    {:title "Search"
+                     :icon m/Icons.search
+                     :on-tap (fn [] (navigate-to-page 11))})])]))])
             
             :side-row
             (m/Container

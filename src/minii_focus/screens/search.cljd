@@ -1,0 +1,332 @@
+(ns minii-focus.screens.search
+  "Search page - full-text search and advanced search"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.screens.task-detail :as task-detail]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.services.search :as search-svc]
+   [minii-focus.services.task :as task]
+   [minii-focus.services.tag :as tag-svc]))
+
+(defn search-screen []
+  (let [query-state (atom "")
+        search-type (atom :fulltext) ; :fulltext or :advanced
+        show-advanced (atom false)
+        ;; Advanced search filters
+        selected-statuses (atom #{})
+        is-flagged-filter (atom nil) ; nil, true, or false
+        selected-tags (atom #{})
+        type-filter (atom nil) ; nil, "task", "project", etc.
+        tasks-with-info (atom [])]
+    (f/widget
+     :context ctx
+    ;;  :init (fn []
+    ;;         ;; Load search history on init
+    ;;         (search-svc/refresh-search-history!)
+    ;;         ;; Load tags for advanced search
+    ;;         (tag-svc/refresh-tags!))
+     :watch [_query query-state
+             _st search-type
+             _sa show-advanced
+             _ss selected-statuses
+             _if is-flagged-filter
+             _stags selected-tags
+             _tf type-filter
+             _twi tasks-with-info
+             {results :search-results
+              history :search-history
+              loading :search-loading
+              tags :tags} state/app-state]
+     :let [status-options ["active" "idle" "blocked" "completed"]
+           type-options [nil "task" "project" "note" "focus"]
+           perform-search (fn []
+                           (let [query @query-state
+                                 filters {:statuses (when (seq @selected-statuses)
+                                                     (vec @selected-statuses))
+                                         :is-flagged @is-flagged-filter
+                                         :tag-ids (when (seq @selected-tags)
+                                                   (vec @selected-tags))
+                                         :type @type-filter}]
+                             (search-svc/refresh-search-results! query @search-type filters)))
+           clear-filters (fn []
+                          (reset! selected-statuses #{})
+                          (reset! is-flagged-filter nil)
+                          (reset! selected-tags #{})
+                          (reset! type-filter nil))]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .actions [(m/IconButton
+                         .tooltip "Toggle search type"
+                         .icon (m/Icon (if (= @search-type :fulltext)
+                                       m/Icons.search
+                                       m/Icons.filter_list))
+                         .onPressed (fn []
+                                     (swap! search-type (fn [t]
+                                                         (if (= t :fulltext) :advanced :fulltext)))
+                                     (reset! show-advanced false)))
+                        (m/IconButton
+                         .tooltip "Clear history"
+                         .icon (m/Icon m/Icons.delete_sweep)
+                         .onPressed (fn []
+                                     (search-svc/clear-search-history)))
+                        (m/IconButton
+                         .tooltip "Refresh"
+                         .icon (m/Icon m/Icons.refresh)
+                         .onPressed (fn []
+                                     (perform-search)
+                                     (search-svc/refresh-search-history!)))])
+      .body
+      (comp/mongol-row-layout
+       {:main-row
+        (m/Padding
+         .padding (m/EdgeInsets.all (comp/space :m))
+         .child
+         (m/SingleChildScrollView
+          .scrollDirection m/Axis.horizontal
+          .child
+          (m/Row
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(m/Column  
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.center
+               .children
+               [(m/Container
+                 .padding (m/EdgeInsets.all (comp/space :s))
+                 .decoration (m/BoxDecoration
+                              .border (m/Border.all
+                                       .color m/Colors.grey.shade300
+                                       .width 1)
+                              .borderRadius (m/BorderRadius.circular 4))
+                 .child
+                 (m/SizedBox
+                  .height 300
+                  .child (mgl/MongolTextField
+                          .decoration (m/InputDecoration
+                                      .hintText "Хайх..."
+                                      .border m/InputBorder.none)
+                          .maxLines 1
+                          .onChanged (fn [v] (reset! query-state v))
+                          .onSubmitted (fn [v]
+                                        (when (seq v)
+                                          (perform-search))))))
+                (m/SizedBox .width (comp/space :s))
+                (mgl/MongolElevatedButton
+                 .onPressed (fn []
+                             (when (seq @query-state)
+                               (perform-search)))
+                 .child (mgl/MongolText "Хайх"))])
+              ;; Advanced filters toggle
+              (if (= @search-type :advanced)
+                (m/Row
+                 .children
+                 [(mgl/MongolTextButton
+                   .onPressed (fn []
+                               (swap! show-advanced not))
+                   .child (mgl/MongolText (if @show-advanced "Дэлгэрэнгүй нуух" "Дэлгэрэнгүй харуулах")))
+                  (m/SizedBox .width (comp/space :s))
+                  (mgl/MongolTextButton
+                   .onPressed (fn []
+                               (clear-filters)
+                               (when (seq @query-state)
+                                 (perform-search)))
+                   .child (mgl/MongolText "Шүүлт цэвэрлэх"))])
+                (m/SizedBox))])
+            ;; Advanced filters panel
+            (if (and (= @search-type :advanced) @show-advanced)
+              (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [(m/SizedBox .width (comp/space :m))
+                (comp/mongol-text-block
+                 {:text "Статус"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/Wrap
+                 .direction m/Axis.vertical
+                 .spacing (comp/space :s)
+                 .runSpacing (comp/space :s)
+                 .children
+                 (map (fn [status]
+                        (let [selected? (contains? @selected-statuses status)]
+                          (m/RotatedBox
+                           .quarterTurns 1
+                           .child (m/FilterChip
+                                   .label (m/Text status)
+                                   .selected selected?
+                                   .onSelected (fn [v]
+                                                (if v
+                                                  (swap! selected-statuses conj status)
+                                                  (swap! selected-statuses disj status))
+                                                (perform-search))))))
+                      status-options))
+                (m/SizedBox .width (comp/space :m))
+                (comp/mongol-text-block
+                 {:text "Туглуулсан"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/Row
+                 .children
+                 [(m/ChoiceChip
+                   .label (m/Text "Бүгд")
+                   .selected (= @is-flagged-filter nil)
+                   .onSelected (fn [_]
+                                (reset! is-flagged-filter nil)
+                                (perform-search)))
+                  (m/SizedBox .width (comp/space :s))
+                  (m/ChoiceChip
+                   .label (m/Text "Тийм")
+                   .selected (= @is-flagged-filter true)
+                   .onSelected (fn [_]
+                                (reset! is-flagged-filter true)
+                                (perform-search)))
+                  (m/SizedBox .width (comp/space :s))
+                  (m/ChoiceChip
+                   .label (m/Text "Үгүй")
+                   .selected (= @is-flagged-filter false)
+                   .onSelected (fn [_]
+                                (reset! is-flagged-filter false)
+                                (perform-search)))])
+                (m/SizedBox .height (comp/space :m))
+                (comp/mongol-text-block
+                 {:text "Төрөл"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/Wrap
+                 .direction m/Axis.vertical
+                 .spacing (comp/space :s)
+                 .runSpacing (comp/space :s)
+                 .children
+                 (map (fn [type-opt]
+                        (let [type-label (or type-opt "Бүгд")
+                              selected? (= @type-filter type-opt)]
+                          (m/RotatedBox
+                           .quarterTurns 1
+                           .child (m/FilterChip
+                                   .label (m/Text type-label)
+                                   .selected selected?
+                                   .onSelected (fn [v]
+                                                (reset! type-filter (if v type-opt nil))
+                                                (perform-search))))))
+                      type-options))
+                (m/SizedBox .height (comp/space :m))
+                (comp/mongol-text-block
+                 {:text "Таг"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (if (empty? tags)
+                  (comp/mongol-text-block
+                   {:text "Таг байхгүй"
+                    :style (m/TextStyle .color (comp/color :text-weak))})
+                  (m/Wrap
+                   .direction m/Axis.vertical
+                   .spacing (comp/space :s)
+                   .runSpacing (comp/space :s)
+                   .children
+                   (map (fn [tag]
+                          (let [tag-id (.-id tag)
+                                selected? (contains? @selected-tags tag-id)]
+                            (m/RotatedBox
+                             .quarterTurns 1
+                             .child (m/FilterChip
+                                     .label (m/Text (.-name tag))
+                                     .selected selected?
+                                     .onSelected (fn [v]
+                                                   (if v
+                                                     (swap! selected-tags conj tag-id)
+                                                     (swap! selected-tags disj tag-id))
+                                                   (perform-search))))))
+                        tags)))])
+                        (m/SizedBox))
+            ;; Search history
+            (if (seq history)
+              (m/Row
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [(m/SizedBox .width (comp/space :m))
+                (comp/mongol-text-block
+                 {:text "Хайлтын түүх"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/Wrap
+                 .direction m/Axis.vertical
+                 .spacing (comp/space :s)
+                 .runSpacing (comp/space :s)
+                 .children
+                 (map (fn [hist-item]
+                        (m/RotatedBox
+                         .quarterTurns 1
+                         .child (m/ActionChip
+                                 .label (m/Text (.-query hist-item))
+                                 .onPressed (fn []
+                                              (reset! query-state (.-query hist-item))
+                                              (perform-search)))))
+                      (take 10 history)))])
+                      (m/SizedBox))
+            ;; Search results
+            (m/SizedBox .width (comp/space :m))
+            (comp/mongol-text-block
+             {:text (if loading
+                     "Хайж байна..."
+                     (str "Үр дүн: " (count results)))
+              :style (m/TextStyle .fontSize (comp/font-size :m))})
+            (if loading
+              (m/Center
+               .child (m/CircularProgressIndicator))
+              (if (empty? results)
+                (comp/mongol-text-block
+                 {:text "Үр дүн олдсонгүй"
+                  :style (m/TextStyle .color (comp/color :text-weak))})
+                (do
+                  ;; Load blocked info when results change
+                  (when (and (seq results) (empty? @tasks-with-info))
+                    (-> (task/get-tasks-with-blocked-info results)
+                        (.then (fn [info-list]
+                                 (reset! tasks-with-info info-list)))
+                        (.catchError (fn [e]
+                                       (dart-core/print (str "Error loading blocked info: " e))))))
+                  (m/Expanded
+                   .child (m/ListView
+                           .scrollDirection m/Axis.horizontal
+                           .shrinkWrap true
+                           .children
+                           (map (fn [item]
+                                  (let [item-id (.-id item)
+                                        task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
+                                        blocked? (:blocked task-info false)]
+                                    (comp/mongol-task-item
+                                     {:content (.-content item)
+                                      :status (keyword (.-status item))
+                                      :blocked? blocked?
+                                      :on-tap (fn []
+                                                (task/refresh-task-detail! item-id)
+                                                (m/Navigator.push
+                                                 ctx
+                                                 (m/MaterialPageRoute
+                                                  .builder (fn [_]
+                                                             (task-detail/task-detail-screen item-id)))))})))
+                                results))))))])))
+        :side-row
+        (m/Container
+         .padding (m/EdgeInsets.all (comp/space :m))
+         .child
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          [(comp/mongol-text-block
+            {:text "Хайлт"
+             :style (m/TextStyle .fontSize (comp/font-size :m))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Төрөл: " (if (= @search-type :fulltext) "Бүтэн текст" "Дэлгэрэнгүй"))
+             :style (m/TextStyle .color (comp/color :text-weak))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Үр дүн: " (count results))
+             :style (m/TextStyle .color (comp/color :text-weak))})
+           (m/SizedBox .height (comp/space :s))
+           (comp/mongol-text-block
+            {:text (str "Түүх: " (count history))
+             :style (m/TextStyle .color (comp/color :text-weak))})]))})))))
+

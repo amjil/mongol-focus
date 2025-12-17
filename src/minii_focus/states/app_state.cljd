@@ -42,6 +42,10 @@
          :flagged-tasks []
          ;; Perspectives
          :perspectives []
+         ;; Search
+         :search-results []
+         :search-history []
+         :search-loading false
          ;; Compatible with old fields (gradual migration)
          :tasks []
          :loading false}))
@@ -171,5 +175,15 @@
 ;; Perspectives
 (defn set-perspectives! [perspectives]
   (update-state! assoc :perspectives perspectives))
+
+;; Search
+(defn set-search-results! [results]
+  (update-state! assoc :search-results results))
+
+(defn set-search-history! [history]
+  (update-state! assoc :search-history history))
+
+(defn set-search-loading! [loading]
+  (update-state! assoc :search-loading loading))
 
 

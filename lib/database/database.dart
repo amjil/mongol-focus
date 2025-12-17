@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'connection/connection.dart' as impl;
 import 'perspectives_dao.dart';
 import 'tags_dao.dart';
+import 'search_dao.dart';
 
 part 'database.g.dart';
 
@@ -162,6 +163,21 @@ class Perspectives extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// SearchHistory table - search history records
+class SearchHistory extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get query => text()();
+
+  // search type: "fulltext", "advanced"
+  TextColumn get searchType => text().withDefault(const Constant('fulltext'))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Items,
@@ -172,6 +188,7 @@ class Perspectives extends Table {
     Reviews,
     Settings,
     Perspectives,
+    SearchHistory,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -185,14 +202,21 @@ class AppDatabase extends _$AppDatabase {
   TagsDao? _tagsDao;
   TagsDao get tagsDao => _tagsDao ??= TagsDao(this);
 
+  SearchDao? _searchDao;
+  SearchDao get searchDao => _searchDao ??= SearchDao(this);
+
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+        // Create FTS virtual table for full-text search
+        await customStatement(
+          'CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(content, id UNINDEXED)',
+        );
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
@@ -214,6 +238,19 @@ class AppDatabase extends _$AppDatabase {
           // Migration from version 3 to 4
           // Add estimated duration field to Items table
           await m.addColumn(items, items.estimatedMinutes);
+        }
+        if (from < 5) {
+          // Migration from version 4 to 5
+          // Create SearchHistory table
+          await m.createTable(searchHistory);
+          // Create FTS virtual table for full-text search
+          await customStatement(
+            'CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(content, id UNINDEXED)',
+          );
+          // Populate FTS table with existing items
+          await customStatement(
+            'INSERT INTO items_fts(content, id) SELECT content, id FROM items',
+          );
         }
       },
     );
@@ -366,6 +403,7 @@ class AppDatabase extends _$AppDatabase {
           ]))
         .get();
   }
+
 }
 
 Future<AppDatabase> initDriftDatabase() async {

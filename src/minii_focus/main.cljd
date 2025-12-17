@@ -16,6 +16,7 @@
    [minii-focus.services.review :as review-svc]
    [minii-focus.services.settings :as settings-svc]
    [minii-focus.services.perspectives :as perspective-svc]
+   [minii-focus.services.search :as search-svc]
    [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.components.core :as comp]
@@ -30,6 +31,7 @@
    [minii-focus.screens.focus-stats :as focus-stats]
    [minii-focus.screens.settings :as settings]
    [minii-focus.screens.perspectives :as perspectives]
+   [minii-focus.screens.search :as search]
    [minii-focus.screens.task-detail :as task-detail]))
 
 ;; Initialize application
@@ -92,7 +94,8 @@
                  (review/review-screen)
                  (focus-stats/focus-stats-screen)
                  (settings/settings-screen)
-                 (perspectives/perspectives-screen)]
+                 (perspectives/perspectives-screen)
+                 (search/search-screen)]
           ;; Bottom navigation only shows the 4 most important entries
           bottom-items [{:title "Home" :icon m/Icons.home :idx 0}
                         {:title "Today" :icon m/Icons.calendar_today :idx 1}
@@ -108,7 +111,8 @@
                         {:title "Review" :idx 7}
                         {:title "Stats" :idx 8}
                         {:title "Settings" :idx 9}
-                        {:title "Perspectives" :idx 10}]
+                        {:title "Perspectives" :idx 10}
+                        {:title "Search" :idx 11}]
           set-page! (fn [idx]
                       (reset! current-index idx)
                       ;; Auto-refresh data when switching pages
@@ -143,6 +147,10 @@
                              ;; Perspectives page - refresh perspectives
                              true
                              (perspective-svc/refresh-perspectives!))
+                        11 (do
+                             ;; Search page - refresh search history
+                             true
+                             (search-svc/refresh-search-history!))
                         nil))]
     :bind {:info info}
     :watch [_tab current-index]
@@ -166,7 +174,8 @@
               "/review" review/review-screen
               "/stats" focus-stats/focus-stats-screen
               "/settings" settings/settings-screen
-              "/perspectives" perspectives/perspectives-screen}
+              "/perspectives" perspectives/perspectives-screen
+              "/search" search/search-screen}
      .home (m/Scaffold
             .drawer (m/Drawer
                      .child (m/SafeArea
