@@ -14,7 +14,37 @@
    [minii-focus.services.task :as task]))
 
 
-(defn- edit-perspective-dialog [dialog-ctx perspective on-save on-cancel]
+(defn- build-filter-conditions
+  "根据本地 UI 状态构建透视过滤条件 Map。
+   - selected-statuses: Clojure 集合/序列，元素为状态字符串
+   - only-flagged?: 是否仅显示已加星任务
+   - selected-tags: Clojure 集合/序列，元素为 tag id 字符串
+   - tags-mode: :or / :and
+   - due-soon?: 是否启用 '3 日内到期' 过滤
+   - overdue?: 是否启用 '已逾期' 过滤"
+  [{:keys [selected-statuses only-flagged? selected-tags tags-mode due-soon? overdue?]}]
+  (let [m {}
+        m (if (seq selected-statuses)
+            (assoc m "status" (vec selected-statuses))
+            m)
+        m (if only-flagged?
+            (assoc m "isFlagged" true)
+            m)
+        m (if (seq selected-tags)
+            (-> m
+                (assoc "tags" (vec selected-tags))
+                (assoc "tagsMode" (if (= tags-mode :and) "and" "or")))
+            m)
+        m (if due-soon?
+            (assoc m "dueSoon" true)
+            m)
+        m (if overdue?
+            (assoc m "overdue" true)
+            m)]
+    m))
+
+
+(defn- edit-perspective-dialog [dialog-ctx perspective tags on-save on-cancel]
   (let [name-state (atom (.-name perspective))
         sort-by-state (atom (.-sortBy perspective))
         sort-order-state (atom (.-sortOrder perspective))
@@ -25,13 +55,42 @@
                               (convert/jsonDecode filter-conditions-str))
                             (catch Exception _ex
                               {"status" ["active"]}))
-        name-controller (m/TextEditingController .text (.-name perspective))]
+        ;; 从已有 filter-conditions 中恢复 UI 状态
+        existing-statuses (let [v (get filter-conditions "status")]
+                            (if (and v (seq v))
+                              (set v)
+                              #{"active"}))
+        selected-statuses (atom existing-statuses)
+        only-flagged? (atom (boolean (get filter-conditions "isFlagged")))
+        existing-tags (let [v (get filter-conditions "tags")]
+                        (if (and v (seq v))
+                          (set v)
+                          #{}))
+        selected-tags (atom existing-tags)
+        tags-mode (atom (case (get filter-conditions "tagsMode")
+                          "and" :and
+                          :or))
+        due-soon? (atom (boolean (get filter-conditions "dueSoon")))
+        overdue? (atom (boolean (get filter-conditions "overdue")))
+        name-controller (m/TextEditingController .text (.-name perspective))
+        ;; 可选状态列表（与 Items.status 约定保持一致）
+        status-options [["active" "Active"]
+                        ["blocked" "Blocked"]
+                        ["completed" "Completed"]
+                        ["on_hold" "On hold"]
+                        ["dropped" "Dropped"]]]
     (f/widget
      :context _ctx
      :watch [_nm name-state
              _sb sort-by-state
              _so sort-order-state
-             _gb group-by-state]
+             _gb group-by-state
+             _ss selected-statuses
+             _fl only-flagged?
+             _st selected-tags
+             _tm tags-mode
+             _ds due-soon?
+             _ov overdue?]
      (m/AlertDialog
       .insetPadding (m/EdgeInsets.zero)
       .contentPadding (m/EdgeInsets.zero)
@@ -74,7 +133,94 @@
                                   (dropdown/MongolSelectItem .value "dueDate" .label (mgl/MongolText "Due Date"))
                                   (dropdown/MongolSelectItem .value "deferDate" .label (mgl/MongolText "Defer Date"))]
                           .onChanged (fn [v] (reset! group-by-state v))
-                          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))]))
+                          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))
+                         (m/SizedBox .width (comp/space :s))
+                         ;; 状态过滤
+                         (m/Column
+                          .crossAxisAlignment m/CrossAxisAlignment.start
+                          .children
+                          [(mgl/MongolText "Status")
+                           (m/SizedBox .height (comp/space :xs))
+                           (m/Wrap
+                            .spacing (comp/space :xs)
+                            .runSpacing (comp/space :xs)
+                            .children
+                            (map (fn [[status-key label]]
+                                   (let [selected? (contains? @selected-statuses status-key)]
+                                     (m/FilterChip
+                                      .label (m/Text label)
+                                      .selected selected?
+                                      .onSelected (fn [v]
+                                                    (if v
+                                                      (swap! selected-statuses conj status-key)
+                                                      (swap! selected-statuses disj status-key))))))
+                                 status-options))])
+                         (m/SizedBox .width (comp/space :s))
+                         ;; 仅已加星
+                         (m/FilterChip
+                          .label (m/Text "Flagged only")
+                          .selected @only-flagged?
+                          .onSelected (fn [v] (reset! only-flagged? v)))
+                         (m/SizedBox .width (comp/space :s))
+                         ;; 标签过滤
+                         (m/Column
+                          .crossAxisAlignment m/CrossAxisAlignment.start
+                          .children
+                          [(mgl/MongolText "Tags")
+                           (m/SizedBox .height (comp/space :xs))
+                           (if (empty? tags)
+                             (mgl/MongolText "No tags")
+                             (m/Wrap
+                              .spacing (comp/space :xs)
+                              .runSpacing (comp/space :xs)
+                              .children
+                              (map (fn [t]
+                                     (let [tid (.-id t)
+                                           selected? (contains? @selected-tags tid)]
+                                       (m/FilterChip
+                                        .label (m/Text (.-name t))
+                                        .selected selected?
+                                        .onSelected (fn [v]
+                                                      (if v
+                                                        (swap! selected-tags conj tid)
+                                                        (swap! selected-tags disj tid))))))
+                                   tags)))
+                           (m/SizedBox .height (comp/space :xs))
+                           (m/Row
+                            .mainAxisSize m/MainAxisSize.min
+                            .children
+                            [(m/Text "Mode:")
+                             (m/SizedBox .width (comp/space :xs))
+                             (m/FilterChip
+                              .label (m/Text "OR")
+                              .selected (= @tags-mode :or)
+                              .onSelected (fn [v]
+                                            (when v (reset! tags-mode :or))))
+                             (m/SizedBox .width (comp/space :xs))
+                             (m/FilterChip
+                              .label (m/Text "AND")
+                              .selected (= @tags-mode :and)
+                              .onSelected (fn [v]
+                                            (when v (reset! tags-mode :and))))])])
+                         (m/SizedBox .width (comp/space :s))
+                         ;; 日期范围过滤
+                         (m/Column
+                          .crossAxisAlignment m/CrossAxisAlignment.start
+                          .children
+                          [(mgl/MongolText "Date range")
+                           (m/SizedBox .height (comp/space :xs))
+                           (m/Row
+                            .mainAxisSize m/MainAxisSize.min
+                            .children
+                            [(m/FilterChip
+                              .label (m/Text "Due soon (3d)")
+                              .selected @due-soon?
+                              .onSelected (fn [v] (reset! due-soon? v)))
+                             (m/SizedBox .width (comp/space :xs))
+                             (m/FilterChip
+                              .label (m/Text "Overdue")
+                              .selected @overdue?
+                              .onSelected (fn [v] (reset! overdue? v)))])])]))
       .actions [(m/TextButton
                  .onPressed (fn []
                               (when on-cancel (on-cancel))
@@ -84,7 +230,14 @@
                  .onPressed (fn []
                               (let [name-value (if (empty? @name-state)
                                                  (.-text name-controller)
-                                                 @name-state)]
+                                                 @name-state)
+                                    filter-conditions (build-filter-conditions
+                                                       {:selected-statuses @selected-statuses
+                                                        :only-flagged? @only-flagged?
+                                                        :selected-tags @selected-tags
+                                                        :tags-mode @tags-mode
+                                                        :due-soon? @due-soon?
+                                                        :overdue? @overdue?})]
                                 (when (and (not (empty? name-value)) on-save)
                                   (on-save name-value
                                            filter-conditions
@@ -94,7 +247,7 @@
                                   (m/Navigator.pop dialog-ctx))))
                  .child (m/Text "Save"))]))))
 
-(defn- perspectives-section [ctx perspectives editing-id]
+(defn- perspectives-section [ctx perspectives editing-id tags]
   (if (empty? perspectives)
     (comp/mongol-text-block
      {:text "No perspectives created yet"
@@ -120,6 +273,7 @@
                                                            (edit-perspective-dialog
                                                             dialog-ctx
                                                             p
+                                                            tags
                                                             (fn [name filter-conditions sort-by sort-order group-by]
                                                               (-> (perspective-svc/update-perspective
                                                                    (.-id p)
@@ -148,38 +302,144 @@
                                                                   (dart-core/print (str "Error deleting perspective: " error)))))))]))))
           perspectives))))
 
-(defn- create-perspective-section [name-state]
-  (m/Column
-   .crossAxisAlignment m/CrossAxisAlignment.center
-   .children
-   [(m/Container
-     .padding (m/EdgeInsets.all (comp/space :s))
-     .decoration (m/BoxDecoration
-                  .border (m/Border.all
-                           .color m/Colors.grey.shade300
-                           .width 1)
-                  .borderRadius (m/BorderRadius.circular 4))
-     .child (m/SizedBox
-             .height (+ (* (comp/font-size :m) 2) (* (comp/space :s) 2))
-             .child (mgl/MongolTextField
-                     .decoration nil
-                     .maxLines 1
-                     ;; .hintText "Perspective name"
-                     .onChanged (fn [v] (reset! name-state v)))))
-    (m/SizedBox .height (comp/space :s))
-    (mgl/MongolElevatedButton
-     .onPressed (fn []
-                  (when (not (empty? @name-state))
-                    (-> (perspective-svc/create-perspective
-                         @name-state
-                         {"status" ["active"]}
-                         "dueDate"
-                         "asc"
-                         "none")
-                        (.then (fn [_]
-                                 (reset! name-state "")
-                                 (perspective-svc/refresh-perspectives!))))))
-     .child (mgl/MongolText "Create"))]))
+(defn- create-perspective-section [name-state tags]
+  (let [;; 过滤条件本地状态
+        selected-statuses (atom #{"active"})
+        only-flagged? (atom false)
+        selected-tags (atom #{})
+        tags-mode (atom :or)
+        due-soon? (atom false)
+        overdue? (atom false)
+        status-options [["active" "Active"]
+                        ["blocked" "Blocked"]
+                        ["completed" "Completed"]
+                        ["on_hold" "On hold"]
+                        ["dropped" "Dropped"]]]
+    (m/Column
+     .crossAxisAlignment m/CrossAxisAlignment.center
+     .children
+     [(m/Container
+       .padding (m/EdgeInsets.all (comp/space :s))
+       .decoration (m/BoxDecoration
+                    .border (m/Border.all
+                             .color m/Colors.grey.shade300
+                             .width 1)
+                    .borderRadius (m/BorderRadius.circular 4))
+       .child (m/SizedBox
+               .height (+ (* (comp/font-size :m) 2) (* (comp/space :s) 2))
+               .child (mgl/MongolTextField
+                       .decoration nil
+                       .maxLines 1
+                       ;; .hintText "Perspective name"
+                       .onChanged (fn [v] (reset! name-state v)))))
+      (m/SizedBox .height (comp/space :s))
+      ;; 状态过滤
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.start
+       .children
+       [(mgl/MongolText "Status")
+        (m/SizedBox .height (comp/space :xs))
+        (m/Wrap
+         .spacing (comp/space :xs)
+         .runSpacing (comp/space :xs)
+         .children
+         (map (fn [[status-key label]]
+                (let [selected? (contains? @selected-statuses status-key)]
+                  (m/FilterChip
+                   .label (m/Text label)
+                   .selected selected?
+                   .onSelected (fn [v]
+                                 (if v
+                                   (swap! selected-statuses conj status-key)
+                                   (swap! selected-statuses disj status-key))))))
+              status-options))])
+      (m/SizedBox .height (comp/space :s))
+      ;; 仅已加星
+      (m/FilterChip
+       .label (m/Text "Flagged only")
+       .selected @only-flagged?
+       .onSelected (fn [v] (reset! only-flagged? v)))
+      (m/SizedBox .height (comp/space :s))
+      ;; 标签过滤
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.start
+       .children
+       [(mgl/MongolText "Tags")
+        (m/SizedBox .height (comp/space :xs))
+        (if (empty? tags)
+          (mgl/MongolText "No tags")
+          (m/Wrap
+           .spacing (comp/space :xs)
+           .runSpacing (comp/space :xs)
+           .children
+           (map (fn [t]
+                  (let [tid (.-id t)
+                        selected? (contains? @selected-tags tid)]
+                    (m/FilterChip
+                     .label (m/Text (.-name t))
+                     .selected selected?
+                     .onSelected (fn [v]
+                                   (if v
+                                     (swap! selected-tags conj tid)
+                                     (swap! selected-tags disj tid))))))
+                tags)))
+        (m/SizedBox .height (comp/space :xs))
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         [(m/Text "Mode:")
+          (m/SizedBox .width (comp/space :xs))
+          (m/FilterChip
+           .label (m/Text "OR")
+           .selected (= @tags-mode :or)
+           .onSelected (fn [v]
+                         (when v (reset! tags-mode :or))))
+          (m/SizedBox .width (comp/space :xs))
+          (m/FilterChip
+           .label (m/Text "AND")
+           .selected (= @tags-mode :and)
+           .onSelected (fn [v]
+                         (when v (reset! tags-mode :and))))])])
+      (m/SizedBox .height (comp/space :s))
+      ;; 日期范围过滤
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.start
+       .children
+       [(mgl/MongolText "Date range")
+        (m/SizedBox .height (comp/space :xs))
+        (m/Row
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         [(m/FilterChip
+           .label (m/Text "Due soon (3d)")
+           .selected @due-soon?
+           .onSelected (fn [v] (reset! due-soon? v)))
+          (m/SizedBox .width (comp/space :xs))
+          (m/FilterChip
+           .label (m/Text "Overdue")
+           .selected @overdue?
+           .onSelected (fn [v] (reset! overdue? v)))] )])
+      (m/SizedBox .height (comp/space :s))
+      (mgl/MongolElevatedButton
+       .onPressed (fn []
+                    (when (not (empty? @name-state))
+                      (let [filter-conditions (build-filter-conditions
+                                               {:selected-statuses @selected-statuses
+                                                :only-flagged? @only-flagged?
+                                                :selected-tags @selected-tags
+                                                :tags-mode @tags-mode
+                                                :due-soon? @due-soon?
+                                                :overdue? @overdue?})]
+                        (-> (perspective-svc/create-perspective
+                             @name-state
+                             filter-conditions
+                             "dueDate"
+                             "asc"
+                             "none")
+                            (.then (fn [_]
+                                     (reset! name-state "")
+                                     (perspective-svc/refresh-perspectives!)))))))
+       .child (mgl/MongolText "Create"))])))
 
 (defn- select-perspective-section [perspectives selected-perspective perspective-tasks tasks-with-info]
   (if (empty? perspectives)
@@ -297,7 +557,8 @@
              _pt perspective-tasks
              _twi tasks-with-info
              _li loading-info
-             {perspectives :perspectives} state/app-state]
+             {perspectives :perspectives
+              tags :tags} state/app-state]
      (do
        (when (and (seq @perspective-tasks) (empty? @tasks-with-info) (not @loading-info))
          (reset! loading-info true)
@@ -341,13 +602,13 @@
                      {:text "Create Perspective"
                       :style (m/TextStyle .fontSize (comp/font-size :l))})
                     (m/SizedBox .width (comp/space :s))
-                    (create-perspective-section name-state)
+                    (create-perspective-section name-state tags)
                     (m/SizedBox .width (comp/space :l))
                     (comp/mongol-text-block
                      {:text "Perspectives"
                       :style (m/TextStyle .fontSize (comp/font-size :l))})
                     (m/SizedBox .width (comp/space :s))
-                    (perspectives-section ctx perspectives editing-id)])))
+                    (perspectives-section ctx perspectives editing-id tags)])))
                 :side-row
                 (m/Container
                  .padding (m/EdgeInsets.all (comp/space :m))
