@@ -14,378 +14,76 @@
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.recurring-tasks :as recurring]
    [minii-focus.utils.datetime :as dt]
-   [minii-focus.states.app-state :as state]))
+   [minii-focus.states.app-state :as state]
+   [minii-focus.screens.task-detail :as task-detail]))
 
+(defn- actions [editing task-detail defer-state due-state content-state status-state
+                editing-state]
+  (if editing
+    [(m/IconButton
+      .icon (m/Icon m/Icons.check)
+      .onPressed (fn []
+                   ;; Optimistic update: update local state immediately
+                   (when task-detail
+                     (let [^dart-core/DateTime? defer-dt @defer-state
+                           ^dart-core/DateTime? due-dt @due-state
+                           ^#/(d/Value dart-core/DateTime?)
+                           defer-value (if defer-dt
+                                         (d/Value defer-dt)
+                                         (d/Value nil))
+                           ^#/(d/Value dart-core/DateTime?)
+                           due-value (if due-dt
+                                       (d/Value due-dt)
+                                       (d/Value nil))]
+                       (swap! state/app-state
+                              (fn [s]
+                                (if-let [td (:task-detail s)]
+                                  (assoc s :task-detail
+                                         (.copyWith td
+                                                    .content @content-state
+                                                    .status (name @status-state)
+                                                    .deferAt defer-value
+                                                    .dueAt due-value))
+                                  s)))))
+                   (reset! editing-state false)
+                   ;; Then persist to database (auto-refresh happens in update-task)
+                   (-> (task/update-task (.-id task-detail)
+                                         @content-state
+                                         (name @status-state)
+                                         @defer-state
+                                         @due-state)
+                       (.then (fn [_]
+                                (task/refresh-task-detail! (.-id task-detail))))
+                       (.catchError (fn [error]
+                                      (dart-core/print (str "Error saving task: " error))
+                                      ;; Rollback on error
+                                      (when task-detail
+                                        (task/refresh-task-detail! (.-id task-detail))))))))
+     (m/IconButton
+      .icon (m/Icon m/Icons.close)
+      .onPressed (fn []
+                   (reset! editing-state false)
+                   (when task-detail
+                     (reset! content-state (.-content task-detail))
+                     (reset! status-state (keyword (.-status task-detail)))
+                     (reset! defer-state (.-deferAt task-detail))
+                     (reset! due-state (.-dueAt task-detail)))))]
+    [(m/IconButton
+      .tooltip "Refresh"
+      .icon (m/Icon m/Icons.refresh)
+      .onPressed (fn [] (task/refresh-task-detail! (.-id task-detail))))
+     (m/IconButton
+      .icon (m/Icon m/Icons.edit)
+      .onPressed (fn []
+                   (when task-detail
+                     (reset! content-state (.-content task-detail))
+                     (reset! status-state (keyword (.-status task-detail)))
+                     (reset! defer-state (.-deferAt task-detail))
+                     (reset! due-state (.-dueAt task-detail))
+                     (reset! editing-state true))))]))
 
-
-(defn task-detail-screen
-  "Task detail page"
-  [task-id]
-  (let [editing-state (atom false)
-        content-state (atom "")
-        status-state (atom :active)
-        defer-state (atom nil)
-        due-state (atom nil)]
-    (f/widget
-     :context ctx
-     :watch [{task-detail :task-detail
-              loading :task-detail-loading
-              tag-ids :task-detail-tags
-              all-tags :task-detail-all-tags
-              parent-rel :task-detail-parent} state/app-state
-
-             editing editing-state
-             content content-state
-             status status-state
-             defer defer-state
-             due due-state]
-     :let [display-content #(if editing content (or (some-> task-detail .-content) ""))
-           display-status #(if editing status (or (some-> task-detail .-status keyword) :active))
-           display-defer #(if editing defer (some-> task-detail .-deferAt))
-           display-due #(if editing due (some-> task-detail .-dueAt))]
-       (m/Scaffold
-        .appBar (m/AppBar
-                 .actions
-                 (if editing
-                   [(m/IconButton
-                     .icon (m/Icon m/Icons.check)
-                     .onPressed (fn []
-                                  ;; Optimistic update: update local state immediately
-                                  (when task-detail
-                                    (let [^dart-core/DateTime? defer-dt @defer-state
-                                          ^dart-core/DateTime? due-dt @due-state
-                                          ^#/(d/Value dart-core/DateTime?) 
-                                          defer-value (if defer-dt
-                                                       (d/Value defer-dt)
-                                                       (d/Value nil))
-                                          ^#/(d/Value dart-core/DateTime?) 
-                                          due-value (if due-dt
-                                                     (d/Value due-dt)
-                                                     (d/Value nil))]
-                                      (swap! state/app-state
-                                             (fn [s]
-                                               (if-let [td (:task-detail s)]
-                                                 (assoc s :task-detail
-                                                        (.copyWith td
-                                                                   .content @content-state
-                                                                   .status (name @status-state)
-                                                                   .deferAt defer-value
-                                                                   .dueAt due-value))
-                                                 s)))))
-                                  (reset! editing-state false)
-                                  ;; Then persist to database (auto-refresh happens in update-task)
-                                  (-> (task/update-task (.-id task-detail)
-                                                        @content-state
-                                                        (name @status-state)
-                                                        @defer-state
-                                                        @due-state)
-                                      (.then (fn [_]
-                                               (task/refresh-task-detail! (.-id task-detail))))
-                                      (.catchError (fn [error]
-                                                     (dart-core/print (str "Error saving task: " error))
-                                                     ;; Rollback on error
-                                                     (when task-detail
-                                                       (task/refresh-task-detail! (.-id task-detail))))))))
-                    (m/IconButton
-                     .icon (m/Icon m/Icons.close)
-                     .onPressed (fn []
-                                  (reset! editing-state false)
-                                  (when task-detail
-                                    (reset! content-state (.-content task-detail))
-                                    (reset! status-state (keyword (.-status task-detail)))
-                                    (reset! defer-state (.-deferAt task-detail))
-                                    (reset! due-state (.-dueAt task-detail)))))]
-                   [(m/IconButton
-                     .tooltip "Refresh"
-                     .icon (m/Icon m/Icons.refresh)
-                     .onPressed (fn [] (task/refresh-task-detail! (.-id task-detail))))
-                    (m/IconButton
-                     .icon (m/Icon m/Icons.edit)
-                     .onPressed (fn []
-                                  (when task-detail
-                                    (reset! content-state (.-content task-detail))
-                                    (reset! status-state (keyword (.-status task-detail)))
-                                    (reset! defer-state (.-deferAt task-detail))
-                                    (reset! due-state (.-dueAt task-detail))
-                                    (reset! editing-state true))))]))
-        .body (cond
-                loading (m/Center .child (m/CircularProgressIndicator))
-                (nil? task-detail) (m/Center
-                                    .child (comp/mongol-text-block
-                                            {:text "Task does not exist"
-                                             :style (m/TextStyle
-                                                     .color (comp/color :text-weak)
-                                                     .fontSize (comp/font-size :m))}))
-                :else
-                (m/Column
-                 .children
-                 [(m/Expanded
-                   .child (m/ListView
-                           .scrollDirection m/Axis.horizontal
-                           .padding (m/EdgeInsets.all (comp/space :m))
-                           .children
-                           [(if editing
-                              (mgl/MongolTextField
-                               .controller (m/TextEditingController .text (display-content))
-                               .onChanged (fn [value] (reset! content-state value))
-                               .maxLines nil
-                               .autofocus true
-                               .decoration (m/InputDecoration
-                                            .labelText "Task content"
-                                            .border (m/OutlineInputBorder)))
-                              (comp/mongol-text-block
-                               {:text (display-content)
-                                :style (m/TextStyle .fontSize (comp/font-size :l))}))
-                            (m/SizedBox .width (comp/space :l))
-                            (m/Column
-                             .crossAxisAlignment m/CrossAxisAlignment.center
-                             .children
-                             [(comp/mongol-text-block
-                               {:text "Parent task"
-                                :style (m/TextStyle .fontSize (comp/font-size :m))})
-                              (m/SizedBox .height (comp/space :s))
-                              (if parent-rel
-                                (m/Column
-                                 .crossAxisAlignment m/CrossAxisAlignment.center
-                                 .children
-                                 [(comp/mongol-text-block
-                                   {:text (str "Parent: " (.-parentId parent-rel))
-                                    :style (m/TextStyle .color (comp/color :text-weak))})
-                                  (m/SizedBox .height (comp/space :s))
-                                  (mgl/MongolTextButton
-                                   .onPressed (fn []
-                                               (-> (tree-svc/remove-parent-task (.-id task-detail))
-                                                   (.then (fn []
-                                                           (task/refresh-task-detail! (.-id task-detail))
-                                                           (dart-core/print "Parent removed")))
-                                                   (.catchError (fn [error]
-                                                                  (dart-core/print (str "Error removing parent: " error))))))
-                                   .child (mgl/MongolText "Remove parent"))])
-                                (comp/mongol-text-block
-                                 {:text "None"
-                                  :style (m/TextStyle .color (comp/color :text-weak))}))
-                              (m/SizedBox .height (comp/space :s))
-                              (mgl/MongolTextButton
-                               .onPressed (fn []
-                                           (let [all-tasks-promise (task/get-all-tasks)]
-                                             (-> all-tasks-promise
-                                                 (.then (fn [all-tasks]
-                                                         ;; Filter out current task and its descendants
-                                                         (let [current-id (.-id task-detail)
-                                                               available-tasks (filter (fn [t]
-                                                                                         (not= (.-id t) current-id))
-                                                                                       all-tasks)]
-                                                           (m/showDialog
-                                                            .context ctx
-                                                            .builder (fn [dialog-ctx]
-                                                                       (m/AlertDialog
-                                                                        .title (mgl/MongolText "Select Parent Task")
-                                                                        .content (m/Container
-                                                                                 .width 300
-                                                                                 .height 400
-                                                                                 .child (m/ListView
-                                                                                         .children
-                                                                                         (concat
-                                                                                          [(m/ListTile
-                                                                                            .title (mgl/MongolText "None (Remove parent)")
-                                                                                            .onTap (fn []
-                                                                                                    (m/Navigator.pop dialog-ctx)
-                                                                                                    (-> (tree-svc/remove-parent-task current-id)
-                                                                                                        (.then (fn []
-                                                                                                                (task/refresh-task-detail! current-id)
-                                                                                                                (dart-core/print "Parent removed")))
-                                                                                                        (.catchError (fn [error]
-                                                                                                                       (dart-core/print (str "Error removing parent: " error)))))))]
-                                                                                          (map (fn [t]
-                                                                                                 (let [tid (.-id t)
-                                                                                                       tcontent (.-content t)]
-                                                                                                   (m/ListTile
-                                                                                                    .title (mgl/MongolText tcontent)
-                                                                                                    .subtitle (mgl/MongolText (str "ID: " tid))
-                                                                                                    .onTap (fn []
-                                                                                                            (m/Navigator.pop dialog-ctx)
-                                                                                                            (-> (tree-svc/set-parent-task current-id tid)
-                                                                                                                (.then (fn []
-                                                                                                                        (task/refresh-task-detail! current-id)
-                                                                                                                        (dart-core/print (str "Parent set to: " tid))))
-                                                                                                                (.catchError (fn [error]
-                                                                                                                               (dart-core/print (str "Error setting parent: " error)))))))))
-                                                                                               available-tasks))))
-                                                                        .actions [(m/TextButton
-                                                                                   .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                                                   .child (m/Text "Cancel"))])))
-                                                            nil)))
-                                                 (.catchError (fn [error]
-                                                                (dart-core/print (str "Error loading tasks: " error)))))))
-                               .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))
-                            (m/SizedBox .width (comp/space :l))
-                            (m/SizedBox .width (comp/space :l))
-                            (m/SingleChildScrollView
-                             .child
-                             (m/Column
-                              .crossAxisAlignment m/CrossAxisAlignment.center
-                              .children
-                              [(comp/mongol-text-block
-                                {:text "Status"
-                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
-                               (m/SizedBox .height (comp/space :s))
-                               (m/RotatedBox
-                                .quarterTurns 1
-                                .child (m/SegmentedButton
-                                        .segments [(m/ButtonSegment .value :idle .label (m/Text "Idle"))
-                                                   (m/ButtonSegment .value :active .label (m/Text "Active"))
-                                                   (m/ButtonSegment .value :completed .label (m/Text "Completed"))
-                                                   (m/ButtonSegment .value :blocked .label (m/Text "Blocked"))]
-                                        .selected #{(display-status)}
-                                        .onSelectionChanged (fn [selection]
-                                                              (let [new-status (first selection)]
-                                                                (if @editing-state
-                                                                  (reset! status-state new-status)
-                                                                  (-> (task/update-task (.-id task-detail) nil (name new-status) nil nil)
-                                                                      (.then (fn [] (task/refresh-task-detail! task-id)))
-                                                                      (.catchError (fn [error]
-                                                                                     (dart-core/print (str "Error updating status: " error))))))))))]))
-                            (m/SizedBox .width (comp/space :l))
-                            (m/SingleChildScrollView
-                             .child
-                             (m/Column
-                              .crossAxisAlignment m/CrossAxisAlignment.center
-                              .children
-                              [(comp/mongol-text-block
-                                {:text "Start (defer)"
-                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
-                               (m/TextButton
-                                .onPressed (fn []
-                                             (-> (m/showDatePicker
-                                                  .context ctx
-                                                  .initialDate (or (display-defer) (dt/now))
-                                                  .firstDate (dart-core/DateTime. 2000)
-                                                  .lastDate (dart-core/DateTime. 2100))
-                                                 (.then (fn [picked]
-                                                          (when picked
-                                                            (if @editing-state
-                                                              (reset! defer-state picked)
-                                                              (-> (task/update-task task-id nil nil picked nil)
-                                                                  (.then (fn [] (task/refresh-task-detail! task-id)))
-                                                                  (.catchError (fn [error]
-                                                                                 (dart-core/print (str "Error updating defer: " error))))))))))
-                                             nil)
-                                .child (mgl/MongolText (or (dt/format-date (display-defer)) "Not set")))
-                               (m/SizedBox .height (comp/space :s))
-                               (comp/mongol-text-block
-                                {:text "Due (due)"
-                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
-                               (m/TextButton
-                                .onPressed (fn []
-                                             (-> (m/showDatePicker
-                                                  .context ctx
-                                                  .initialDate (or (display-due) (dt/now))
-                                                  .firstDate (dart-core/DateTime. 2000)
-                                                  .lastDate (dart-core/DateTime. 2100))
-                                                 (.then (fn [picked]
-                                                          (when picked
-                                                            (if @editing-state
-                                                              (reset! due-state picked)
-                                                              (-> (task/update-task (.-id task-detail) nil nil nil picked)
-                                                                  (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
-                                                                  (.catchError (fn [error]
-                                                                                 (dart-core/print (str "Error updating due: " error))))))))))
-                                             nil)
-                                .child (mgl/MongolText (or (dt/format-date (display-due)) "Not set")))]))
-                            (m/SizedBox .width (comp/space :l))
-                            (m/Column
-                             .crossAxisAlignment m/CrossAxisAlignment.center
-                             .children
-                             [(comp/mongol-text-block
-                               {:text "Flagged"
-                                :style (m/TextStyle .fontSize (comp/font-size :m))})
-                              (m/SizedBox .height (comp/space :s))
-                              (m/RotatedBox
-                               .quarterTurns 1
-                               .child (m/IconButton
-                                      .icon (m/Icon (if (and task-detail (.-isFlagged task-detail))
-                                                     m/Icons.star
-                                                     m/Icons.star_border))
-                                      .color (if (and task-detail (.-isFlagged task-detail))
-                                              m/Colors.amber
-                                              m/Colors.grey)
-                                      .onPressed (fn []
-                                                   (when task-detail
-                                                     (-> (task/toggle-task-flag (.-id task-detail))
-                                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
-                                                         (.catchError (fn [error]
-                                                                        (dart-core/print (str "Error toggling flag: " error)))))))))])
-                            (m/SizedBox .width (comp/space :l))
-                            (m/Column
-                             .crossAxisAlignment m/CrossAxisAlignment.center
-                             .children
-                             [(comp/mongol-text-block
-                               {:text "Recurrence"
-                                :style (m/TextStyle .fontSize (comp/font-size :m))})
-                              (m/SizedBox .height (comp/space :s))
-                              (mgl/MongolTextButton
-                               .onPressed (fn []
-                                            (when task-detail
-                                              (m/showDialog
-                                               .context ctx
-                                               .builder (fn [dialog-ctx]
-                                                         (let [recurrence-options ["None" "Daily" "Weekly" "Monthly" "Yearly"]
-                                                               current-rule (or (some-> task-detail .-recurrenceRule) "None")]
-                                                           (m/AlertDialog
-                                                            .title (mgl/MongolText "Set Recurrence")
-                                                            .content (m/Container
-                                                                      .width 300
-                                                                      .height 200
-                                                                      .child (m/ListView
-                                                                              .children
-                                                                              (map (fn [option]
-                                                                                     (m/ListTile
-                                                                                      .title (mgl/MongolText option)
-                                                                                      .selected (= option current-rule)
-                                                                                      .onTap (fn []
-                                                                                               (let [rule (if (= option "None") nil (str/lower-case option))]
-                                                                                                 (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
-                                                                                                     (.then (fn []
-                                                                                                              (task/refresh-task-detail! (.-id task-detail))
-                                                                                                              (m/Navigator.pop dialog-ctx)))
-                                                                                                     (.catchError (fn [error]
-                                                                                                                    (dart-core/print (str "Error setting recurrence: " error)))))))))
-                                                                                   recurrence-options)))
-                                                            .actions [(m/TextButton
-                                                                       .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                                       .child (m/Text "Cancel"))]))
-                                               nil))))
-                               .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])
-                            (m/SizedBox .width (comp/space :l))
-                            (m/Column
-                             .crossAxisAlignment m/CrossAxisAlignment.center
-                             .mainAxisAlignment m/MainAxisAlignment.start
-                             .children
-                             [(comp/mongol-text-block
-                               {:text "Tags"
-                                :style (m/TextStyle .fontSize (comp/font-size :m))})
-                              (m/Wrap
-                               .spacing (comp/space :s)
-                               .runSpacing (comp/space :s)
-                               .children
-                               (map (fn [tag-row]
-                                      (let [tid (.-id tag-row)
-                                            name (.-name tag-row)
-                                            selected? (contains? tag-ids tid)]
-                                        (m/RotatedBox
-                                         .quarterTurns 1
-                                         .child (m/FilterChip
-                                                 .label (m/Text name)
-                                                 .selected selected?
-                                                 .onSelected (fn [v]
-                                                               (if v
-                                                                 (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
-                                                                     (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))
-                                                                 (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
-                                                                     (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))))))))
-                                    all-tags))])
-
-                            (m/SingleChildScrollView
+(defn- elavated-buttons [ctx task-detail display-status]
+  (m/SingleChildScrollView
                              .child
 
                              (m/Column
@@ -418,5 +116,334 @@
                                                           (m/Navigator.pop ctx)))))
                                 .style (m/ButtonStyle
                                         .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                                .child (mgl/MongolText "Delete task"))]))])]))
+                                .child (mgl/MongolText "Delete task"))])))
+
+(defn- tags-section [task-detail tag-ids all-tags]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .mainAxisAlignment m/MainAxisAlignment.start
+   .children
+   [(comp/mongol-text-block
+     {:text "Tags"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (m/Wrap
+     .spacing (comp/space :s)
+     .runSpacing (comp/space :s)
+     .children
+     (map (fn [tag-row]
+            (let [tid (.-id tag-row)
+                  name (.-name tag-row)
+                  selected? (contains? tag-ids tid)]
+              (m/RotatedBox
+               .quarterTurns 1
+               .child (m/FilterChip
+                       .label (m/Text name)
+                       .selected selected?
+                       .onSelected (fn [v]
+                                     (if v
+                                       (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
+                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))
+                                       (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
+                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))))))))
+          all-tags))]))
+
+
+(defn- recurrence-section [ctx task-detail]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Recurrence"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (m/SizedBox .height (comp/space :s))
+    (mgl/MongolTextButton
+     .onPressed (fn []
+                  (when task-detail
+                    (m/showDialog
+                     .context ctx
+                     .builder (fn [dialog-ctx]
+                                (let [recurrence-options ["None" "Daily" "Weekly" "Monthly" "Yearly"]
+                                      current-rule (or (some-> task-detail .-recurrenceRule) "None")]
+                                  (m/AlertDialog
+                                   .title (mgl/MongolText "Set Recurrence")
+                                   .content (m/Container
+                                             .width 300
+                                             .height 200
+                                             .child (m/ListView
+                                                     .children
+                                                     (map (fn [option]
+                                                            (m/ListTile
+                                                             .title (mgl/MongolText option)
+                                                             .selected (= option current-rule)
+                                                             .onTap (fn []
+                                                                      (let [rule (if (= option "None") nil (str/lower-case option))]
+                                                                        (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
+                                                                            (.then (fn []
+                                                                                     (task/refresh-task-detail! (.-id task-detail))
+                                                                                     (m/Navigator.pop dialog-ctx)))
+                                                                            (.catchError (fn [error]
+                                                                                           (dart-core/print (str "Error setting recurrence: " error)))))))))
+                                                          recurrence-options)))
+                                   .actions [(m/TextButton
+                                              .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                              .child (m/Text "Cancel"))]))
+                                nil))))
+     .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])) 
+
+(defn- flagged-section [task-detail]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Flagged"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (m/SizedBox .height (comp/space :s))
+    (m/RotatedBox
+     .quarterTurns 1
+     .child (m/IconButton
+             .icon (m/Icon (if (and task-detail (.-isFlagged task-detail))
+                             m/Icons.star
+                             m/Icons.star_border))
+             .color (if (and task-detail (.-isFlagged task-detail))
+                      m/Colors.amber
+                      m/Colors.grey)
+             .onPressed (fn []
+                          (when task-detail
+                            (-> (task/toggle-task-flag (.-id task-detail))
+                                (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                (.catchError (fn [error]
+                                               (dart-core/print (str "Error toggling flag: " error)))))))))]))
+
+(defn- defer-due-section [ctx task-detail display-defer display-due editing-state defer-state due-state]
+  (m/SingleChildScrollView
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(comp/mongol-text-block
+      {:text "Start (defer)"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (m/TextButton
+      .onPressed (fn []
+                   (-> (m/showDatePicker
+                        .context ctx
+                        .initialDate (or (display-defer) (dt/now))
+                        .firstDate (dart-core/DateTime. 2000)
+                        .lastDate (dart-core/DateTime. 2100))
+                       (.then (fn [picked]
+                                (when picked
+                                  (if @editing-state
+                                    (reset! defer-state picked)
+                                    (-> (task/update-task (.-id task-detail) nil nil picked nil)
+                                        (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                        (.catchError (fn [error]
+                                                       (dart-core/print (str "Error updating defer: " error))))))))))
+                   nil)
+      .child (mgl/MongolText (or (dt/format-date (display-defer)) "Not set")))
+     (m/SizedBox .height (comp/space :s))
+     (comp/mongol-text-block
+      {:text "Due (due)"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (m/TextButton
+      .onPressed (fn []
+                   (-> (m/showDatePicker
+                        .context ctx
+                        .initialDate (or (display-due) (dt/now))
+                        .firstDate (dart-core/DateTime. 2000)
+                        .lastDate (dart-core/DateTime. 2100))
+                       (.then (fn [picked]
+                                (when picked
+                                  (if @editing-state
+                                    (reset! due-state picked)
+                                    (-> (task/update-task (.-id task-detail) nil nil nil picked)
+                                        (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                        (.catchError (fn [error]
+                                                       (dart-core/print (str "Error updating due: " error))))))))))
+                   nil)
+      .child (mgl/MongolText (or (dt/format-date (display-due)) "Not set")))])))
+
+
+
+(defn- status-section [task-detail display-status editing-state status-state]
+  (m/SingleChildScrollView
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(comp/mongol-text-block
+      {:text "Status"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (m/SizedBox .height (comp/space :s))
+     (m/RotatedBox
+      .quarterTurns 1
+      .child (m/SegmentedButton
+              .segments [(m/ButtonSegment .value :idle .label (m/Text "Idle"))
+                         (m/ButtonSegment .value :active .label (m/Text "Active"))
+                         (m/ButtonSegment .value :completed .label (m/Text "Completed"))
+                         (m/ButtonSegment .value :blocked .label (m/Text "Blocked"))]
+              .selected #{(display-status)}
+              .onSelectionChanged (fn [selection]
+                                    (let [new-status (first selection)]
+                                      (if @editing-state
+                                        (reset! status-state new-status)
+                                        (-> (task/update-task (.-id task-detail) nil (name new-status) nil nil)
+                                            (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                            (.catchError (fn [error]
+                                                           (dart-core/print (str "Error updating status: " error))))))))))])))
+
+(defn- parent-section [ctx task-detail parent-rel]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Parent task"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (m/SizedBox .height (comp/space :s))
+    (if parent-rel
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [(comp/mongol-text-block
+         {:text (str "Parent: " (.-parentId parent-rel))
+          :style (m/TextStyle .color (comp/color :text-weak))})
+        (m/SizedBox .height (comp/space :s))
+        (mgl/MongolTextButton
+         .onPressed (fn []
+                      (-> (tree-svc/remove-parent-task (.-id task-detail))
+                          (.then (fn []
+                                   (task/refresh-task-detail! (.-id task-detail))
+                                   (dart-core/print "Parent removed")))
+                          (.catchError (fn [error]
+                                         (dart-core/print (str "Error removing parent: " error))))))
+         .child (mgl/MongolText "Remove parent"))])
+      (comp/mongol-text-block
+       {:text "None"
+        :style (m/TextStyle .color (comp/color :text-weak))}))
+    (m/SizedBox .height (comp/space :s))
+    (mgl/MongolTextButton
+     .onPressed (fn []
+                  (let [all-tasks-promise (task/get-all-tasks)]
+                    (-> all-tasks-promise
+                        (.then (fn [all-tasks]
+                                 ;; Filter out current task and its descendants
+                                 (let [current-id (.-id task-detail)
+                                       available-tasks (filter (fn [t]
+                                                                 (not= (.-id t) current-id))
+                                                               all-tasks)]
+                                   (m/showDialog
+                                    .context ctx
+                                    .builder (fn [dialog-ctx]
+                                               (m/AlertDialog
+                                                .title (mgl/MongolText "Select Parent Task")
+                                                .content (m/Container
+                                                          .width 300
+                                                          .height 400
+                                                          .child (m/ListView
+                                                                  .children
+                                                                  (concat
+                                                                   [(m/ListTile
+                                                                     .title (mgl/MongolText "None (Remove parent)")
+                                                                     .onTap (fn []
+                                                                              (m/Navigator.pop dialog-ctx)
+                                                                              (-> (tree-svc/remove-parent-task current-id)
+                                                                                  (.then (fn []
+                                                                                           (task/refresh-task-detail! current-id)
+                                                                                           (dart-core/print "Parent removed")))
+                                                                                  (.catchError (fn [error]
+                                                                                                 (dart-core/print (str "Error removing parent: " error)))))))]
+                                                                   (map (fn [t]
+                                                                          (let [tid (.-id t)
+                                                                                tcontent (.-content t)]
+                                                                            (m/ListTile
+                                                                             .title (mgl/MongolText tcontent)
+                                                                             .subtitle (mgl/MongolText (str "ID: " tid))
+                                                                             .onTap (fn []
+                                                                                      (m/Navigator.pop dialog-ctx)
+                                                                                      (-> (tree-svc/set-parent-task current-id tid)
+                                                                                          (.then (fn []
+                                                                                                   (task/refresh-task-detail! current-id)
+                                                                                                   (dart-core/print (str "Parent set to: " tid))))
+                                                                                          (.catchError (fn [error]
+                                                                                                         (dart-core/print (str "Error setting parent: " error)))))))))
+                                                                        available-tasks))))
+                                                .actions [(m/TextButton
+                                                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                           .child (m/Text "Cancel"))])))
+                                   nil)))
+                        (.catchError (fn [error]
+                                       (dart-core/print (str "Error loading tasks: " error)))))))
+     .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))]))
+
+
+(defn task-detail-screen
+  "Task detail page"
+  [task-id]
+  (let [editing-state (atom false)
+        content-state (atom "")
+        status-state (atom :active)
+        defer-state (atom nil)
+        due-state (atom nil)]
+    (f/widget
+     :context ctx
+     :watch [{task-detail :task-detail
+              loading :task-detail-loading
+              tag-ids :task-detail-tags
+              all-tags :task-detail-all-tags
+              parent-rel :task-detail-parent} state/app-state
+
+             editing editing-state
+             content content-state
+             status status-state
+             defer defer-state
+             due due-state]
+     :let [display-content #(if editing content (or (some-> task-detail .-content) ""))
+           display-status #(if editing status (or (some-> task-detail .-status keyword) :active))
+           display-defer #(if editing defer (some-> task-detail .-deferAt))
+           display-due #(if editing due (some-> task-detail .-dueAt))]
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .actions
+                 (actions editing task-detail defer-state due-state content-state status-state editing-state))
+        .body (cond
+                loading (m/Center .child (m/CircularProgressIndicator))
+                (nil? task-detail) (m/Center
+                                    .child (comp/mongol-text-block
+                                            {:text "Task does not exist"
+                                             :style (m/TextStyle
+                                                     .color (comp/color :text-weak)
+                                                     .fontSize (comp/font-size :m))}))
+                :else
+                (m/Column
+                 .children
+                 [(m/Expanded
+                   .child (m/ListView
+                           .scrollDirection m/Axis.horizontal
+                           .padding (m/EdgeInsets.all (comp/space :m))
+                           .children
+                           [(if editing
+                              (mgl/MongolTextField
+                               .controller (m/TextEditingController .text (display-content))
+                               .onChanged (fn [value] (reset! content-state value))
+                               .maxLines nil
+                               .autofocus true
+                               .decoration (m/InputDecoration
+                                            .labelText "Task content"
+                                            .border (m/OutlineInputBorder)))
+                              (comp/mongol-text-block
+                               {:text (display-content)
+                                :style (m/TextStyle .fontSize (comp/font-size :l))}))
+                            (m/SizedBox .width (comp/space :l))
+                            (parent-section ctx task-detail parent-rel)
+                            (m/SizedBox .width (comp/space :l))
+                            (status-section task-detail display-status editing-state status-state)
+                            (m/SizedBox .width (comp/space :l))
+                            (defer-due-section ctx task-detail display-defer display-due editing-state defer-state due-state)
+                            (m/SizedBox .width (comp/space :l))
+                            (flagged-section task-detail)
+                            (m/SizedBox .width (comp/space :l))
+                            (recurrence-section ctx task-detail)
+                            (m/SizedBox .width (comp/space :l))
+                            (tags-section task-detail tag-ids all-tags)
+
+                            (elavated-buttons ctx task-detail display-status)]))
                   (keyboard/keyboard {:custom-fns {}})]))))))
