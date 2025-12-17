@@ -1,0 +1,166 @@
+(ns minii-focus.services.recurring-tasks
+  "Recurring tasks management service"
+  (:require
+   ["dart:core" :as dart-core]
+   ["package:drift/drift.dart" :as d]
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.database :as db]
+   [minii-focus.services.task :as task]
+   [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.tag :as tag-svc]
+   [minii-focus.utils.ids :as ids]))
+
+;; =============================================================================
+;; Recurrence rule parsing and validation
+;; =============================================================================
+
+(defn- parse-recurrence-rule
+  "Parse recurrence rule string into map"
+  [rule-str]
+  (when rule-str
+    (let [rule (clojure.string/lower-case rule-str)]
+      (cond
+        (or (= rule "daily") (= rule "day")) {:type "daily" :interval 1}
+        (or (= rule "weekly") (= rule "week")) {:type "weekly" :interval 1}
+        (or (= rule "monthly") (= rule "month")) {:type "monthly" :interval 1}
+        (or (= rule "yearly") (= rule "year")) {:type "yearly" :interval 1}
+        :else {:type "daily" :interval 1}))))
+
+(defn- calculate-next-date
+  "Calculate next occurrence date based on recurrence rule"
+  [base-date rule-str]
+  (when (and base-date rule-str)
+    (let [rule (parse-recurrence-rule rule-str)
+          rule-type (:type rule)]
+      (case rule-type
+        "daily" (.add base-date (dart-core/Duration .days 1))
+        "weekly" (.add base-date (dart-core/Duration .days 7))
+        "monthly" (let [year (.-year base-date)
+                        month (.-month base-date)
+                        day (.-day base-date)]
+                    (if (= month 12)
+                      (dart-core/DateTime. (inc year) 1 day)
+                      (dart-core/DateTime. year (inc month) day)))
+        "yearly" (let [year (.-year base-date)
+                        month (.-month base-date)
+                        day (.-day base-date)]
+                    (dart-core/DateTime. (inc year) month day))
+        base-date))))
+
+;; =============================================================================
+;; Recurring task operations
+;; =============================================================================
+
+(defn set-task-recurrence
+  "Set recurrence rule for a task"
+  [id rule-str end-date]
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)
+        query (doto (.update database (.-items database))
+                (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id))))
+        ^#/(d/Value String?) 
+        rule-value (if rule-str
+                    (d/Value rule-str)
+                    (d/Value nil))
+        ^#/(d/Value dart-core/DateTime?) 
+        end-value (if end-date
+                   (d/Value end-date)
+                   (d/Value nil))
+        companion (drift/ItemsCompanion.
+                  .recurrenceRule rule-value
+                  .recurrenceEndDate end-value
+                  .updatedAt (d/Value now))]
+    (.write query companion)))
+
+(defn remove-task-recurrence
+  "Remove recurrence rule from a task"
+  [id]
+  (set-task-recurrence id nil nil))
+
+(defn get-recurring-tasks
+  "Get all tasks with recurrence rules"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getRecurringTasks database)))
+
+;; =============================================================================
+;; Automatic task creation from recurring tasks
+;; =============================================================================
+
+(defn- should-create-next-occurrence?
+  "Check if we should create next occurrence for a recurring task"
+  [task now]
+  (let [rule-str (.-recurrenceRule task)
+        end-date (.-recurrenceEndDate task)
+        due-at (.-dueAt task)
+        defer-at (.-deferAt task)
+        base-date (or due-at defer-at (.-createdAt task))]
+    (and
+     rule-str
+     (or (nil? end-date) (.isAfter now end-date))
+     (or (nil? due-at) (.isBefore due-at now))
+     (or (nil? defer-at) (.isBefore defer-at now)))))
+
+(defn- create-next-occurrence
+  "Create next occurrence of a recurring task"
+  [original-task]
+  (let [rule-str (.-recurrenceRule original-task)
+        base-date (or (.-dueAt original-task)
+                     (.-deferAt original-task)
+                     (.-createdAt original-task))
+        next-date (calculate-next-date base-date rule-str)
+        new-defer (if (.-deferAt original-task) next-date nil)
+        new-due (if (.-dueAt original-task) next-date nil)]
+    (-> (task/create-task
+         (.-content original-task)
+         (.-type original-task)
+         "active"
+         new-defer
+         new-due)
+        (.then (fn [new-task]
+                 ;; Copy tags from original task
+                 (-> (tag-svc/get-item-tags (.-id original-task))
+                     (.then (fn [tag-links]
+                              (when (seq tag-links)
+                                (dart-core/Future.wait
+                                 (map (fn [link]
+                                       (tag-svc/add-tag-to-item (.-id new-task) (.-tagId link)))
+                                     tag-links)))))
+                     (.then (fn [_] new-task))))))))
+
+(defn process-completed-recurring-tasks
+  "Process completed recurring tasks and create next occurrences"
+  []
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)]
+    (-> (get-recurring-tasks)
+        (.then (fn [recurring-tasks]
+                 (let [completed-tasks (filter (fn [t]
+                                                (and (= (.-status t) "completed")
+                                                     (should-create-next-occurrence? t now)))
+                                              recurring-tasks)]
+                   (if (seq completed-tasks)
+                     (dart-core/Future.wait
+                      (map create-next-occurrence completed-tasks))
+                     (dart-core/Future.value [])))))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error processing recurring tasks: " error))
+                       (dart-core/Future.value []))))))
+
+(defn check-and-create-recurrences
+  "Check all recurring tasks and create next occurrences if needed"
+  []
+  (let [now (dart-core/DateTime.now)]
+    (-> (get-recurring-tasks)
+        (.then (fn [recurring-tasks]
+                 (let [tasks-to-process (filter (fn [t]
+                                                 (should-create-next-occurrence? t now))
+                                               recurring-tasks)]
+                   (if (seq tasks-to-process)
+                     (dart-core/Future.wait
+                      (map create-next-occurrence tasks-to-process))
+                     (dart-core/Future.value [])))))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error checking recurrences: " error))
+                       (dart-core/Future.value []))))))
+

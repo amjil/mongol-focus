@@ -1,0 +1,206 @@
+(ns minii-focus.services.perspectives
+  "Perspectives management service - custom views with filters, sorting, and grouping"
+  (:require
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as convert]
+   ["package:drift/drift.dart" :as d]
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.database :as db]
+   [minii-focus.utils.ids :as ids]
+   [minii-focus.states.app-state :as state]))
+
+;; =============================================================================
+;; Perspective CRUD operations
+;; =============================================================================
+
+(defn create-perspective
+  "Create a new perspective"
+  [name filter-conditions sort-by sort-order group-by]
+  (let [^drift/AppDatabase database (db/get-database)
+        perspective-id (ids/generate-id)
+        now (dart-core/DateTime.now)
+        filter-json (convert/jsonEncode filter-conditions)
+        companion (drift/PerspectivesCompanion.insert
+                   .id perspective-id
+                   .name name
+                   .filterConditions (d/Value filter-json)
+                   .sortBy (d/Value (or sort-by "dueDate"))
+                   .sortOrder (d/Value (or sort-order "asc"))
+                   .groupBy (d/Value (or group-by "none"))
+                   .createdAt (d/Value now)
+                   .updatedAt (d/Value now))]
+    (.insert
+     (.into database (.-perspectives database))
+     companion)))
+
+(defn update-perspective
+  "Update an existing perspective"
+  [id name filter-conditions sort-by sort-order group-by]
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)
+        filter-json (convert/jsonEncode filter-conditions)
+        query (doto (.update database (.-perspectives database))
+                (.where (fn [^drift/Perspectives tbl] (.equals (.-id tbl) id))))
+        companion (drift/PerspectivesCompanion.
+                  .name (if name (d/Value name) (d/Value.absent))
+                  .filterConditions (if filter-conditions (d/Value filter-json) (d/Value.absent))
+                  .sortBy (if sort-by (d/Value sort-by) (d/Value.absent))
+                  .sortOrder (if sort-order (d/Value sort-order) (d/Value.absent))
+                  .groupBy (if group-by (d/Value group-by) (d/Value.absent))
+                  .updatedAt (d/Value now))]
+    (.write query companion)))
+
+(defn delete-perspective
+  "Delete a perspective"
+  [id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.go
+     (doto
+      (.delete database (.-perspectives database))
+      (.where (fn [^drift/Perspectives tbl] (.equals (.-id tbl) id)))))))
+
+(defn get-perspective-by-id
+  "Get perspective by ID"
+  [id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getSingleOrNull
+     (doto (.select database (.-perspectives database))
+       (.where (fn [^drift/Perspectives tbl] (.equals (.-id tbl) id)))))))
+
+(defn get-all-perspectives
+  "Get all perspectives"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.get
+     (doto (.select database (.-perspectives database))
+       (.orderBy [(fn [tbl] (d/OrderingTerm.asc (.-createdAt tbl)))])))))
+
+;; =============================================================================
+;; Apply perspective filters
+;; =============================================================================
+
+(defn- parse-filter-conditions
+  "Parse filter conditions JSON string to map"
+  [filter-json]
+  (try
+    (when filter-json
+      (convert/jsonDecode filter-json))
+    (catch :default e
+      (dart-core/print (str "Error parsing filter conditions: " e))
+      {})))
+
+(defn- apply-status-filter
+  "Apply status filter to query"
+  [query filter-map]
+  (if-let [statuses (get filter-map "status")]
+    (if (vector? statuses)
+      (if (= (count statuses) 1)
+        (.where query (fn [^drift/Items tbl] (.equals (.-status tbl) (first statuses))))
+        (.where query (fn [^drift/Items tbl] (.isIn (.-status tbl) statuses))))
+      query)
+    query))
+
+(defn- apply-flagged-filter
+  "Apply flagged filter to query"
+  [query filter-map]
+  (if (contains? filter-map "isFlagged")
+    (let [flagged? (get filter-map "isFlagged")]
+      (.where query (fn [^drift/Items tbl] (.equals (.-isFlagged tbl) (boolean flagged?)))))
+    query))
+
+(defn- apply-tags-filter
+  "Apply tags filter to query"
+  [query filter-map]
+  (if-let [tag-ids (get filter-map "tags")]
+    (if (seq tag-ids)
+      ;; This is a simplified version - in production, you'd need to join with ItemTags
+      query
+      query)
+    query))
+
+(defn- apply-date-range-filter
+  "Apply date range filter to query"
+  [query filter-map]
+  (cond
+    (get filter-map "dueSoon")
+    (let [now (dart-core/DateTime.now)
+          soon (.add now (dart-core/Duration .days 3))]
+      (.where query (fn [^drift/Items tbl]
+                     (and (.isNotNull (.-dueAt tbl))
+                          (.isBiggerOrEqualValue (.-dueAt tbl) now)
+                          (.isSmallerOrEqualValue (.-dueAt tbl) soon)))))
+    (get filter-map "overdue")
+    (let [now (dart-core/DateTime.now)]
+      (.where query (fn [^drift/Items tbl]
+                     (and (.isNotNull (.-dueAt tbl))
+                          (.isSmallerValue (.-dueAt tbl) now)
+                          (.isNotValue (.-status tbl) "completed")))))
+    :else query))
+
+(defn- apply-sorting
+  "Apply sorting to query"
+  [query sort-by sort-order]
+  (let [sort-fn (case sort-by
+                  "dueDate" (fn [tbl] (d/OrderingTerm.asc (.-dueAt tbl)))
+                  "deferDate" (fn [tbl] (d/OrderingTerm.asc (.-deferAt tbl)))
+                  "createdAt" (fn [tbl] (d/OrderingTerm.desc (.-createdAt tbl)))
+                  "updatedAt" (fn [tbl] (d/OrderingTerm.desc (.-updatedAt tbl)))
+                  "content" (fn [tbl] (d/OrderingTerm.asc (.-content tbl)))
+                  (fn [tbl] (d/OrderingTerm.asc (.-dueAt tbl))))
+        ordering (if (= sort-order "desc")
+                   (fn [tbl] (d/OrderingTerm.desc (.-dueAt tbl)))
+                   sort-fn)]
+    (.orderBy query [(ordering)])))
+
+(defn apply-perspective
+  "Apply perspective filters and sorting to get tasks"
+  [perspective]
+  (let [^drift/AppDatabase database (db/get-database)
+        filter-conditions (parse-filter-conditions (.-filterConditions perspective))
+        sort-by (.-sortBy perspective)
+        sort-order (.-sortOrder perspective)
+        base-query (.select database (.-items database))]
+    (-> base-query
+        (apply-status-filter filter-conditions)
+        (apply-flagged-filter filter-conditions)
+        (apply-tags-filter filter-conditions)
+        (apply-date-range-filter filter-conditions)
+        (apply-sorting sort-by sort-order)
+        (.get))))
+
+;; =============================================================================
+;; Predefined smart filters
+;; =============================================================================
+
+(defn get-flagged-perspective-tasks
+  "Get tasks for 'Flagged' perspective"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getFlaggedTasks database)))
+
+(defn get-due-soon-perspective-tasks
+  "Get tasks for 'Due Soon' perspective"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDueSoonTasks database)))
+
+(defn get-stalled-perspective-tasks
+  "Get tasks for 'Stalled' perspective"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getStalledTasks database)))
+
+;; =============================================================================
+;; State management
+;; =============================================================================
+
+(defn refresh-perspectives!
+  "Refresh perspectives list and write to app-state"
+  []
+  (-> (get-all-perspectives)
+      (.then (fn [perspectives]
+               (state/set-perspectives! perspectives)
+               perspectives))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing perspectives: " error))))))
+

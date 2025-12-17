@@ -82,6 +82,44 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _isFlaggedMeta = const VerificationMeta(
+    'isFlagged',
+  );
+  @override
+  late final GeneratedColumn<bool> isFlagged = GeneratedColumn<bool>(
+    'is_flagged',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_flagged" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _recurrenceRuleMeta = const VerificationMeta(
+    'recurrenceRule',
+  );
+  @override
+  late final GeneratedColumn<String> recurrenceRule = GeneratedColumn<String>(
+    'recurrence_rule',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recurrenceEndDateMeta = const VerificationMeta(
+    'recurrenceEndDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> recurrenceEndDate =
+      GeneratedColumn<DateTime>(
+        'recurrence_end_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -115,6 +153,9 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     deferAt,
     dueAt,
     isFocused,
+    isFlagged,
+    recurrenceRule,
+    recurrenceEndDate,
     createdAt,
     updatedAt,
   ];
@@ -175,6 +216,30 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         isFocused.isAcceptableOrUnknown(data['is_focused']!, _isFocusedMeta),
       );
     }
+    if (data.containsKey('is_flagged')) {
+      context.handle(
+        _isFlaggedMeta,
+        isFlagged.isAcceptableOrUnknown(data['is_flagged']!, _isFlaggedMeta),
+      );
+    }
+    if (data.containsKey('recurrence_rule')) {
+      context.handle(
+        _recurrenceRuleMeta,
+        recurrenceRule.isAcceptableOrUnknown(
+          data['recurrence_rule']!,
+          _recurrenceRuleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recurrence_end_date')) {
+      context.handle(
+        _recurrenceEndDateMeta,
+        recurrenceEndDate.isAcceptableOrUnknown(
+          data['recurrence_end_date']!,
+          _recurrenceEndDateMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -224,6 +289,18 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_focused'],
       )!,
+      isFlagged: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_flagged'],
+      )!,
+      recurrenceRule: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recurrence_rule'],
+      ),
+      recurrenceEndDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}recurrence_end_date'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -249,6 +326,9 @@ class Item extends DataClass implements Insertable<Item> {
   final DateTime? deferAt;
   final DateTime? dueAt;
   final bool isFocused;
+  final bool isFlagged;
+  final String? recurrenceRule;
+  final DateTime? recurrenceEndDate;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Item({
@@ -259,6 +339,9 @@ class Item extends DataClass implements Insertable<Item> {
     this.deferAt,
     this.dueAt,
     required this.isFocused,
+    required this.isFlagged,
+    this.recurrenceRule,
+    this.recurrenceEndDate,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -276,6 +359,13 @@ class Item extends DataClass implements Insertable<Item> {
       map['due_at'] = Variable<DateTime>(dueAt);
     }
     map['is_focused'] = Variable<bool>(isFocused);
+    map['is_flagged'] = Variable<bool>(isFlagged);
+    if (!nullToAbsent || recurrenceRule != null) {
+      map['recurrence_rule'] = Variable<String>(recurrenceRule);
+    }
+    if (!nullToAbsent || recurrenceEndDate != null) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -294,6 +384,13 @@ class Item extends DataClass implements Insertable<Item> {
           ? const Value.absent()
           : Value(dueAt),
       isFocused: Value(isFocused),
+      isFlagged: Value(isFlagged),
+      recurrenceRule: recurrenceRule == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceRule),
+      recurrenceEndDate: recurrenceEndDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceEndDate),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -312,6 +409,11 @@ class Item extends DataClass implements Insertable<Item> {
       deferAt: serializer.fromJson<DateTime?>(json['deferAt']),
       dueAt: serializer.fromJson<DateTime?>(json['dueAt']),
       isFocused: serializer.fromJson<bool>(json['isFocused']),
+      isFlagged: serializer.fromJson<bool>(json['isFlagged']),
+      recurrenceRule: serializer.fromJson<String?>(json['recurrenceRule']),
+      recurrenceEndDate: serializer.fromJson<DateTime?>(
+        json['recurrenceEndDate'],
+      ),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -327,6 +429,9 @@ class Item extends DataClass implements Insertable<Item> {
       'deferAt': serializer.toJson<DateTime?>(deferAt),
       'dueAt': serializer.toJson<DateTime?>(dueAt),
       'isFocused': serializer.toJson<bool>(isFocused),
+      'isFlagged': serializer.toJson<bool>(isFlagged),
+      'recurrenceRule': serializer.toJson<String?>(recurrenceRule),
+      'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -340,6 +445,9 @@ class Item extends DataClass implements Insertable<Item> {
     Value<DateTime?> deferAt = const Value.absent(),
     Value<DateTime?> dueAt = const Value.absent(),
     bool? isFocused,
+    bool? isFlagged,
+    Value<String?> recurrenceRule = const Value.absent(),
+    Value<DateTime?> recurrenceEndDate = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Item(
@@ -350,6 +458,13 @@ class Item extends DataClass implements Insertable<Item> {
     deferAt: deferAt.present ? deferAt.value : this.deferAt,
     dueAt: dueAt.present ? dueAt.value : this.dueAt,
     isFocused: isFocused ?? this.isFocused,
+    isFlagged: isFlagged ?? this.isFlagged,
+    recurrenceRule: recurrenceRule.present
+        ? recurrenceRule.value
+        : this.recurrenceRule,
+    recurrenceEndDate: recurrenceEndDate.present
+        ? recurrenceEndDate.value
+        : this.recurrenceEndDate,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -362,6 +477,13 @@ class Item extends DataClass implements Insertable<Item> {
       deferAt: data.deferAt.present ? data.deferAt.value : this.deferAt,
       dueAt: data.dueAt.present ? data.dueAt.value : this.dueAt,
       isFocused: data.isFocused.present ? data.isFocused.value : this.isFocused,
+      isFlagged: data.isFlagged.present ? data.isFlagged.value : this.isFlagged,
+      recurrenceRule: data.recurrenceRule.present
+          ? data.recurrenceRule.value
+          : this.recurrenceRule,
+      recurrenceEndDate: data.recurrenceEndDate.present
+          ? data.recurrenceEndDate.value
+          : this.recurrenceEndDate,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -377,6 +499,9 @@ class Item extends DataClass implements Insertable<Item> {
           ..write('deferAt: $deferAt, ')
           ..write('dueAt: $dueAt, ')
           ..write('isFocused: $isFocused, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('recurrenceRule: $recurrenceRule, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -392,6 +517,9 @@ class Item extends DataClass implements Insertable<Item> {
     deferAt,
     dueAt,
     isFocused,
+    isFlagged,
+    recurrenceRule,
+    recurrenceEndDate,
     createdAt,
     updatedAt,
   );
@@ -406,6 +534,9 @@ class Item extends DataClass implements Insertable<Item> {
           other.deferAt == this.deferAt &&
           other.dueAt == this.dueAt &&
           other.isFocused == this.isFocused &&
+          other.isFlagged == this.isFlagged &&
+          other.recurrenceRule == this.recurrenceRule &&
+          other.recurrenceEndDate == this.recurrenceEndDate &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -418,6 +549,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
   final Value<DateTime?> deferAt;
   final Value<DateTime?> dueAt;
   final Value<bool> isFocused;
+  final Value<bool> isFlagged;
+  final Value<String?> recurrenceRule;
+  final Value<DateTime?> recurrenceEndDate;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -429,6 +563,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.deferAt = const Value.absent(),
     this.dueAt = const Value.absent(),
     this.isFocused = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    this.recurrenceRule = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -441,6 +578,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.deferAt = const Value.absent(),
     this.dueAt = const Value.absent(),
     this.isFocused = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    this.recurrenceRule = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -455,6 +595,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Expression<DateTime>? deferAt,
     Expression<DateTime>? dueAt,
     Expression<bool>? isFocused,
+    Expression<bool>? isFlagged,
+    Expression<String>? recurrenceRule,
+    Expression<DateTime>? recurrenceEndDate,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -467,6 +610,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       if (deferAt != null) 'defer_at': deferAt,
       if (dueAt != null) 'due_at': dueAt,
       if (isFocused != null) 'is_focused': isFocused,
+      if (isFlagged != null) 'is_flagged': isFlagged,
+      if (recurrenceRule != null) 'recurrence_rule': recurrenceRule,
+      if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -481,6 +627,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Value<DateTime?>? deferAt,
     Value<DateTime?>? dueAt,
     Value<bool>? isFocused,
+    Value<bool>? isFlagged,
+    Value<String?>? recurrenceRule,
+    Value<DateTime?>? recurrenceEndDate,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -493,6 +642,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       deferAt: deferAt ?? this.deferAt,
       dueAt: dueAt ?? this.dueAt,
       isFocused: isFocused ?? this.isFocused,
+      isFlagged: isFlagged ?? this.isFlagged,
+      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -523,6 +675,15 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     if (isFocused.present) {
       map['is_focused'] = Variable<bool>(isFocused.value);
     }
+    if (isFlagged.present) {
+      map['is_flagged'] = Variable<bool>(isFlagged.value);
+    }
+    if (recurrenceRule.present) {
+      map['recurrence_rule'] = Variable<String>(recurrenceRule.value);
+    }
+    if (recurrenceEndDate.present) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -545,6 +706,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
           ..write('deferAt: $deferAt, ')
           ..write('dueAt: $dueAt, ')
           ..write('isFocused: $isFocused, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('recurrenceRule: $recurrenceRule, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -2250,6 +2414,509 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
   }
 }
 
+class $PerspectivesTable extends Perspectives
+    with TableInfo<$PerspectivesTable, Perspective> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PerspectivesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _filterConditionsMeta = const VerificationMeta(
+    'filterConditions',
+  );
+  @override
+  late final GeneratedColumn<String> filterConditions = GeneratedColumn<String>(
+    'filter_conditions',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sortByMeta = const VerificationMeta('sortBy');
+  @override
+  late final GeneratedColumn<String> sortBy = GeneratedColumn<String>(
+    'sort_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('dueDate'),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<String> sortOrder = GeneratedColumn<String>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('asc'),
+  );
+  static const VerificationMeta _groupByMeta = const VerificationMeta(
+    'groupBy',
+  );
+  @override
+  late final GeneratedColumn<String> groupBy = GeneratedColumn<String>(
+    'group_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('none'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    filterConditions,
+    sortBy,
+    sortOrder,
+    groupBy,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'perspectives';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Perspective> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('filter_conditions')) {
+      context.handle(
+        _filterConditionsMeta,
+        filterConditions.isAcceptableOrUnknown(
+          data['filter_conditions']!,
+          _filterConditionsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_filterConditionsMeta);
+    }
+    if (data.containsKey('sort_by')) {
+      context.handle(
+        _sortByMeta,
+        sortBy.isAcceptableOrUnknown(data['sort_by']!, _sortByMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('group_by')) {
+      context.handle(
+        _groupByMeta,
+        groupBy.isAcceptableOrUnknown(data['group_by']!, _groupByMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Perspective map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Perspective(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      filterConditions: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filter_conditions'],
+      )!,
+      sortBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sort_by'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      groupBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_by'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PerspectivesTable createAlias(String alias) {
+    return $PerspectivesTable(attachedDatabase, alias);
+  }
+}
+
+class Perspective extends DataClass implements Insertable<Perspective> {
+  final String id;
+  final String name;
+  final String filterConditions;
+  final String sortBy;
+  final String sortOrder;
+  final String groupBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Perspective({
+    required this.id,
+    required this.name,
+    required this.filterConditions,
+    required this.sortBy,
+    required this.sortOrder,
+    required this.groupBy,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['filter_conditions'] = Variable<String>(filterConditions);
+    map['sort_by'] = Variable<String>(sortBy);
+    map['sort_order'] = Variable<String>(sortOrder);
+    map['group_by'] = Variable<String>(groupBy);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PerspectivesCompanion toCompanion(bool nullToAbsent) {
+    return PerspectivesCompanion(
+      id: Value(id),
+      name: Value(name),
+      filterConditions: Value(filterConditions),
+      sortBy: Value(sortBy),
+      sortOrder: Value(sortOrder),
+      groupBy: Value(groupBy),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Perspective.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Perspective(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      filterConditions: serializer.fromJson<String>(json['filterConditions']),
+      sortBy: serializer.fromJson<String>(json['sortBy']),
+      sortOrder: serializer.fromJson<String>(json['sortOrder']),
+      groupBy: serializer.fromJson<String>(json['groupBy']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'filterConditions': serializer.toJson<String>(filterConditions),
+      'sortBy': serializer.toJson<String>(sortBy),
+      'sortOrder': serializer.toJson<String>(sortOrder),
+      'groupBy': serializer.toJson<String>(groupBy),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Perspective copyWith({
+    String? id,
+    String? name,
+    String? filterConditions,
+    String? sortBy,
+    String? sortOrder,
+    String? groupBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => Perspective(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    filterConditions: filterConditions ?? this.filterConditions,
+    sortBy: sortBy ?? this.sortBy,
+    sortOrder: sortOrder ?? this.sortOrder,
+    groupBy: groupBy ?? this.groupBy,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Perspective copyWithCompanion(PerspectivesCompanion data) {
+    return Perspective(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      filterConditions: data.filterConditions.present
+          ? data.filterConditions.value
+          : this.filterConditions,
+      sortBy: data.sortBy.present ? data.sortBy.value : this.sortBy,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      groupBy: data.groupBy.present ? data.groupBy.value : this.groupBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Perspective(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('filterConditions: $filterConditions, ')
+          ..write('sortBy: $sortBy, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('groupBy: $groupBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    filterConditions,
+    sortBy,
+    sortOrder,
+    groupBy,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Perspective &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.filterConditions == this.filterConditions &&
+          other.sortBy == this.sortBy &&
+          other.sortOrder == this.sortOrder &&
+          other.groupBy == this.groupBy &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PerspectivesCompanion extends UpdateCompanion<Perspective> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> filterConditions;
+  final Value<String> sortBy;
+  final Value<String> sortOrder;
+  final Value<String> groupBy;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PerspectivesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.filterConditions = const Value.absent(),
+    this.sortBy = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.groupBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PerspectivesCompanion.insert({
+    required String id,
+    required String name,
+    required String filterConditions,
+    this.sortBy = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.groupBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       filterConditions = Value(filterConditions);
+  static Insertable<Perspective> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? filterConditions,
+    Expression<String>? sortBy,
+    Expression<String>? sortOrder,
+    Expression<String>? groupBy,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (filterConditions != null) 'filter_conditions': filterConditions,
+      if (sortBy != null) 'sort_by': sortBy,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (groupBy != null) 'group_by': groupBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PerspectivesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? filterConditions,
+    Value<String>? sortBy,
+    Value<String>? sortOrder,
+    Value<String>? groupBy,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PerspectivesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      filterConditions: filterConditions ?? this.filterConditions,
+      sortBy: sortBy ?? this.sortBy,
+      sortOrder: sortOrder ?? this.sortOrder,
+      groupBy: groupBy ?? this.groupBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (filterConditions.present) {
+      map['filter_conditions'] = Variable<String>(filterConditions.value);
+    }
+    if (sortBy.present) {
+      map['sort_by'] = Variable<String>(sortBy.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<String>(sortOrder.value);
+    }
+    if (groupBy.present) {
+      map['group_by'] = Variable<String>(groupBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PerspectivesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('filterConditions: $filterConditions, ')
+          ..write('sortBy: $sortBy, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('groupBy: $groupBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2260,6 +2927,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FocusSessionsTable focusSessions = $FocusSessionsTable(this);
   late final $ReviewsTable reviews = $ReviewsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
+  late final $PerspectivesTable perspectives = $PerspectivesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2272,6 +2940,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     focusSessions,
     reviews,
     settings,
+    perspectives,
   ];
 }
 
@@ -2284,6 +2953,9 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<DateTime?> deferAt,
       Value<DateTime?> dueAt,
       Value<bool> isFocused,
+      Value<bool> isFlagged,
+      Value<String?> recurrenceRule,
+      Value<DateTime?> recurrenceEndDate,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -2297,6 +2969,9 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<DateTime?> deferAt,
       Value<DateTime?> dueAt,
       Value<bool> isFocused,
+      Value<bool> isFlagged,
+      Value<String?> recurrenceRule,
+      Value<DateTime?> recurrenceEndDate,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -2342,6 +3017,21 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<bool> get isFocused => $composableBuilder(
     column: $table.isFocused,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFlagged => $composableBuilder(
+    column: $table.isFlagged,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recurrenceRule => $composableBuilder(
+    column: $table.recurrenceRule,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2400,6 +3090,21 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isFlagged => $composableBuilder(
+    column: $table.isFlagged,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recurrenceRule => $composableBuilder(
+    column: $table.recurrenceRule,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2440,6 +3145,19 @@ class $$ItemsTableAnnotationComposer
 
   GeneratedColumn<bool> get isFocused =>
       $composableBuilder(column: $table.isFocused, builder: (column) => column);
+
+  GeneratedColumn<bool> get isFlagged =>
+      $composableBuilder(column: $table.isFlagged, builder: (column) => column);
+
+  GeneratedColumn<String> get recurrenceRule => $composableBuilder(
+    column: $table.recurrenceRule,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2483,6 +3201,9 @@ class $$ItemsTableTableManager
                 Value<DateTime?> deferAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
                 Value<bool> isFocused = const Value.absent(),
+                Value<bool> isFlagged = const Value.absent(),
+                Value<String?> recurrenceRule = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2494,6 +3215,9 @@ class $$ItemsTableTableManager
                 deferAt: deferAt,
                 dueAt: dueAt,
                 isFocused: isFocused,
+                isFlagged: isFlagged,
+                recurrenceRule: recurrenceRule,
+                recurrenceEndDate: recurrenceEndDate,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -2507,6 +3231,9 @@ class $$ItemsTableTableManager
                 Value<DateTime?> deferAt = const Value.absent(),
                 Value<DateTime?> dueAt = const Value.absent(),
                 Value<bool> isFocused = const Value.absent(),
+                Value<bool> isFlagged = const Value.absent(),
+                Value<String?> recurrenceRule = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2518,6 +3245,9 @@ class $$ItemsTableTableManager
                 deferAt: deferAt,
                 dueAt: dueAt,
                 isFocused: isFocused,
+                isFlagged: isFlagged,
+                recurrenceRule: recurrenceRule,
+                recurrenceEndDate: recurrenceEndDate,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -3542,6 +4272,265 @@ typedef $$SettingsTableProcessedTableManager =
       Setting,
       PrefetchHooks Function()
     >;
+typedef $$PerspectivesTableCreateCompanionBuilder =
+    PerspectivesCompanion Function({
+      required String id,
+      required String name,
+      required String filterConditions,
+      Value<String> sortBy,
+      Value<String> sortOrder,
+      Value<String> groupBy,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PerspectivesTableUpdateCompanionBuilder =
+    PerspectivesCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> filterConditions,
+      Value<String> sortBy,
+      Value<String> sortOrder,
+      Value<String> groupBy,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$PerspectivesTableFilterComposer
+    extends Composer<_$AppDatabase, $PerspectivesTable> {
+  $$PerspectivesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filterConditions => $composableBuilder(
+    column: $table.filterConditions,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sortBy => $composableBuilder(
+    column: $table.sortBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupBy => $composableBuilder(
+    column: $table.groupBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PerspectivesTableOrderingComposer
+    extends Composer<_$AppDatabase, $PerspectivesTable> {
+  $$PerspectivesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filterConditions => $composableBuilder(
+    column: $table.filterConditions,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sortBy => $composableBuilder(
+    column: $table.sortBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupBy => $composableBuilder(
+    column: $table.groupBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PerspectivesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PerspectivesTable> {
+  $$PerspectivesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get filterConditions => $composableBuilder(
+    column: $table.filterConditions,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sortBy =>
+      $composableBuilder(column: $table.sortBy, builder: (column) => column);
+
+  GeneratedColumn<String> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get groupBy =>
+      $composableBuilder(column: $table.groupBy, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PerspectivesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PerspectivesTable,
+          Perspective,
+          $$PerspectivesTableFilterComposer,
+          $$PerspectivesTableOrderingComposer,
+          $$PerspectivesTableAnnotationComposer,
+          $$PerspectivesTableCreateCompanionBuilder,
+          $$PerspectivesTableUpdateCompanionBuilder,
+          (
+            Perspective,
+            BaseReferences<_$AppDatabase, $PerspectivesTable, Perspective>,
+          ),
+          Perspective,
+          PrefetchHooks Function()
+        > {
+  $$PerspectivesTableTableManager(_$AppDatabase db, $PerspectivesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PerspectivesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PerspectivesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PerspectivesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> filterConditions = const Value.absent(),
+                Value<String> sortBy = const Value.absent(),
+                Value<String> sortOrder = const Value.absent(),
+                Value<String> groupBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PerspectivesCompanion(
+                id: id,
+                name: name,
+                filterConditions: filterConditions,
+                sortBy: sortBy,
+                sortOrder: sortOrder,
+                groupBy: groupBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String filterConditions,
+                Value<String> sortBy = const Value.absent(),
+                Value<String> sortOrder = const Value.absent(),
+                Value<String> groupBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PerspectivesCompanion.insert(
+                id: id,
+                name: name,
+                filterConditions: filterConditions,
+                sortBy: sortBy,
+                sortOrder: sortOrder,
+                groupBy: groupBy,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PerspectivesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PerspectivesTable,
+      Perspective,
+      $$PerspectivesTableFilterComposer,
+      $$PerspectivesTableOrderingComposer,
+      $$PerspectivesTableAnnotationComposer,
+      $$PerspectivesTableCreateCompanionBuilder,
+      $$PerspectivesTableUpdateCompanionBuilder,
+      (
+        Perspective,
+        BaseReferences<_$AppDatabase, $PerspectivesTable, Perspective>,
+      ),
+      Perspective,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3559,4 +4548,6 @@ class $AppDatabaseManager {
       $$ReviewsTableTableManager(_db, _db.reviews);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
+  $$PerspectivesTableTableManager get perspectives =>
+      $$PerspectivesTableTableManager(_db, _db.perspectives);
 }

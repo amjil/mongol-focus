@@ -34,6 +34,10 @@
          :tags-loading false
          :tagged-items []
          :focus-sessions-loading false
+         ;; Flagged tasks
+         :flagged-tasks []
+         ;; Perspectives
+         :perspectives []
          ;; Compatible with old fields (gradual migration)
          :tasks []
          :loading false}))
@@ -152,5 +156,13 @@
 ;; Tagged items (for tag filtering)
 (defn set-tagged-items! [items]
   (update-state! assoc :tagged-items items))
+
+;; Flagged tasks
+(defn set-flagged-tasks! [tasks]
+  (update-state! assoc :flagged-tasks tasks))
+
+;; Perspectives
+(defn set-perspectives! [perspectives]
+  (update-state! assoc :perspectives perspectives))
 
 

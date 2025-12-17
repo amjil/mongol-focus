@@ -1,0 +1,294 @@
+(ns minii-focus.screens.perspectives
+  "Perspectives page - manage custom perspectives (filters, sorting, grouping)"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.components.core :as comp]
+   [minii-focus.screens.task-detail :as task-detail]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.services.perspectives :as perspective-svc]
+   [minii-focus.services.task :as task]))
+
+(defn perspectives-screen []
+  (let [name-state (atom "")
+        editing-id (atom nil)
+        selected-perspective (atom nil)
+        perspective-tasks (atom [])
+        tasks-with-info (atom [])]
+    (f/widget
+     :context ctx
+     :watch [_nm name-state
+             _ed editing-id
+             _sp selected-perspective
+             _pt perspective-tasks
+             _twi tasks-with-info
+             {perspectives :perspectives} state/app-state]
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .actions [(m/IconButton
+                            .tooltip "Refresh"
+                            .icon (m/Icon m/Icons.refresh)
+                            .onPressed (fn []
+                                         (perspective-svc/refresh-perspectives!)))]
+                 .bottom (m/TabBar
+                          .tabs [(m/Tab .text "Manage")
+                                 (m/Tab .text "Apply")]))
+        .body (m/TabBarView
+               .children
+               [(;; Tab 1: Manage Perspectives
+                 comp/mongol-row-layout
+                 {:main-row
+                  (m/Padding
+                   .padding (m/EdgeInsets.all (comp/space :m))
+                   .child
+                   (m/SingleChildScrollView
+                    .child
+                    (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     [(comp/mongol-text-block
+                       {:text "Create Perspective"
+                        :style (m/TextStyle .fontSize (comp/font-size :l))})
+                      (m/SizedBox .height (comp/space :s))
+                      (m/Row
+                       .crossAxisAlignment m/CrossAxisAlignment.center
+                       .children
+                       [(m/Container
+                         .padding (m/EdgeInsets.all (comp/space :s))
+                         .decoration (m/BoxDecoration
+                                      .border (m/Border.all
+                                               .color m/Colors.grey.shade300
+                                               .width 1)
+                                      .borderRadius (m/BorderRadius.circular 4))
+                         .child
+                         (m/SizedBox
+                          .height (+ (* (comp/font-size :m) 20) (* (comp/space :s) 2))
+                          .child (mgl/MongolTextField
+                                  .decoration nil
+                                  .maxLines 1
+                                  .hintText "Perspective name"
+                                  .onChanged (fn [v] (reset! name-state v)))))
+                        (m/SizedBox .width (comp/space :s))
+                        (mgl/MongolElevatedButton
+                         .onPressed (fn []
+                                      (when (seq @name-state)
+                                        (-> (perspective-svc/create-perspective
+                                             @name-state
+                                             {"status" ["active"]}
+                                             "dueDate"
+                                             "asc"
+                                             "none")
+                                            (.then (fn [_]
+                                                     (reset! name-state "")
+                                                     (perspective-svc/refresh-perspectives!))))))
+                         .child (mgl/MongolText "Create"))])
+                      (m/SizedBox .height (comp/space :l))
+                      (comp/mongol-text-block
+                       {:text "Perspectives"
+                        :style (m/TextStyle .fontSize (comp/font-size :l))})
+                      (m/SizedBox .height (comp/space :s))
+                      (if (empty? perspectives)
+                        (comp/mongol-text-block
+                         {:text "No perspectives created yet"
+                          :style (m/TextStyle .color (comp/color :text-weak))})
+                        (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         (map (fn [p]
+                                (m/Card
+                                 .child (m/ListTile
+                                         .title (mgl/MongolText (.-name p))
+                                         .subtitle (mgl/MongolText (str "Sort: " (.-sortBy p) " " (.-sortOrder p)))
+                                         .trailing (m/Row
+                                                   .mainAxisSize m/MainAxisSize.min
+                                                   .children
+                                                   [(m/IconButton
+                                                     .icon (m/Icon m/Icons.edit)
+                                                     .onPressed (fn []
+                                                                  (reset! editing-id (.-id p))
+                                                                  (m/showDialog
+                                                                   .context ctx
+                                                                   .builder (fn [dialog-ctx]
+                                                                             (m/AlertDialog
+                                                                              .title (mgl/MongolText "Edit Perspective")
+                                                                              .content (mgl/MongolText "Edit functionality coming soon")
+                                                                              .actions [(m/TextButton
+                                                                                        .onPressed (fn []
+                                                                                                     (reset! editing-id nil)
+                                                                                                     (m/Navigator.pop dialog-ctx))
+                                                                                        .child (m/Text "Close"))])))))
+                                                    (m/IconButton
+                                                     .icon (m/Icon m/Icons.delete)
+                                                     .color m/Colors.red
+                                                     .onPressed (fn []
+                                                                  (-> (perspective-svc/delete-perspective (.-id p))
+                                                                      (.then (fn []
+                                                                              (perspective-svc/refresh-perspectives!)))
+                                                                      (.catchError (fn [error]
+                                                                                     (dart-core/print (str "Error deleting perspective: " error)))))))]))))
+                              perspectives)))])))
+                  :side-row
+                  (m/Container
+                   .padding (m/EdgeInsets.all (comp/space :m))
+                   .child
+                   (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [(comp/mongol-text-block
+                      {:text "Perspectives"
+                       :style (m/TextStyle .fontSize (comp/font-size :m))})
+                     (m/SizedBox .height (comp/space :s))
+                     (comp/mongol-text-block
+                      {:text (str "Total: " (count perspectives))
+                       :style (m/TextStyle .color (comp/color :text-weak))})]))})
+                ;; Tab 2: Apply Perspectives
+                (comp/mongol-row-layout
+                 {:main-row
+                  (m/Padding
+                   .padding (m/EdgeInsets.all (comp/space :m))
+                   .child
+                   (m/SingleChildScrollView
+                    .child
+                    (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     [(comp/mongol-text-block
+                       {:text "Select Perspective"
+                        :style (m/TextStyle .fontSize (comp/font-size :l))})
+                      (m/SizedBox .height (comp/space :s))
+                      (if (empty? perspectives)
+                        (comp/mongol-text-block
+                         {:text "No perspectives available. Create one in the Manage tab."
+                          :style (m/TextStyle .color (comp/color :text-weak))})
+                        (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         (concat
+                          [(m/ListTile
+                            .title (mgl/MongolText "Flagged")
+                            .subtitle (mgl/MongolText "Show all flagged tasks")
+                            .leading (m/Icon m/Icons.star)
+                            .onTap (fn []
+                                     (reset! selected-perspective "flagged")
+                                     (-> (perspective-svc/get-flagged-perspective-tasks)
+                                         (.then (fn [tasks]
+                                                 (reset! perspective-tasks tasks)
+                                                 (when (seq tasks)
+                                                   (-> (task/get-tasks-with-blocked-info tasks)
+                                                       (.then (fn [info-list]
+                                                               (reset! tasks-with-info info-list)))
+                                                       (.catchError (fn [e]
+                                                                      (dart-core/print (str "Error loading blocked info: " e)))))))))))
+                           (m/ListTile
+                            .title (mgl/MongolText "Due Soon")
+                            .subtitle (mgl/MongolText "Tasks due within 3 days")
+                            .leading (m/Icon m/Icons.schedule)
+                            .onTap (fn []
+                                     (reset! selected-perspective "due-soon")
+                                     (-> (perspective-svc/get-due-soon-perspective-tasks)
+                                         (.then (fn [tasks]
+                                                 (reset! perspective-tasks tasks)
+                                                 (when (seq tasks)
+                                                   (-> (task/get-tasks-with-blocked-info tasks)
+                                                       (.then (fn [info-list]
+                                                               (reset! tasks-with-info info-list)))
+                                                       (.catchError (fn [e]
+                                                                      (dart-core/print (str "Error loading blocked info: " e)))))))))))
+                           (m/ListTile
+                            .title (mgl/MongolText "Stalled")
+                            .subtitle (mgl/MongolText "Tasks with no activity for 7+ days")
+                            .leading (m/Icon m/Icons.pause_circle)
+                            .onTap (fn []
+                                     (reset! selected-perspective "stalled")
+                                     (-> (perspective-svc/get-stalled-perspective-tasks)
+                                         (.then (fn [tasks]
+                                                 (reset! perspective-tasks tasks)
+                                                 (when (seq tasks)
+                                                   (-> (task/get-tasks-with-blocked-info tasks)
+                                                       (.then (fn [info-list]
+                                                               (reset! tasks-with-info info-list)))
+                                                       (.catchError (fn [e]
+                                                                      (dart-core/print (str "Error loading blocked info: " e)))))))))))]
+                          (map (fn [p]
+                                 (m/ListTile
+                                  .title (mgl/MongolText (.-name p))
+                                  .subtitle (mgl/MongolText (str "Sort: " (.-sortBy p)))
+                                  .leading (m/Icon m/Icons.filter_list)
+                                  .onTap (fn []
+                                           (reset! selected-perspective (.-id p))
+                                           (-> (perspective-svc/apply-perspective p)
+                                               (.then (fn [tasks]
+                                                       (reset! perspective-tasks tasks)
+                                                       (when (seq tasks)
+                                                         (-> (task/get-tasks-with-blocked-info tasks)
+                                                             (.then (fn [info-list]
+                                                                     (reset! tasks-with-info info-list)))
+                                                             (.catchError (fn [e]
+                                                                            (dart-core/print (str "Error loading blocked info: " e))))))))))))
+                               perspectives))))
+                      (m/SizedBox .height (comp/space :l))
+                      (when @selected-perspective
+                        (comp/mongol-text-block
+                         {:text (str "Tasks (" (count @perspective-tasks) ")")
+                          :style (m/TextStyle .fontSize (comp/font-size :l))}))
+                      (m/SizedBox .height (comp/space :s))
+                      (if (and @selected-perspective (seq @perspective-tasks))
+                        (do
+                          (when (and (seq @perspective-tasks) (empty? @tasks-with-info))
+                            (-> (task/get-tasks-with-blocked-info @perspective-tasks)
+                                (.then (fn [info-list]
+                                        (reset! tasks-with-info info-list)))
+                                (.catchError (fn [e]
+                                               (dart-core/print (str "Error loading blocked info: " e))))))
+                          (m/Expanded
+                           .child (m/ListView
+                                   .shrinkWrap true
+                                   .scrollDirection m/Axis.horizontal
+                                   .children
+                                   (map (fn [item]
+                                          (let [item-id (.-id item)
+                                                task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
+                                                blocked? (:blocked task-info false)]
+                                            (comp/mongol-task-item
+                                             {:content (.-content item)
+                                              :status (keyword (.-status item))
+                                              :blocked? blocked?
+                                              :on-tap (fn []
+                                                        (task/refresh-task-detail! item-id)
+                                                        (m/Navigator.push
+                                                         ctx
+                                                         (m/MaterialPageRoute
+                                                          .builder (fn [_]
+                                                                     (task-detail/task-detail-screen item-id)))))})))
+                                        @perspective-tasks))))
+                        (when @selected-perspective
+                          (comp/mongol-text-block
+                           {:text "No tasks found"
+                            :style (m/TextStyle .color (comp/color :text-weak))})))])))
+                  :side-row
+                  (m/Container
+                   .padding (m/EdgeInsets.all (comp/space :m))
+                   .child
+                   (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [(comp/mongol-text-block
+                      {:text "Selected"
+                       :style (m/TextStyle .fontSize (comp/font-size :m))})
+                     (m/SizedBox .height (comp/space :s))
+                     (comp/mongol-text-block
+                      {:text (if @selected-perspective
+                              (cond
+                                (= @selected-perspective "flagged") "Flagged"
+                                (= @selected-perspective "due-soon") "Due Soon"
+                                (= @selected-perspective "stalled") "Stalled"
+                                :else "Custom")
+                              "None")
+                       :style (m/TextStyle .color (comp/color :text-weak))})
+                     (m/SizedBox .height (comp/space :s))
+                     (comp/mongol-text-block
+                      {:text (str "Tasks: " (count @perspective-tasks))
+                       :style (m/TextStyle .color (comp/color :text-weak))})]))})])))))
+

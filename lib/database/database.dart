@@ -30,6 +30,16 @@ class Items extends Table {
   BoolColumn get isFocused =>
       boolean().withDefault(const Constant(false))();
 
+  // whether task is flagged/starred
+  BoolColumn get isFlagged =>
+      boolean().withDefault(const Constant(false))();
+
+  // recurrence rule: "daily", "weekly", "monthly", "yearly", or null
+  TextColumn get recurrenceRule => text().nullable()();
+
+  // recurrence end date (optional)
+  DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -115,6 +125,32 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+// Perspectives table - custom perspective configurations
+class Perspectives extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get name => text()();
+
+  // filter conditions as JSON string
+  // e.g., {"status": ["active"], "isFlagged": true, "tags": ["tag1", "tag2"]}
+  TextColumn get filterConditions => text()();
+
+  // sort rule: "dueDate", "createdAt", "updatedAt", "content", "custom"
+  TextColumn get sortBy => text().withDefault(const Constant('dueDate'))();
+
+  // sort order: "asc" or "desc"
+  TextColumn get sortOrder => text().withDefault(const Constant('asc'))();
+
+  // group by: "project", "tag", "dueDate", "deferDate", "none"
+  TextColumn get groupBy => text().withDefault(const Constant('none'))();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Items,
@@ -124,13 +160,14 @@ class Settings extends Table {
     FocusSessions,
     Reviews,
     Settings,
+    Perspectives,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
@@ -139,7 +176,15 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // future migration logic
+        if (from < 2) {
+          // Migration from version 1 to 2
+          // Add new columns to Items table
+          await m.addColumn(items, items.isFlagged);
+          await m.addColumn(items, items.recurrenceRule);
+          await m.addColumn(items, items.recurrenceEndDate);
+          // Create Perspectives table
+          await m.createTable(perspectives);
+        }
       },
     );
   }
@@ -218,6 +263,49 @@ class AppDatabase extends _$AppDatabase {
       updatedAt: Value(DateTime.now()),
     );
     await (update(items)..where((t) => t.id.equals(id))).write(companion);
+  }
+
+  // Get flagged tasks
+  Future<List<Item>> getFlaggedTasks() async {
+    return (select(items)
+          ..where((t) =>
+              t.isFlagged.equals(true) &
+              t.status.isNotValue('completed'))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .get();
+  }
+
+  // Get tasks with recurrence rules
+  Future<List<Item>> getRecurringTasks() async {
+    return (select(items)
+          ..where((t) => t.recurrenceRule.isNotNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.dueAt)]))
+        .get();
+  }
+
+  // Get tasks due soon (within next 3 days)
+  Future<List<Item>> getDueSoonTasks() async {
+    final now = DateTime.now();
+    final soon = now.add(const Duration(days: 3));
+    return (select(items)
+          ..where((t) =>
+              t.dueAt.isNotNull() &
+              t.dueAt.isBiggerOrEqualValue(now) &
+              t.dueAt.isSmallerOrEqualValue(soon) &
+              t.status.isNotValue('completed'))
+          ..orderBy([(t) => OrderingTerm.asc(t.dueAt)]))
+        .get();
+  }
+
+  // Get stalled tasks (no activity for 7+ days and not completed)
+  Future<List<Item>> getStalledTasks() async {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return (select(items)
+          ..where((t) =>
+              t.updatedAt.isSmallerOrEqualValue(cutoff) &
+              t.status.isNotValue('completed'))
+          ..orderBy([(t) => OrderingTerm.asc(t.updatedAt)]))
+        .get();
   }
 }
 

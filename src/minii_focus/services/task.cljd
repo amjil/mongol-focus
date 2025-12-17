@@ -372,3 +372,62 @@
   (let [^drift/AppDatabase database (db/get-database)]
     (.updateTask database id nil "blocked" nil nil)))
 
+;; =============================================================================
+;; Task flagging operations
+;; =============================================================================
+
+(defn set-task-flagged
+  "Set task flagged status"
+  [id flagged?]
+  (let [^drift/AppDatabase database (db/get-database)
+        now (dart-core/DateTime.now)
+        query (doto (.update database (.-items database))
+                (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id))))
+        companion (drift/ItemsCompanion.
+                  .isFlagged (d/Value (boolean flagged?))
+                  .updatedAt (d/Value now))]
+    (.write query companion)
+    (dart-core/Future.value nil)))
+
+(defn toggle-task-flag
+  "Toggle task flag status"
+  [id]
+  (-> (get-task-by-id id)
+      (.then (fn [task]
+               (if task
+                 (let [current-flagged (.-isFlagged task)]
+                   (set-task-flagged id (not current-flagged)))
+                 (dart-core/Future.value nil))))))
+
+(defn get-flagged-tasks
+  "Get all flagged tasks"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getFlaggedTasks database)))
+
+(defn refresh-flagged-tasks!
+  "Refresh flagged tasks and write to app-state"
+  []
+  (-> (get-flagged-tasks)
+      (.then (fn [tasks]
+               (state/set-flagged-tasks! tasks)
+               tasks))
+      (.catchError (fn [error]
+                     (dart-core/print (str "Error refreshing flagged tasks: " error))))))
+
+;; =============================================================================
+;; Smart filter queries
+;; =============================================================================
+
+(defn get-due-soon-tasks
+  "Get tasks due soon (within next 3 days)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDueSoonTasks database)))
+
+(defn get-stalled-tasks
+  "Get stalled tasks (no activity for 7+ days)"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getStalledTasks database)))
+

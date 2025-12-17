@@ -6,11 +6,13 @@
    ["dart:core" :as dart-core]
    ["package:drift/drift.dart" :as d]
    [cljd.flutter :as f]
+   [clojure.string :as str]
    [virtual-keyboard.keyboard :as keyboard]
    [minii-focus.components.core :as comp]
    [minii-focus.services.tag :as tag-svc]
    [minii-focus.services.task :as task]
    [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.recurring-tasks :as recurring]
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
 
@@ -287,6 +289,69 @@
                                                                                  (dart-core/print (str "Error updating due: " error))))))))))
                                              nil)
                                 .child (mgl/MongolText (or (dt/format-date (display-due)) "Not set")))]))
+                            (m/SizedBox .width (comp/space :l))
+                            (m/Column
+                             .crossAxisAlignment m/CrossAxisAlignment.center
+                             .children
+                             [(comp/mongol-text-block
+                               {:text "Flagged"
+                                :style (m/TextStyle .fontSize (comp/font-size :m))})
+                              (m/SizedBox .height (comp/space :s))
+                              (m/RotatedBox
+                               .quarterTurns 1
+                               .child (m/IconButton
+                                      .icon (m/Icon (if (and task-detail (.-isFlagged task-detail))
+                                                     m/Icons.star
+                                                     m/Icons.star_border))
+                                      .color (if (and task-detail (.-isFlagged task-detail))
+                                              m/Colors.amber
+                                              m/Colors.grey)
+                                      .onPressed (fn []
+                                                   (when task-detail
+                                                     (-> (task/toggle-task-flag (.-id task-detail))
+                                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                                         (.catchError (fn [error]
+                                                                        (dart-core/print (str "Error toggling flag: " error)))))))))])
+                            (m/SizedBox .width (comp/space :l))
+                            (m/Column
+                             .crossAxisAlignment m/CrossAxisAlignment.center
+                             .children
+                             [(comp/mongol-text-block
+                               {:text "Recurrence"
+                                :style (m/TextStyle .fontSize (comp/font-size :m))})
+                              (m/SizedBox .height (comp/space :s))
+                              (m/TextButton
+                               .onPressed (fn []
+                                            (when task-detail
+                                              (m/showDialog
+                                               .context ctx
+                                               .builder (fn [dialog-ctx]
+                                                         (let [recurrence-options ["None" "Daily" "Weekly" "Monthly" "Yearly"]
+                                                               current-rule (or (some-> task-detail .-recurrenceRule) "None")]
+                                                           (m/AlertDialog
+                                                            .title (mgl/MongolText "Set Recurrence")
+                                                            .content (m/Container
+                                                                     .width 300
+                                                                     .height 200
+                                                                     .child (m/ListView
+                                                                             .children
+                                                                             (map (fn [option]
+                                                                                    (m/ListTile
+                                                                                     .title (mgl/MongolText option)
+                                                                                     .selected (= option current-rule)
+                                                                                     .onTap (fn []
+                                                                                             (let [rule (if (= option "None") nil (str/lower-case option))]
+                                                                                               (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
+                                                                                                   (.then (fn []
+                                                                                                           (task/refresh-task-detail! (.-id task-detail))
+                                                                                                           (m/Navigator.pop dialog-ctx)))
+                                                                                                   (.catchError (fn [error]
+                                                                                                                 (dart-core/print (str "Error setting recurrence: " error)))))))))
+                                                                                  recurrence-options))))
+                                                            .actions [(m/TextButton
+                                                                       .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                                       .child (m/Text "Cancel"))]))))))
+                               .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None"))])
                             (m/SizedBox .width (comp/space :l))
                             (m/Column
                              .crossAxisAlignment m/CrossAxisAlignment.center
