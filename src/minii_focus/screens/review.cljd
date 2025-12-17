@@ -20,7 +20,9 @@
               due-projects :review-due-projects} state/app-state
              _ct content
              _tp review-type]
-     (m/Scaffold)
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (m/Text "")))
      .body
      (m/SafeArea)
      (m/Padding
