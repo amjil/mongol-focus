@@ -16,6 +16,8 @@
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
 
+
+
 (defn task-detail-screen
   "Task detail page"
   [task-id]
@@ -211,10 +213,11 @@
                                                                                                available-tasks))))
                                                                         .actions [(m/TextButton
                                                                                    .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                                                   .child (m/Text "Cancel"))]))))
+                                                                                   .child (m/Text "Cancel"))])))
+                                                            nil)))
                                                  (.catchError (fn [error]
-                                                                (dart-core/print (str "Error loading tasks: " error)))))))))
-                               .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))])
+                                                                (dart-core/print (str "Error loading tasks: " error)))))))
+                               .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))
                             (m/SizedBox .width (comp/space :l))
                             (m/SizedBox .width (comp/space :l))
                             (m/SingleChildScrollView
@@ -350,7 +353,8 @@
                                                                                    recurrence-options)))
                                                             .actions [(m/TextButton
                                                                        .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                                       .child (m/Text "Cancel"))]))))))
+                                                                       .child (m/Text "Cancel"))]))
+                                               nil))))
                                .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])
                             (m/SizedBox .width (comp/space :l))
                             (m/Column
@@ -414,5 +418,5 @@
                                                           (m/Navigator.pop ctx)))))
                                 .style (m/ButtonStyle
                                         .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                                .child (mgl/MongolText "Delete task"))]))]))
+                                .child (mgl/MongolText "Delete task"))]))])]))
                   (keyboard/keyboard {:custom-fns {}})]))))))
