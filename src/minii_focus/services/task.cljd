@@ -116,15 +116,30 @@
                       (dart-core/Future.value nil))))))
 
 (defn delete-task
-  "Delete task"
+  "Delete task with cascade deletion of related data (ItemTree, ItemTags)"
   [id]
   (let [^drift/AppDatabase database (db/get-database)]
     ;; Cancel reminders before deleting task
     (-> (notif/cancel-task-reminder id)
         (.then (fn [_]
+                 ;; Delete ItemTree relations where this task is parent
                  (.go
-                  (doto
-                   (.delete database (.-items database))
+                  (doto (.delete database (.-itemTree database))
+                    (.where (fn [^drift/ItemTree tbl] (.equals (.-parentId tbl) id)))))))
+        (.then (fn [_]
+                 ;; Delete ItemTree relations where this task is child
+                 (.go
+                  (doto (.delete database (.-itemTree database))
+                    (.where (fn [^drift/ItemTree tbl] (.equals (.-childId tbl) id)))))))
+        (.then (fn [_]
+                 ;; Delete ItemTags relations
+                 (.go
+                  (doto (.delete database (.-itemTags database))
+                    (.where (fn [^drift/ItemTags tbl] (.equals (.-itemId tbl) id)))))))
+        (.then (fn [_]
+                 ;; Finally delete the task itself
+                 (.go
+                  (doto (.delete database (.-items database))
                     (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
         (.catchError (fn [error]
                       (dart-core/print (str "Error deleting task: " error))
