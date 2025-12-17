@@ -14,8 +14,7 @@
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.recurring-tasks :as recurring]
    [minii-focus.utils.datetime :as dt]
-   [minii-focus.states.app-state :as state]
-   [minii-focus.screens.task-detail :as task-detail]))
+   [minii-focus.states.app-state :as state]))
 
 (defn- actions [editing task-detail defer-state due-state content-state status-state
                 editing-state]
@@ -58,7 +57,8 @@
                                       (dart-core/print (str "Error saving task: " error))
                                       ;; Rollback on error
                                       (when task-detail
-                                        (task/refresh-task-detail! (.-id task-detail))))))))
+                                        (task/refresh-task-detail! (.-id task-detail))))))
+                   nil))
      (m/IconButton
       .icon (m/Icon m/Icons.close)
       .onPressed (fn []
@@ -67,7 +67,8 @@
                      (reset! content-state (.-content task-detail))
                      (reset! status-state (keyword (.-status task-detail)))
                      (reset! defer-state (.-deferAt task-detail))
-                     (reset! due-state (.-dueAt task-detail)))))]
+                     (reset! due-state (.-dueAt task-detail)))
+                   nil))]
     [(m/IconButton
       .tooltip "Refresh"
       .icon (m/Icon m/Icons.refresh)
@@ -84,39 +85,42 @@
 
 (defn- elavated-buttons [ctx task-detail display-status]
   (m/SingleChildScrollView
-                             .child
-
-                             (m/Column
-                              .children
-                              [(mgl/MongolElevatedButton
-                                .onPressed (fn []
-                                             (if (= (display-status) :completed)
-                                               (task/mark-task-active (.-id task-detail))
-                                               (task/mark-task-completed (.-id task-detail)))
-                                             (-> (task/refresh-task-detail! (.-id task-detail))
-                                                 (.catchError (fn [error]
-                                                                (dart-core/print (str "Error toggling status: " error))))))
-                                .child (mgl/MongolText (if (= (display-status) :completed)
-                                                         "Mark as active"
-                                                         "Mark as completed")))
-                               (m/SizedBox .height (comp/space :s))
-                               (mgl/MongolElevatedButton
-                                .onPressed (fn []
-                                             (let [session-id (task/enter-focus (.-id task-detail))]
-                                               (state/set-focused-task! task-detail)
-                                               (state/set-focus-session-id! session-id)
-                                               (dart-core/print "Entered focus")))
-                                .child (mgl/MongolText "Enter Focus"))
-                               (m/SizedBox .height (comp/space :s))
-                               (mgl/MongolElevatedButton
-                                .onPressed (fn []
-                                             (-> (task/delete-task (.-id task-detail))
-                                                 (.then (fn []
-                                                          (dart-core/print "Task deleted")
-                                                          (m/Navigator.pop ctx)))))
-                                .style (m/ButtonStyle
-                                        .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                                .child (mgl/MongolText "Delete task"))])))
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(mgl/MongolElevatedButton
+      .onPressed (fn []
+                   (if (= (display-status) :completed)
+                     (task/mark-task-active (.-id task-detail))
+                     (task/mark-task-completed (.-id task-detail)))
+                   (-> (task/refresh-task-detail! (.-id task-detail))
+                       (.catchError (fn [error]
+                                      (dart-core/print (str "Error toggling status: " error)))))
+                   nil)
+      .child (mgl/MongolText (if (= (display-status) :completed)
+                               "Mark as active"
+                               "Mark as completed")))
+     (m/SizedBox .height (comp/space :s))
+     (mgl/MongolElevatedButton
+      .onPressed (fn []
+                   (let [session-id (task/enter-focus (.-id task-detail))]
+                     (state/set-focused-task! task-detail)
+                     (state/set-focus-session-id! session-id)
+                     (dart-core/print "Entered focus"))
+                   nil)
+      .child (mgl/MongolText "Enter Focus"))
+     (m/SizedBox .height (comp/space :s))
+     (mgl/MongolElevatedButton
+      .onPressed (fn []
+                   (-> (task/delete-task (.-id task-detail))
+                       (.then (fn []
+                                (dart-core/print "Task deleted")
+                                (m/Navigator.pop ctx))))
+                   nil)
+      .style (m/ButtonStyle
+              .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
+      .child (mgl/MongolText "Delete task"))])))
 
 (defn- tags-section [task-detail tag-ids all-tags]
   (m/Column
@@ -186,8 +190,8 @@
                                                           recurrence-options)))
                                    .actions [(m/TextButton
                                               .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                              .child (m/Text "Cancel"))]))
-                                nil))))
+                                              .child (m/Text "Cancel"))])))))
+                  nil)
      .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])) 
 
 (defn- flagged-section [task-detail]
@@ -223,7 +227,7 @@
     [(comp/mongol-text-block
       {:text "Start (defer)"
        :style (m/TextStyle .fontSize (comp/font-size :m))})
-     (m/TextButton
+     (mgl/MongolTextButton
       .onPressed (fn []
                    (-> (m/showDatePicker
                         .context ctx
@@ -244,7 +248,7 @@
      (comp/mongol-text-block
       {:text "Due (due)"
        :style (m/TextStyle .fontSize (comp/font-size :m))})
-     (m/TextButton
+     (mgl/MongolTextButton
       .onPressed (fn []
                    (-> (m/showDatePicker
                         .context ctx
@@ -368,10 +372,10 @@
                                                                         available-tasks))))
                                                 .actions [(m/TextButton
                                                            .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                           .child (m/Text "Cancel"))])))
-                                   nil)))
+                                                           .child (m/Text "Cancel"))]))))))
                         (.catchError (fn [error]
-                                       (dart-core/print (str "Error loading tasks: " error)))))))
+                                       (dart-core/print (str "Error loading tasks: " error))))))
+                  nil)
      .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))]))
 
 
