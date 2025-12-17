@@ -133,8 +133,12 @@ class PerspectivesDao {
               ),
             ])
               ..where(itemTags.tagId.isIn(tagIds))
-              ..groupBy([_db.items.id])
-              ..having(itemTags.tagId.count(distinct: true).equals(tagIds.length));
+              ..groupBy(
+                [_db.items.id],
+                having: itemTags.tagId
+                    .count(distinct: true)
+                    .equals(tagIds.length),
+              );
 
             final rows = await joined.get();
             return rows.map((row) => row.readTable(_db.items)).toList();

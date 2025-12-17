@@ -7,11 +7,27 @@
    [minii-focus.components.core :as comp]
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.services.task :as task]
+   [minii-focus.services.item-tree :as item-tree]
    [minii-focus.states.app-state :as state]))
 
 (defn today-screen []
   (let [tasks-with-info (atom [])
-        show-blocked (atom true)]
+        show-blocked (atom true)
+        ;; Helper: refresh Today tasks and blocked info
+        refresh-today-with-blocked!
+        (fn []
+          (reset! tasks-with-info [])
+          (task/refresh-today-tasks!)
+          (-> (task/get-today-tasks)
+              (.then (fn [refreshed-tasks]
+                       (when (seq refreshed-tasks)
+                         (-> (task/get-tasks-with-blocked-info refreshed-tasks)
+                             (.then (fn [info-list]
+                                      (reset! tasks-with-info info-list)))
+                             (.catchError (fn [error]
+                                            (dart-core/print (str "Error loading blocked info after refresh: " error))))))))
+              (.catchError (fn [error]
+                             (dart-core/print (str "Error refreshing today tasks: " error))))))]
     (f/widget
      :context ctx
      ;; Pages only subscribe to state, don't do loading side effects in render
@@ -34,63 +50,143 @@
                                      :style (m/TextStyle
                                              .color (comp/color :text-weak)
                                              .fontSize (comp/font-size :m))}))]
-                          (->> _twi
-                               (filter (fn [info]
-                                         (or _sb
-                                             (not (:blocked info)))))
-                               (map (fn [info]
-                                      (let [task-row (:task info)
-                                            task-id (.-id task-row)
-                                            task-status (keyword (.-status task-row))
-                                            blocked (:blocked info)]
-                                        (comp/mongol-task-item
-                                         {:content (.-content task-row)
-                                          :status task-status
-                                          :blocked? blocked
-                                          :on-tap (fn []
-                                                    ;; Navigate to task detail page
-                                                    (task/refresh-task-detail! task-id)
-                                                    (m/Navigator.push
-                                                     ctx
-                                                     (m/MaterialPageRoute
-                                                      .builder (fn [_]
-                                                                 (task-detail/task-detail-screen task-id)))))
-                                          :on-long-press (fn []
-                                                           ;; Structure adjustment placeholder: will integrate item_tree drag/move later
-                                                           (m/showModalBottomSheet
-                                                            .context ctx
-                                                            .builder (fn [_]
-                                                                       (m/Wrap
-                                                                        .children
-                                                                        [(m/ListTile
-                                                                          .leading (m/Icon m/Icons.subdirectory_arrow_right)
-                                                                          .title (m/Text "Set as subtask (placeholder)")
-                                                                          .onTap (fn []
-                                                                                   (dart-core/print (str "Set as child (TODO): " task-id))
-                                                                                   (m/Navigator.pop ctx)))
-                                                                         (m/ListTile
-                                                                          .leading (m/Icon m/Icons.arrow_upward)
-                                                                          .title (m/Text "Move up (placeholder)")
-                                                                          .onTap (fn []
-                                                                                   (dart-core/print (str "Move up (TODO): " task-id))
-                                                                                   (m/Navigator.pop ctx)))
-                                                                         (m/ListTile
-                                                                          .leading (m/Icon m/Icons.arrow_downward)
-                                                                          .title (m/Text "Move down (placeholder)")
-                                                                          .onTap (fn []
-                                                                                   (dart-core/print (str "Move down (TODO): " task-id))
-                                                                                   (m/Navigator.pop ctx)))]))))
-                                          :on-swipe-left (fn []
-                                                           ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)
-                                                           (-> (task/enter-focus task-id)
-                                                               (.then (fn [session-id]
-                                                                        (state/set-focused-task! task-row)
-                                                                        (state/set-focus-session-id! session-id)
-                                                                        (task/refresh-today-tasks!)
-                                                                        (task/refresh-focus-tasks!)
-                                                                        (dart-core/print (str "Entered focus: " task-id))))
-                                                               (.catchError (fn [error]
-                                                                              (dart-core/print (str "Error entering focus: " error))))))}))))))))]
+                          (let [visible-tasks (->> _twi
+                                                   (filter (fn [info]
+                                                             (or _sb
+                                                                 (not (:blocked info)))))
+                                                   (vec))]
+                            (map-indexed
+                             (fn [index info]
+                               (let [task-row (:task info)
+                                     task-id (.-id task-row)
+                                     task-status (keyword (.-status task-row))
+                                     blocked (:blocked info)
+                                     ;; Use previous visible task as default parent for "Set as child"
+                                     parent-task-id (when (pos? index)
+                                                      (.-id task-row))]
+                                    (comp/mongol-task-item
+                                     {:content (.-content task-row)
+                                      :status task-status
+                                      :blocked? blocked
+                                      :on-tap (fn []
+                                                ;; Navigate to task detail page
+                                                (task/refresh-task-detail! task-id)
+                                                (m/Navigator.push
+                                                 ctx
+                                                 (m/MaterialPageRoute
+                                                  .builder (fn [_]
+                                                             (task-detail/task-detail-screen task-id)))))
+                                      :on-long-press
+                                      (fn []
+                                        ;; Structure adjustment: integrate item-tree hierarchy & ordering
+                                        (m/showModalBottomSheet
+                                         .context ctx
+                                         .builder
+                                         (fn [_]
+                                           (m/Wrap
+                                            .children
+                                            [(m/ListTile
+                                              .leading (m/Icon m/Icons.subdirectory_arrow_right)
+                                              .title (m/Text "Set as subtask")
+                                              .onTap
+                                              (fn []
+                                                (if parent-task-id
+                                                  (-> (item-tree/set-parent-task task-id parent-task-id)
+                                                      (.then (fn [_]
+                                                               (dart-core/print (str "Set task " task-id " as child of " parent-task-id))
+                                                               (refresh-today-with-blocked!)))
+                                                      (.catchError
+                                                       (fn [error]
+                                                         (dart-core/print (str "Error setting parent task: " error)))))
+                                                  (dart-core/print "No previous task to set as parent"))
+                                                (m/Navigator.pop ctx)))
+                                             (m/ListTile
+                                              .leading (m/Icon m/Icons.arrow_upward)
+                                              .title (m/Text "Move up")
+                                              .onTap
+                                              (fn []
+                                                ;; Move task up among siblings in ItemTree
+                                                (-> (item-tree/get-parent task-id)
+                                                    (.then
+                                                     (fn [parent-rel]
+                                                       (if parent-rel
+                                                         (let [parent-id (.-parentId parent-rel)]
+                                                           (-> (item-tree/get-children parent-id)
+                                                               (.then
+                                                                (fn [relations]
+                                                                  (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                                                        idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))]
+                                                                    (if (and idx (pos? idx))
+                                                                      (let [new-child-ids (-> child-ids
+                                                                                              (assoc idx (nth child-ids (dec idx)))
+                                                                                              (assoc (dec idx) task-id))]
+                                                                        (-> (item-tree/reorder-siblings parent-id new-child-ids)
+                                                                            (.then
+                                                                             (fn [_]
+                                                                               (dart-core/print (str "Moved task up: " task-id))
+                                                                               (refresh-today-with-blocked!)))
+                                                                            (.catchError
+                                                                             (fn [error]
+                                                                               (dart-core/print (str "Error reordering siblings (up): " error))))))
+                                                                      (dart-core/print "Task is already at the top or not found among siblings")))))
+                                                               (.catchError
+                                                                (fn [error]
+                                                                  (dart-core/print (str "Error loading siblings for move up: " error))))))
+                                                         (dart-core/print "Task has no parent; cannot move up"))))
+                                                    (.catchError
+                                                     (fn [error]
+                                                       (dart-core/print (str "Error getting parent for move up: " error)))))
+                                                (m/Navigator.pop ctx)))
+                                             (m/ListTile
+                                              .leading (m/Icon m/Icons.arrow_downward)
+                                              .title (m/Text "Move down")
+                                              .onTap
+                                              (fn []
+                                                ;; Move task down among siblings in ItemTree
+                                                (-> (item-tree/get-parent task-id)
+                                                    (.then
+                                                     (fn [parent-rel]
+                                                       (if parent-rel
+                                                         (let [parent-id (.-parentId parent-rel)]
+                                                           (-> (item-tree/get-children parent-id)
+                                                               (.then
+                                                                (fn [relations]
+                                                                  (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                                                        idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))
+                                                                        last-idx (dec (count child-ids))]
+                                                                    (if (and idx (< idx last-idx))
+                                                                      (let [new-child-ids (-> child-ids
+                                                                                              (assoc idx (nth child-ids (inc idx)))
+                                                                                              (assoc (inc idx) task-id))]
+                                                                        (-> (item-tree/reorder-siblings parent-id new-child-ids)
+                                                                            (.then
+                                                                             (fn [_]
+                                                                               (dart-core/print (str "Moved task down: " task-id))
+                                                                               (refresh-today-with-blocked!)))
+                                                                            (.catchError
+                                                                             (fn [error]
+                                                                               (dart-core/print (str "Error reordering siblings (down): " error))))))
+                                                                      (dart-core/print "Task is already at the bottom or not found among siblings")))))
+                                                               (.catchError
+                                                                (fn [error]
+                                                                  (dart-core/print (str "Error loading siblings for move down: " error))))))
+                                                         (dart-core/print "Task has no parent; cannot move down"))))
+                                                    (.catchError
+                                                     (fn [error]
+                                                       (dart-core/print (str "Error getting parent for move down: " error)))))
+                                                (m/Navigator.pop ctx)))]))))
+                                      :on-swipe-left
+                                      (fn []
+                                        ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)
+                                        (-> (task/enter-focus task-id)
+                                            (.then (fn [session-id]
+                                                     (state/set-focused-task! task-row)
+                                                     (state/set-focus-session-id! session-id)
+                                                     (task/refresh-today-tasks!)
+                                                     (task/refresh-focus-tasks!)
+                                                     (dart-core/print (str "Entered focus: " task-id))))
+                                            (.catchError (fn [error]
+                                                           (dart-core/print (str "Error entering focus: " error))))))}))))))))]
      (do
        (when (and (not loading) (seq tasks) (empty? _twi))
          (-> (task/get-tasks-with-blocked-info tasks)
@@ -109,17 +205,7 @@
                             .tooltip "Refresh"
                             .icon (m/Icon m/Icons.refresh)
                             .onPressed (fn []
-                                         (reset! tasks-with-info [])
-                                         (task/refresh-today-tasks!)
-                                         ;; Reload blocked info after refresh
-                                         (-> (task/get-today-tasks)
-                                             (.then (fn [refreshed-tasks]
-                                                      (when (seq refreshed-tasks)
-                                                        (-> (task/get-tasks-with-blocked-info refreshed-tasks)
-                                                            (.then (fn [info-list]
-                                                                     (reset! tasks-with-info info-list)))
-                                                            (.catchError (fn [error]
-                                                                           (dart-core/print (str "Error loading blocked info: " error)))))))))))])
+                                         (refresh-today-with-blocked!)))])
         .body (comp/mongol-row-layout
                {:main-row (comp/vertical-reveal-motion
                            {:child main-view})
