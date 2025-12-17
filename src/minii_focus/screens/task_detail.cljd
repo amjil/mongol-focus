@@ -16,72 +16,87 @@
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
 
-(defn- actions [editing task-detail defer-state due-state content-state status-state
-                editing-state]
+(defn- actions
+  [editing task-detail defer-state due-state content-state status-state editing-state]
   (if editing
     [(m/IconButton
       .icon (m/Icon m/Icons.check)
-      .onPressed (fn []
-                   ;; Optimistic update: update local state immediately
-                   (when task-detail
-                     (let [^dart-core/DateTime? defer-dt @defer-state
-                           ^dart-core/DateTime? due-dt @due-state
-                           ^#/(d/Value dart-core/DateTime?)
-                           defer-value (if defer-dt
-                                         (d/Value defer-dt)
-                                         (d/Value nil))
-                           ^#/(d/Value dart-core/DateTime?)
-                           due-value (if due-dt
-                                       (d/Value due-dt)
-                                       (d/Value nil))]
-                       (swap! state/app-state
-                              (fn [s]
-                                (if-let [td (:task-detail s)]
-                                  (assoc s :task-detail
-                                         (.copyWith td
-                                                    .content @content-state
-                                                    .status (name @status-state)
-                                                    .deferAt defer-value
-                                                    .dueAt due-value))
-                                  s)))))
-                   (reset! editing-state false)
-                   ;; Then persist to database (auto-refresh happens in update-task)
-                   (-> (task/update-task (.-id task-detail)
-                                         @content-state
-                                         (name @status-state)
-                                         @defer-state
-                                         @due-state)
-                       (.then (fn [_]
-                                (task/refresh-task-detail! (.-id task-detail))))
-                       (.catchError (fn [error]
-                                      (dart-core/print (str "Error saving task: " error))
-                                      ;; Rollback on error
-                                      (when task-detail
-                                        (task/refresh-task-detail! (.-id task-detail))))))
-                   nil))
+      .onPressed
+      (fn []
+        ;; Optimistic update: update local state immediately
+        (when task-detail
+          (let [old-status (some-> task-detail .-status keyword)
+                new-status @status-state
+                valid? (or (nil? old-status)
+                           (= old-status new-status)
+                           (task/valid-status-transition?
+                            old-status new-status))
+                status-to-save (if valid? new-status old-status)
+                ^dart-core/DateTime? defer-dt @defer-state
+                ^dart-core/DateTime? due-dt @due-state
+                ^#/(d/Value dart-core/DateTime?)
+                defer-value (if defer-dt
+                              (d/Value defer-dt)
+                              (d/Value nil))
+                ^#/(d/Value dart-core/DateTime?)
+                due-value (if due-dt
+                            (d/Value due-dt)
+                            (d/Value nil))]
+            (when (not valid?)
+              (dart-core/print
+               (str "Invalid status change in edit from "
+                    old-status " to " new-status)))
+            (swap! state/app-state
+                   (fn [s]
+                     (if-let [td (:task-detail s)]
+                       (assoc s :task-detail
+                              (.copyWith td
+                                         .content @content-state
+                                         .status (name status-to-save)
+                                         .deferAt defer-value
+                                         .dueAt due-value))
+                       s)))
+            (when valid?
+              (reset! editing-state false)
+              ;; Then persist to database (auto-refresh happens in update-task)
+              (-> (task/update-task (.-id task-detail)
+                                    @content-state
+                                    (name status-to-save)
+                                    @defer-state
+                                    @due-state)
+                  (.then (fn [_]
+                           (task/refresh-task-detail! (.-id task-detail))))
+                  (.catchError
+                   (fn [error]
+                     (dart-core/print (str "Error saving task: " error))
+                     ;; Rollback on error
+                     (when task-detail
+                       (task/refresh-task-detail! (.-id task-detail)))))))))))
      (m/IconButton
       .icon (m/Icon m/Icons.close)
-      .onPressed (fn []
-                   (reset! editing-state false)
-                   (when task-detail
-                     (reset! content-state (.-content task-detail))
-                     (reset! status-state (keyword (.-status task-detail)))
-                     (reset! defer-state (.-deferAt task-detail))
-                     (reset! due-state (.-dueAt task-detail)))
-                   nil))]
+      .onPressed
+      (fn []
+        (reset! editing-state false)
+        (when task-detail
+          (reset! content-state (.-content task-detail))
+          (reset! status-state (keyword (.-status task-detail)))
+          (reset! defer-state (.-deferAt task-detail))
+          (reset! due-state (.-dueAt task-detail)))
+        nil))]
     [(m/IconButton
       .tooltip "Refresh"
       .icon (m/Icon m/Icons.refresh)
       .onPressed (fn [] (task/refresh-task-detail! (.-id task-detail))))
      (m/IconButton
       .icon (m/Icon m/Icons.edit)
-      .onPressed (fn []
-                   (when task-detail
-                     (reset! content-state (.-content task-detail))
-                     (reset! status-state (keyword (.-status task-detail)))
-                     (reset! defer-state (.-deferAt task-detail))
-                     (reset! due-state (.-dueAt task-detail))
-                     (reset! editing-state true))))]))
+      .onPressed
+      (fn []
+        (when task-detail
+          (reset! content-state (.-content task-detail))
+          (reset! status-state (keyword (.-status task-detail)))
+          (reset! defer-state (.-deferAt task-detail))
+          (reset! due-state (.-dueAt task-detail))
+          (reset! editing-state true))))]))
 
 (defn- elavated-buttons [ctx task-detail display-status]
   (m/SingleChildScrollView
@@ -91,15 +106,19 @@
     .children
     [(mgl/MongolElevatedButton
       .onPressed (fn []
-                   (if (= (display-status) :completed)
-                     (task/mark-task-active (.-id task-detail))
-                     (task/mark-task-completed (.-id task-detail)))
-                   (-> (task/refresh-task-detail! (.-id task-detail))
-                       (.catchError (fn [error]
-                                      (dart-core/print (str "Error toggling status: " error)))))
-                   nil)
+                   (let [current-status (display-status)]
+                     ;; 只允许从非 completed 状态流转到 completed（终止状态）
+                     (when (and task-detail
+                                (not= current-status :completed)
+                                (task/valid-status-transition? current-status :completed))
+                       (-> (task/mark-task-completed (.-id task-detail))
+                           (.then (fn [_]
+                                    (task/refresh-task-detail! (.-id task-detail))))
+                           (.catchError (fn [error]
+                                          (dart-core/print (str "Error marking task as completed: " error))))))
+                     nil))
       .child (mgl/MongolText (if (= (display-status) :completed)
-                               "Mark as active"
+                               "Completed"
                                "Mark as completed")))
      (m/SizedBox .height (comp/space :s))
      (mgl/MongolElevatedButton
@@ -289,11 +308,23 @@
               .onSelectionChanged (fn [selection]
                                     (let [new-status (first selection)]
                                       (if @editing-state
+                                        ;; 编辑模式：先写入本地状态，提交时统一校验
                                         (reset! status-state new-status)
-                                        (-> (task/update-task (.-id task-detail) nil (name new-status) nil nil)
-                                            (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
-                                            (.catchError (fn [error]
-                                                           (dart-core/print (str "Error updating status: " error))))))))))])))
+                                        (let [current-status (display-status)]
+                                          (if (task/valid-status-transition?
+                                               current-status new-status)
+                                            (-> (task/update-task (.-id task-detail)
+                                                                  nil
+                                                                  (name new-status)
+                                                                  nil
+                                                                  nil)
+                                                (.then (fn []
+                                                         (task/refresh-task-detail! (.-id task-detail))))
+                                                (.catchError (fn [error]
+                                                               (dart-core/print (str "Error updating status: " error)))))
+                                            (dart-core/print
+                                             (str "Invalid status change from "
+                                                  current-status " to " new-status)))))))))])))
 
 (defn- parent-section [ctx task-detail parent-rel]
   (m/Column

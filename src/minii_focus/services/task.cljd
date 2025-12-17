@@ -14,11 +14,57 @@
    [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
+;; Task status state machine
+;; =============================================================================
+
+;; 任务状态流转规则：
+;; - idle      -> active, blocked
+;; - active    -> idle, blocked, completed
+;; - blocked   -> idle, active
+;; - completed -> （终止状态，不再允许流转到其他状态）
+(def ^:private allowed-status-transitions
+  {:idle #{:active :blocked}
+   :active #{:idle :blocked :completed}
+   :blocked #{:idle :active}
+   :completed #{}})
+
+(defn valid-status-transition?
+  "校验任务状态是否允许从 from-status 流转到 to-status。
+  传入和返回都使用关键字状态（如 :active / :completed）。"
+  [from-status to-status]
+  (if (= from-status to-status)
+    true
+    (contains? (get allowed-status-transitions from-status #{}) to-status)))
+
+;; 内部辅助：带状态机校验的状态更新，仅修改 status 字段
+(defn- update-task-status!
+  "根据状态机规则安全地更新任务状态。
+  new-status 为字符串形式（\"active\" 等），供底层数据库使用。"
+  [id ^String new-status]
+  (-> (get-task-by-id id)
+      (.then
+       (fn [task]
+         (if (nil? task)
+           (dart-core/Future.value nil)
+           (let [current-status (some-> task .-status keyword)
+                 target-status (keyword new-status)]
+             (if (valid-status-transition? current-status target-status)
+               (let [^drift/AppDatabase database (db/get-database)]
+                 (.updateTask database id nil new-status nil nil))
+               (do
+                 (dart-core/print
+                  (str "Invalid task status transition: "
+                       current-status " -> " target-status
+                       " for task " id))
+                 (dart-core/Future.value nil)))))))))
+
+;; =============================================================================
 ;; Task CRUD operations
 ;; =============================================================================
 
 ;; Forward declaration so that reminder helpers can be defined later
-(declare update-task-reminders)
+;; 以及在状态更新辅助函数中使用的 get-task-by-id
+(declare update-task-reminders get-task-by-id)
 
 (defn create-task
   "Create new task"
@@ -415,33 +461,29 @@
 (defn mark-task-completed
   "Mark task as completed with automatic refresh"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (-> (.updateTask database id nil "completed" nil nil)
-        (.then (fn [_]
-                 ;; Cancel reminders for completed tasks
-                 (notif/cancel-task-reminder id)
-                 nil))
-        (.catchError (fn [error]
-                      (dart-core/print (str "Error marking task as completed: " error))
-                      (dart-core/Future.value nil))))))
+  (-> (update-task-status! id "completed")
+      (.then (fn [_]
+               ;; Cancel reminders for completed tasks
+               (notif/cancel-task-reminder id)
+               nil))
+      (.catchError (fn [error]
+                    (dart-core/print (str "Error marking task as completed: " error))
+                    (dart-core/Future.value nil)))))
 
 (defn mark-task-active
   "Mark task as active"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.updateTask database id nil "active" nil nil)))
+  (update-task-status! id "active"))
 
 (defn mark-task-idle
   "Mark task as idle"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.updateTask database id nil "idle" nil nil)))
+  (update-task-status! id "idle"))
 
 (defn mark-task-blocked
   "Mark task as blocked"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.updateTask database id nil "blocked" nil nil)))
+  (update-task-status! id "blocked"))
 
 ;; =============================================================================
 ;; Task flagging operations
