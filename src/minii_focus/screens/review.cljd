@@ -3,6 +3,7 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["package:cljd_mongol_focus/mongol_dropdown_button.dart" :as dropdown]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
    [minii-focus.states.app-state :as state]
@@ -19,72 +20,73 @@
               due-projects :review-due-projects} state/app-state
              _ct content
              _tp review-type]
-     (m/Scaffold
-      .body
-      (m/Padding
-       .padding (m/EdgeInsets.all (comp/space :m))
-       .child
-       (m/Row
+     (m/Scaffold)
+     .body
+     (m/SafeArea)
+     (m/Padding
+      .padding (m/EdgeInsets.all (comp/space :m)))
+     (m/Row
+      .children
+      [(m/Column
         .children
-        [(m/Column
-          .children
-          [(m/DropdownButton
-            .value @review-type
-            .items [(m/DropdownMenuItem .value "daily" .child (m/Text "Daily"))
-                    (m/DropdownMenuItem .value "weekly" .child (m/Text "Weekly"))]
-            .onChanged (fn [v]
-                         (reset! review-type v)
-                         (review-svc/refresh-reviews! v)))
-           (m/SizedBox .height (comp/space :s))
-           (m/Expanded
-            .child (mgl/MongolTextField
-                    .decoration (m/InputDecoration .labelText "New review")
-                    .onChanged (fn [v] (reset! content v))))
-           (m/SizedBox .height (comp/space :s))
-           ;; Due projects section (simple textual list for now)
-           (if (seq due-projects)
-             (m/Column
-              .crossAxisAlignment m/CrossAxisAlignment.start
-              .children
-              [(comp/mongol-text-block
-                {:text "Projects due for review"
-                 :style (m/TextStyle
-                         .fontSize (comp/font-size :s)
-                         .color (comp/color :text-weak))})
-               (m/SizedBox .height (comp/space :xs))
-               (m/Container
-                .height 120
-                .child
-                (m/ListView.builder
-                 .itemCount (count due-projects)
-                 .itemBuilder (fn [_ idx]
-                                (let [p (nth due-projects idx)]
-                                  (mgl/MongolListTile
-                                   .title (mgl/MongolText (.-content p)))))))])
-             (m/SizedBox))
-           (m/SizedBox .height (comp/space :s))
-           (m/ElevatedButton
-            .onPressed (fn []
-                         (when (seq @content)
-                           (-> (review-svc/create-review {:type @review-type
-                                                          :content @content})
-                               (.then (fn [_]
-                                        (reset! content "")
-                                        (review-svc/refresh-reviews! @review-type))))))
-            .child (m/Text "Save"))])
-         (m/SizedBox .width (comp/space :l))
-         (cond
-           loading (m/Center .child (m/CircularProgressIndicator))
-           (empty? reviews) (comp/mongol-text-block
-                             {:text "No reviews"
-                              :style (m/TextStyle .color (comp/color :text-weak))})
-           :else (m/ListView.builder
-                  .itemCount (count reviews)
-                  .itemBuilder (fn [_ idx]
-                                 (let [r (nth reviews idx)]
-                                   (mgl/MongolListTile
-                                    .title (mgl/MongolText (.-content r))
-                                    .subtitle (mgl/MongolText (dt/format-date (.-createdAt r))))))))]))))))
+        [(dropdown/MongolSelect
+          .value @review-type
+          .items [(dropdown/MongolSelectItem .value "daily" .label (mgl/MongolText "Daily"))
+                  (dropdown/MongolSelectItem .value "weekly" .label (mgl/MongolText "Weekly"))]
+          .onChanged (fn [v]
+                       (reset! review-type v)
+                       (review-svc/refresh-reviews! v))
+          .valueBuilder (fn [v] (mgl/MongolText (or v ""))))
+         (m/SizedBox .height (comp/space :s))
+         (m/Expanded
+          .child (mgl/MongolTextField
+                  .decoration (m/InputDecoration .labelText "New review")
+                  .onChanged (fn [v] (reset! content v))))
+         (m/SizedBox .height (comp/space :s))
+         ;; Due projects section (simple textual list for now)
+         (if (seq due-projects)
+           (m/Column
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(comp/mongol-text-block
+              {:text "Projects due for review"
+               :style (m/TextStyle
+                       .fontSize (comp/font-size :s)
+                       .color (comp/color :text-weak))})
+             (m/SizedBox .height (comp/space :xs))
+             (m/Container
+              .height 120
+              .child
+              (m/ListView.builder
+               .itemCount (count due-projects)
+               .itemBuilder (fn [_ idx]
+                              (let [p (nth due-projects idx)]
+                                (mgl/MongolListTile
+                                 .title (mgl/MongolText (.-content p)))))))])
+           (m/SizedBox))])
+       (m/SizedBox .width (comp/space :l))
+       (mgl/MongolElevatedButton
+        .onPressed (fn []
+                     (when (seq @content)
+                       (-> (review-svc/create-review {:type @review-type
+                                                      :content @content})
+                           (.then (fn [_]
+                                    (reset! content "")
+                                    (review-svc/refresh-reviews! @review-type))))))
+        .child (mgl/MongolText "Save"))
+       (m/SizedBox .width (comp/space :l))
+       (cond
+         loading (m/Center .child (m/CircularProgressIndicator))
+         (empty? reviews) (comp/mongol-text-block
+                           {:text "No reviews"
+                            :style (m/TextStyle .color (comp/color :text-weak))})
+         :else (m/ListView.builder
+                .itemCount (count reviews)
+                .itemBuilder (fn [_ idx]
+                               (let [r (nth reviews idx)]
+                                 (mgl/MongolListTile
+                                  .title (mgl/MongolText (.-content r))
+                                  .subtitle (mgl/MongolText (dt/format-date (.-createdAt r))))))))]))))
 
 ;; NOTE: Loading/refresh is handled by services; pages only subscribe to state and trigger refresh via buttons.
 
