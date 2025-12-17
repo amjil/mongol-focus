@@ -47,6 +47,9 @@ class Items extends Table {
   // preferred review interval in days (e.g. 7, 30); null means no automatic review reminder
   IntColumn get reviewIntervalDays => integer().nullable()();
 
+  // estimated duration in minutes
+  IntColumn get estimatedMinutes => integer().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -179,7 +182,7 @@ class AppDatabase extends _$AppDatabase {
       _perspectivesDao ??= PerspectivesDao(this);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -202,6 +205,11 @@ class AppDatabase extends _$AppDatabase {
           // Add review-related fields to Items table
           await m.addColumn(items, items.lastReviewedAt);
           await m.addColumn(items, items.reviewIntervalDays);
+        }
+        if (from < 4) {
+          // Migration from version 3 to 4
+          // Add estimated duration field to Items table
+          await m.addColumn(items, items.estimatedMinutes);
         }
       },
     );
@@ -272,12 +280,14 @@ class AppDatabase extends _$AppDatabase {
     String? status,
     DateTime? deferAt,
     DateTime? dueAt,
+    int? estimatedMinutes,
   ) async {
     final companion = ItemsCompanion(
       content: content != null ? Value(content) : const Value.absent(),
       status: status != null ? Value(status) : const Value.absent(),
       deferAt: deferAt != null ? Value(deferAt) : const Value.absent(),
       dueAt: dueAt != null ? Value(dueAt) : const Value.absent(),
+      estimatedMinutes: estimatedMinutes != null ? Value(estimatedMinutes) : const Value.absent(),
       updatedAt: Value(DateTime.now()),
     );
     await (update(items)..where((t) => t.id.equals(id))).write(companion);
@@ -323,6 +333,33 @@ class AppDatabase extends _$AppDatabase {
               t.updatedAt.isSmallerOrEqualValue(cutoff) &
               t.status.isNotValue('completed'))
           ..orderBy([(t) => OrderingTerm.asc(t.updatedAt)]))
+        .get();
+  }
+
+  // Get total estimated minutes for active tasks
+  Future<int> getTotalEstimatedMinutes() async {
+    final tasks = await (select(items)
+          ..where((t) =>
+              t.estimatedMinutes.isNotNull() &
+              t.status.isNotValue('completed')))
+        .get();
+    return tasks.fold<int>(
+      0,
+      (sum, task) => sum + (task.estimatedMinutes ?? 0),
+    );
+  }
+
+  // Get tasks ordered by estimated duration
+  Future<List<Item>> getTasksByEstimatedDuration({bool ascending = true}) async {
+    return (select(items)
+          ..where((t) =>
+              t.estimatedMinutes.isNotNull() &
+              t.status.isNotValue('completed'))
+          ..orderBy([
+            (t) => ascending
+                ? OrderingTerm.asc(t.estimatedMinutes)
+                : OrderingTerm.desc(t.estimatedMinutes)
+          ]))
         .get();
   }
 }

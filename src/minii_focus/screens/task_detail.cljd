@@ -18,7 +18,7 @@
    [minii-focus.states.app-state :as state]))
 
 (defn- actions
-  [ctx editing task-detail defer-state due-state content-state status-state editing-state]
+  [ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state]
   (if editing
     [(m/IconButton
       .icon (m/Icon m/Icons.check)
@@ -35,14 +35,15 @@
                 status-to-save (if valid? new-status old-status)
                 ^dart-core/DateTime? defer-dt @defer-state
                 ^dart-core/DateTime? due-dt @due-state
+                estimated-mins @estimated-minutes-state
                 ^#/(d/Value dart-core/DateTime?)
                 defer-value (if defer-dt
-                              (d/Value defer-dt)
-                              (d/Value nil))
+                             (d/Value defer-dt)
+                             (d/Value nil))
                 ^#/(d/Value dart-core/DateTime?)
                 due-value (if due-dt
-                            (d/Value due-dt)
-                            (d/Value nil))]
+                           (d/Value due-dt)
+                           (d/Value nil))]
             (when (not valid?)
               (dart-core/print
                (str "Invalid status change in edit from "
@@ -61,10 +62,11 @@
               (reset! editing-state false)
               ;; Then persist to database (auto-refresh happens in update-task)
               (-> (task/update-task (.-id task-detail)
-                                    @content-state
-                                    (name status-to-save)
-                                    @defer-state
-                                    @due-state)
+                                  @content-state
+                                  (name status-to-save)
+                                  @defer-state
+                                  @due-state
+                                  estimated-mins)
                   (.then (fn [_]
                            (task/refresh-task-detail! (.-id task-detail))))
                   (.catchError
@@ -82,7 +84,8 @@
           (reset! content-state (.-content task-detail))
           (reset! status-state (keyword (.-status task-detail)))
           (reset! defer-state (.-deferAt task-detail))
-          (reset! due-state (.-dueAt task-detail)))
+          (reset! due-state (.-dueAt task-detail))
+          (reset! estimated-minutes-state (.-estimatedMinutes task-detail)))
         nil))]
     [(m/IconButton
       .tooltip "Refresh"
@@ -97,6 +100,7 @@
           (reset! status-state (keyword (.-status task-detail)))
           (reset! defer-state (.-deferAt task-detail))
           (reset! due-state (.-dueAt task-detail))
+          (reset! estimated-minutes-state (.-estimatedMinutes task-detail))
           (reset! editing-state true))))]))
 
 (defn- elavated-buttons [ctx task-detail display-status]
@@ -238,6 +242,41 @@
                                 (.catchError (fn [error]
                                                (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
+(defn- estimated-duration-section [ctx task-detail display-estimated editing-state estimated-state]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Estimated Duration (minutes)"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (if @editing-state
+      (mgl/MongolTextField
+       .controller (m/TextEditingController
+                    .text (if-let [mins (display-estimated)]
+                           (str mins)
+                           ""))
+       .keyboardType m/TextInputType.number
+       .onChanged (fn [value]
+                   (try
+                     (if (empty? value)
+                       (reset! estimated-state nil)
+                       (let [parsed (dart-core/int.parse value)]
+                         (when (>= parsed 0)
+                           (reset! estimated-state parsed))))
+                     (catch dart-core/Exception _e
+                       nil)))
+       .decoration (m/InputDecoration
+                    .labelText "Minutes"
+                    .border (m/OutlineInputBorder)
+                    .hintText "0"))
+      (mgl/MongolTextButton
+       .onPressed (fn []
+                   (reset! editing-state true)
+                   nil)
+       .child (mgl/MongolText (if-let [mins (display-estimated)]
+                               (str mins " min")
+                               "Not set"))))]))
+
 (defn- defer-due-section [ctx task-detail display-defer display-due editing-state defer-state due-state]
   (m/SingleChildScrollView
    .child
@@ -258,7 +297,7 @@
                                 (when picked
                                   (if @editing-state
                                     (reset! defer-state picked)
-                                    (-> (task/update-task (.-id task-detail) nil nil picked nil)
+                                    (-> (task/update-task (.-id task-detail) nil nil picked nil nil)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Хойшлуулах огноог шинэчлэхэд алдаа гарлаа")))))))))
@@ -279,7 +318,7 @@
                                 (when picked
                                   (if @editing-state
                                     (reset! due-state picked)
-                                    (-> (task/update-task (.-id task-detail) nil nil nil picked)
+                                    (-> (task/update-task (.-id task-detail) nil nil nil picked nil)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Дуусах огноог шинэчлэхэд алдаа гарлаа")))))))))
@@ -317,6 +356,7 @@
                                             (-> (task/update-task (.-id task-detail)
                                                                   nil
                                                                   (name new-status)
+                                                                  nil
                                                                   nil
                                                                   nil)
                                                 (.then (fn []
@@ -418,7 +458,8 @@
         content-state (atom "")
         status-state (atom :active)
         defer-state (atom nil)
-        due-state (atom nil)]
+        due-state (atom nil)
+        estimated-minutes-state (atom nil)]
     (f/widget
      :context ctx
      :watch [{task-detail :task-detail
@@ -431,15 +472,17 @@
              content content-state
              status status-state
              defer defer-state
-             due due-state]
+             due due-state
+             estimated-minutes estimated-minutes-state]
      :let [display-content #(if editing content (or (some-> task-detail .-content) ""))
            display-status #(if editing status (or (some-> task-detail .-status keyword) :active))
            display-defer #(if editing defer (some-> task-detail .-deferAt))
-           display-due #(if editing due (some-> task-detail .-dueAt))]
+           display-due #(if editing due (some-> task-detail .-dueAt))
+           display-estimated #(if editing estimated-minutes (some-> task-detail .-estimatedMinutes))]
        (m/Scaffold
         .appBar (m/AppBar
                  .actions
-                 (actions ctx editing task-detail defer-state due-state content-state status-state editing-state))
+                 (actions ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state))
         .body (cond
                 loading (m/Center .child (m/CircularProgressIndicator))
                 (nil? task-detail) (m/Center
@@ -474,6 +517,8 @@
                             (status-section ctx task-detail display-status editing-state status-state)
                             (m/SizedBox .width (comp/space :l))
                             (defer-due-section ctx task-detail display-defer display-due editing-state defer-state due-state)
+                            (m/SizedBox .width (comp/space :l))
+                            (estimated-duration-section ctx task-detail display-estimated editing-state estimated-minutes-state)
                             (m/SizedBox .width (comp/space :l))
                             (flagged-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))

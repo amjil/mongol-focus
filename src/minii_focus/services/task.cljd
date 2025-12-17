@@ -51,8 +51,15 @@
            (let [current-status (some-> task .-status keyword)
                  target-status (keyword new-status)]
              (if (valid-status-transition? current-status target-status)
-               (let [^drift/AppDatabase database (db/get-database)]
-                 (.updateTask database id nil new-status nil nil))
+               (let [^drift/AppDatabase database (db/get-database)
+                     now (dart-core/DateTime.now)
+                     companion (drift/ItemsCompanion.
+                                .status (d/Value new-status)
+                                .updatedAt (d/Value now))]
+                 (.go
+                  (doto (.update database (.-items database))
+                    (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))
+                    (.write companion))))
                (do
                  (dart-core/print
                   (str "Invalid task status transition: "
@@ -70,29 +77,36 @@
 
 (defn create-task
   "Create new task"
-  [^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at]
-  (let [^drift/AppDatabase database (db/get-database)
-        ^String task-id (ids/generate-id)
-        ^String task-type (or type "task")
-        ^String task-status (or status "active")
-        now (dart-core/DateTime.now)
-        ^#/(d/Value dart-core/DateTime?) 
-        defer-value (if (some? defer-at)
-                     (d/Value defer-at)
-                     (d/Value nil))
-        ^#/(d/Value dart-core/DateTime?) 
-        due-value (if due-at
-                   (d/Value due-at)
-                   (d/Value nil))
-        companion (drift/ItemsCompanion.insert
-                   .id task-id
-                   .type task-type
-                   .content content
-                   .status (d/Value task-status)
-                   .deferAt defer-value
-                   .dueAt due-value
-                   .createdAt (d/Value now)
-                   .updatedAt (d/Value now))]
+  ([^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at]
+   (create-task content type status defer-at due-at nil))
+  ([^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at estimated-minutes]
+   (let [^drift/AppDatabase database (db/get-database)
+         ^String task-id (ids/generate-id)
+         ^String task-type (or type "task")
+         ^String task-status (or status "active")
+         now (dart-core/DateTime.now)
+         ^#/(d/Value dart-core/DateTime?) 
+         defer-value (if (some? defer-at)
+                      (d/Value defer-at)
+                      (d/Value nil))
+         ^#/(d/Value dart-core/DateTime?) 
+         due-value (if due-at
+                    (d/Value due-at)
+                    (d/Value nil))
+         ^#/(d/Value int?)
+         estimated-value (if (some? estimated-minutes)
+                          (d/Value estimated-minutes)
+                          (d/Value nil))
+         companion (drift/ItemsCompanion.insert
+                    .id task-id
+                    .type task-type
+                    .content content
+                    .status (d/Value task-status)
+                    .deferAt defer-value
+                    .dueAt due-value
+                    .estimatedMinutes estimated-value
+                    .createdAt (d/Value now)
+                    .updatedAt (d/Value now))]
     (-> (.insert
          (.into database (.-items database))
          companion)
@@ -102,20 +116,22 @@
                  nil))
         (.catchError (fn [error]
                       (toast/handle-error-global error "Ажлыг үүсгэхэд алдаа гарлаа")
-                      (dart-core/Future.value nil))))))
+                      (dart-core/Future.value nil)))))))
 
 (defn update-task
   "Update task with automatic refresh of related pages"
-  [id content status defer-at due-at]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (-> (.updateTask database id content status defer-at due-at)
-        (.then (fn [_]
-                 ;; Update reminders when task is modified
-                 (update-task-reminders id)
-                 nil))
-        (.catchError (fn [error]
-                      (toast/handle-error-global error "Ажлыг шинэчлэхэд алдаа гарлаа")
-                      (dart-core/Future.value nil))))))
+  ([id content status defer-at due-at]
+   (update-task id content status defer-at due-at nil))
+  ([id content status defer-at due-at estimated-minutes]
+   (let [^drift/AppDatabase database (db/get-database)]
+     (-> (.updateTask database id content status defer-at due-at estimated-minutes)
+         (.then (fn [_]
+                  ;; Update reminders when task is modified
+                  (update-task-reminders id)
+                  nil))
+         (.catchError (fn [error]
+                       (toast/handle-error-global error "Ажлыг шинэчлэхэд алдаа гарлаа")
+                       (dart-core/Future.value nil)))))))
 
 (defn delete-task
   "Delete task with cascade deletion of related data (ItemTree, ItemTags)"
@@ -559,4 +575,18 @@
   []
   (let [^drift/AppDatabase database (db/get-database)]
     (.getStalledTasks database)))
+
+(defn get-total-estimated-minutes
+  "Get total estimated minutes for all active tasks"
+  []
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getTotalEstimatedMinutes database)))
+
+(defn get-tasks-by-estimated-duration
+  "Get tasks ordered by estimated duration"
+  ([]
+   (get-tasks-by-estimated-duration true))
+  ([ascending]
+   (let [^drift/AppDatabase database (db/get-database)]
+     (.getTasksByEstimatedDuration database .ascending ascending))))
 

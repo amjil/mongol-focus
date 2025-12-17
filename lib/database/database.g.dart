@@ -142,6 +142,17 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _estimatedMinutesMeta = const VerificationMeta(
+    'estimatedMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> estimatedMinutes = GeneratedColumn<int>(
+    'estimated_minutes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -180,6 +191,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     recurrenceEndDate,
     lastReviewedAt,
     reviewIntervalDays,
+    estimatedMinutes,
     createdAt,
     updatedAt,
   ];
@@ -282,6 +294,15 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         ),
       );
     }
+    if (data.containsKey('estimated_minutes')) {
+      context.handle(
+        _estimatedMinutesMeta,
+        estimatedMinutes.isAcceptableOrUnknown(
+          data['estimated_minutes']!,
+          _estimatedMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -351,6 +372,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         DriftSqlType.int,
         data['${effectivePrefix}review_interval_days'],
       ),
+      estimatedMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}estimated_minutes'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -381,6 +406,7 @@ class Item extends DataClass implements Insertable<Item> {
   final DateTime? recurrenceEndDate;
   final DateTime? lastReviewedAt;
   final int? reviewIntervalDays;
+  final int? estimatedMinutes;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Item({
@@ -396,6 +422,7 @@ class Item extends DataClass implements Insertable<Item> {
     this.recurrenceEndDate,
     this.lastReviewedAt,
     this.reviewIntervalDays,
+    this.estimatedMinutes,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -425,6 +452,9 @@ class Item extends DataClass implements Insertable<Item> {
     }
     if (!nullToAbsent || reviewIntervalDays != null) {
       map['review_interval_days'] = Variable<int>(reviewIntervalDays);
+    }
+    if (!nullToAbsent || estimatedMinutes != null) {
+      map['estimated_minutes'] = Variable<int>(estimatedMinutes);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -457,6 +487,9 @@ class Item extends DataClass implements Insertable<Item> {
       reviewIntervalDays: reviewIntervalDays == null && nullToAbsent
           ? const Value.absent()
           : Value(reviewIntervalDays),
+      estimatedMinutes: estimatedMinutes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(estimatedMinutes),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -482,6 +515,7 @@ class Item extends DataClass implements Insertable<Item> {
       ),
       lastReviewedAt: serializer.fromJson<DateTime?>(json['lastReviewedAt']),
       reviewIntervalDays: serializer.fromJson<int?>(json['reviewIntervalDays']),
+      estimatedMinutes: serializer.fromJson<int?>(json['estimatedMinutes']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -502,6 +536,7 @@ class Item extends DataClass implements Insertable<Item> {
       'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
       'lastReviewedAt': serializer.toJson<DateTime?>(lastReviewedAt),
       'reviewIntervalDays': serializer.toJson<int?>(reviewIntervalDays),
+      'estimatedMinutes': serializer.toJson<int?>(estimatedMinutes),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -520,6 +555,7 @@ class Item extends DataClass implements Insertable<Item> {
     Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<DateTime?> lastReviewedAt = const Value.absent(),
     Value<int?> reviewIntervalDays = const Value.absent(),
+    Value<int?> estimatedMinutes = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Item(
@@ -543,6 +579,9 @@ class Item extends DataClass implements Insertable<Item> {
     reviewIntervalDays: reviewIntervalDays.present
         ? reviewIntervalDays.value
         : this.reviewIntervalDays,
+    estimatedMinutes: estimatedMinutes.present
+        ? estimatedMinutes.value
+        : this.estimatedMinutes,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -568,6 +607,9 @@ class Item extends DataClass implements Insertable<Item> {
       reviewIntervalDays: data.reviewIntervalDays.present
           ? data.reviewIntervalDays.value
           : this.reviewIntervalDays,
+      estimatedMinutes: data.estimatedMinutes.present
+          ? data.estimatedMinutes.value
+          : this.estimatedMinutes,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -588,6 +630,7 @@ class Item extends DataClass implements Insertable<Item> {
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
           ..write('reviewIntervalDays: $reviewIntervalDays, ')
+          ..write('estimatedMinutes: $estimatedMinutes, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -608,6 +651,7 @@ class Item extends DataClass implements Insertable<Item> {
     recurrenceEndDate,
     lastReviewedAt,
     reviewIntervalDays,
+    estimatedMinutes,
     createdAt,
     updatedAt,
   );
@@ -627,6 +671,7 @@ class Item extends DataClass implements Insertable<Item> {
           other.recurrenceEndDate == this.recurrenceEndDate &&
           other.lastReviewedAt == this.lastReviewedAt &&
           other.reviewIntervalDays == this.reviewIntervalDays &&
+          other.estimatedMinutes == this.estimatedMinutes &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -644,6 +689,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
   final Value<DateTime?> recurrenceEndDate;
   final Value<DateTime?> lastReviewedAt;
   final Value<int?> reviewIntervalDays;
+  final Value<int?> estimatedMinutes;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -660,6 +706,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.recurrenceEndDate = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
     this.reviewIntervalDays = const Value.absent(),
+    this.estimatedMinutes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -677,6 +724,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.recurrenceEndDate = const Value.absent(),
     this.lastReviewedAt = const Value.absent(),
     this.reviewIntervalDays = const Value.absent(),
+    this.estimatedMinutes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -696,6 +744,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Expression<DateTime>? recurrenceEndDate,
     Expression<DateTime>? lastReviewedAt,
     Expression<int>? reviewIntervalDays,
+    Expression<int>? estimatedMinutes,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -714,6 +763,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       if (lastReviewedAt != null) 'last_reviewed_at': lastReviewedAt,
       if (reviewIntervalDays != null)
         'review_interval_days': reviewIntervalDays,
+      if (estimatedMinutes != null) 'estimated_minutes': estimatedMinutes,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -733,6 +783,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Value<DateTime?>? recurrenceEndDate,
     Value<DateTime?>? lastReviewedAt,
     Value<int?>? reviewIntervalDays,
+    Value<int?>? estimatedMinutes,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -750,6 +801,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
       reviewIntervalDays: reviewIntervalDays ?? this.reviewIntervalDays,
+      estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -795,6 +847,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     if (reviewIntervalDays.present) {
       map['review_interval_days'] = Variable<int>(reviewIntervalDays.value);
     }
+    if (estimatedMinutes.present) {
+      map['estimated_minutes'] = Variable<int>(estimatedMinutes.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -822,6 +877,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('lastReviewedAt: $lastReviewedAt, ')
           ..write('reviewIntervalDays: $reviewIntervalDays, ')
+          ..write('estimatedMinutes: $estimatedMinutes, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3071,6 +3127,7 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<DateTime?> recurrenceEndDate,
       Value<DateTime?> lastReviewedAt,
       Value<int?> reviewIntervalDays,
+      Value<int?> estimatedMinutes,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -3089,6 +3146,7 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<DateTime?> recurrenceEndDate,
       Value<DateTime?> lastReviewedAt,
       Value<int?> reviewIntervalDays,
+      Value<int?> estimatedMinutes,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -3159,6 +3217,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<int> get reviewIntervalDays => $composableBuilder(
     column: $table.reviewIntervalDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get estimatedMinutes => $composableBuilder(
+    column: $table.estimatedMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3242,6 +3305,11 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get estimatedMinutes => $composableBuilder(
+    column: $table.estimatedMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3306,6 +3374,11 @@ class $$ItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get estimatedMinutes => $composableBuilder(
+    column: $table.estimatedMinutes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -3353,6 +3426,7 @@ class $$ItemsTableTableManager
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<DateTime?> lastReviewedAt = const Value.absent(),
                 Value<int?> reviewIntervalDays = const Value.absent(),
+                Value<int?> estimatedMinutes = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3369,6 +3443,7 @@ class $$ItemsTableTableManager
                 recurrenceEndDate: recurrenceEndDate,
                 lastReviewedAt: lastReviewedAt,
                 reviewIntervalDays: reviewIntervalDays,
+                estimatedMinutes: estimatedMinutes,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -3387,6 +3462,7 @@ class $$ItemsTableTableManager
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<DateTime?> lastReviewedAt = const Value.absent(),
                 Value<int?> reviewIntervalDays = const Value.absent(),
+                Value<int?> estimatedMinutes = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3403,6 +3479,7 @@ class $$ItemsTableTableManager
                 recurrenceEndDate: recurrenceEndDate,
                 lastReviewedAt: lastReviewedAt,
                 reviewIntervalDays: reviewIntervalDays,
+                estimatedMinutes: estimatedMinutes,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
