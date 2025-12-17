@@ -46,6 +46,7 @@
          .padding (m/EdgeInsets.all (comp/space :m))
          .child
          (m/SingleChildScrollView
+          .scrollDirection m/Axis.horizontal
           .child
           (m/Row
            .crossAxisAlignment m/CrossAxisAlignment.start
@@ -90,25 +91,28 @@
                {:text "No tags"
                 :style (m/TextStyle .color (comp/color :text-weak))})
               (m/Wrap
+               .direction m/Axis.vertical
                .spacing (comp/space :s)
                .runSpacing (comp/space :s)
                .children
                (map (fn [t]
                       (let [tid (.-id t)
                             selected? (contains? @selected-tags tid)]
-                        (m/FilterChip
-                         .label (m/Text (.-name t))
-                         .selected selected?
-                         .onSelected (fn [v]
-                                       (if v
-                                         (do
-                                           (swap! selected-tags conj tid)
-                                           (tag-svc/refresh-tagged-items! (vec (conj @selected-tags tid)) @filter-mode))
-                                         (do
-                                           (swap! selected-tags disj tid)
-                                           (if (seq (disj @selected-tags tid))
-                                             (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
-                                             (state/set-tagged-items! []))))))))
+                        (m/RotatedBox
+                         .quarterTurns 1
+                         .child (m/FilterChip
+                                 .label (m/Text (.-name t))
+                                 .selected selected?
+                                 .onSelected (fn [v]
+                                               (if v
+                                                 (do
+                                                   (swap! selected-tags conj tid)
+                                                   (tag-svc/refresh-tagged-items! (vec (conj @selected-tags tid)) @filter-mode))
+                                                 (do
+                                                   (swap! selected-tags disj tid)
+                                                   (if (seq (disj @selected-tags tid))
+                                                     (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
+                                                     (state/set-tagged-items! [])))))))))
                     tags)))
             (m/SizedBox .width (comp/space :l))
             (comp/mongol-text-block
@@ -127,7 +131,7 @@
                   (when (and (seq tagged-items) (empty? @tasks-with-info))
                     (-> (task/get-tasks-with-blocked-info tagged-items)
                         (.then (fn [info-list]
-                                (reset! tasks-with-info info-list)))
+                                 (reset! tasks-with-info info-list)))
                         (.catchError (fn [e]
                                        (dart-core/print (str "Error loading blocked info: " e))))))
                   (m/Expanded

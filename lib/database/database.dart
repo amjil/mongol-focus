@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'connection/connection.dart' as impl;
 import 'perspectives_dao.dart';
+import 'tags_dao.dart';
 
 part 'database.g.dart';
 
@@ -180,6 +181,9 @@ class AppDatabase extends _$AppDatabase {
   PerspectivesDao? _perspectivesDao;
   PerspectivesDao get perspectivesDao =>
       _perspectivesDao ??= PerspectivesDao(this);
+
+  TagsDao? _tagsDao;
+  TagsDao get tagsDao => _tagsDao ??= TagsDao(this);
 
   @override
   int get schemaVersion => 4;

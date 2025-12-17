@@ -2,9 +2,7 @@
   "Tag management service"
   (:require
    ["dart:core" :as dart-core]
-   ["package:drift/drift.dart" :as d]
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
-   [clojure.set :as set]
    [minii-focus.services.database :as db]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]
@@ -19,53 +17,48 @@
   [{:keys [name parent-id]}]
   (let [^drift/AppDatabase database (db/get-database)
         tag-id (ids/generate-id)
-        companion (drift/TagsCompanion.insert
-                   .id tag-id
-                   .name name
-                   .parentId (when parent-id (d/Value parent-id)))]
-    (.insert
-     (.into database (.-tags database))
-     companion)
-    tag-id))
+        tags-dao (.-tagsDao database)
+        create-future (if parent-id
+                        (.createTag tags-dao tag-id name .parentId parent-id)
+                        (.createTag tags-dao tag-id name))]
+    (-> create-future
+        (.then (fn [_] tag-id)))))
 
 (defn update-tag
   "Update tag"
   [id {:keys [name parent-id]}]
   (let [^drift/AppDatabase database (db/get-database)
-        query (doto (.update database (.-tags database))
-                (.where (fn [^drift/Tags tbl] (.equals (.-id tbl) id))))
-        companion (drift/TagsCompanion.
-                   .name (when name (d/Value name))
-                   .parentId (when parent-id (d/Value parent-id)))]
-    (.write query companion)))
+        tags-dao (.-tagsDao database)]
+    (cond
+      (and name parent-id)
+      (.updateTag tags-dao id .name name .parentId parent-id)
+      name
+      (.updateTag tags-dao id .name name)
+      parent-id
+      (.updateTag tags-dao id .parentId parent-id)
+      :else
+      (.updateTag tags-dao id))))
 
 (defn delete-tag
   "Delete tag (also deletes associations)"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    ;; First delete associations
-    (.go
-     (doto (.delete database (.-itemTags database))
-       (.where (fn [^drift/ItemTags tbl] (.equals (.-tagId tbl) id)))))
-    ;; Then delete tag
-    (.go
-     (doto (.delete database (.-tags database))
-       (.where (fn [^drift/Tags tbl] (.equals (.-id tbl) id)))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.deleteTag tags-dao id)))
 
 (defn get-tag-by-id
   "Get tag by ID"
   [id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.getSingleOrNull
-     (doto (.select database (.-tags database))
-       (.where (fn [^drift/Tags tbl] (.equals (.-id tbl) id)))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.getTagById tags-dao id)))
 
 (defn get-all-tags
   "Get all tags"
   []
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.get
-     (doto (.select database (.-tags database))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.getAllTags tags-dao)))
 
 ;; =============================================================================
 ;; Page data loading/refresh (side effects in service)
@@ -87,10 +80,9 @@
 (defn get-tags-by-parent
   "Get all child tags of specified parent tag"
   [parent-id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.get
-     (doto (.select database (.-tags database))
-       (.where (fn [^drift/Tags tbl] (.equals (.-parentId tbl) parent-id)))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.getTagsByParent tags-dao parent-id)))
 
 ;; =============================================================================
 ;; Tag and task associations
@@ -100,52 +92,38 @@
   "Add tag to task"
   [item-id tag-id]
   (let [^drift/AppDatabase database (db/get-database)
-        companion (drift/ItemTagsCompanion.insert
-                   .itemId item-id
-                   .tagId tag-id)]
-    (.insert
-     (.into database (.-itemTags database))
-     companion)))
+        tags-dao (.-tagsDao database)]
+    (.addTagToItem tags-dao item-id tag-id)))
 
 (defn remove-tag-from-item
   "Remove tag from task"
   [item-id tag-id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.go
-     (doto (.delete database (.-itemTags database))
-       (.where (fn [^drift/ItemTags tbl]
-                 (and (.equals (.-itemId tbl) item-id)
-                      (.equals (.-tagId tbl) tag-id))))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.removeTagFromItem tags-dao item-id tag-id)))
 
 (defn get-item-tags
   "Get all tags of a task"
   [item-id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.get
-     (doto (.select database (.-itemTags database))
-       (.where (fn [^drift/ItemTags tbl] (.equals (.-itemId tbl) item-id)))))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.getItemTags tags-dao item-id)))
 
 (defn get-items-by-tag
   "Get all tasks by tag"
   [tag-id]
-  (let [^drift/AppDatabase database (db/get-database)]
-    (.get
-     (doto (.select database (.-items database))
-       (.join [(fn [items item-tags]
-                 (and (.equals (.-id items) (.-itemId item-tags))
-                      (.equals (.-tagId item-tags) tag-id)))])))))
+  (let [^drift/AppDatabase database (db/get-database)
+        tags-dao (.-tagsDao database)]
+    (.getItemsByTag tags-dao tag-id)))
 
 (defn get-items-by-tags
   "Get all tasks that have any of the specified tags (OR logic)"
   [tag-ids]
   (if (empty? tag-ids)
     (dart-core/Future.value [])
-    (let [^drift/AppDatabase database (db/get-database)]
-      (.get
-       (doto (.select database (.-items database))
-         (.join [(fn [items item-tags]
-                   (and (.equals (.-id items) (.-itemId item-tags))
-                        (.isIn (.-tagId item-tags) tag-ids)))]))))))
+    (let [^drift/AppDatabase database (db/get-database)
+          tags-dao (.-tagsDao database)]
+      (.getItemsByTags tags-dao tag-ids))))
 
 (defn get-items-by-all-tags
   "Get all tasks that have all of the specified tags (AND logic)"
@@ -153,23 +131,8 @@
   (if (empty? tag-ids)
     (dart-core/Future.value [])
     (let [^drift/AppDatabase database (db/get-database)
-          ;; Get items for each tag separately, then find intersection
-          tag-queries (map (fn [tag-id]
-                           (.get
-                            (doto (.select database (.-items database))
-                              (.join [(fn [items item-tags]
-                                        (and (.equals (.-id items) (.-itemId item-tags))
-                                             (.equals (.-tagId item-tags) tag-id)))]))))
-                         tag-ids)]
-      (-> (dart-core/Future.wait tag-queries)
-          (.then (fn [results]
-                  ;; Find intersection of all tag results
-                  (if (empty? results)
-                    []
-                    (let [id-sets (map (fn [items] (set (map (fn [item] (.-id item)) items))) results)
-                          common-ids (reduce (fn [acc s] (set/intersection acc s)) (first id-sets) (rest id-sets))
-                          all-items (reduce concat results)]
-                      (filter (fn [item] (contains? common-ids (.-id item))) all-items)))))))))
+          tags-dao (.-tagsDao database)]
+      (.getItemsByAllTags tags-dao tag-ids))))
 
 (defn refresh-tagged-items!
   "Refresh items filtered by tag(s) and write to app-state"
