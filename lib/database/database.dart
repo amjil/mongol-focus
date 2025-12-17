@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'connection/connection.dart' as impl;
+import 'perspectives_dao.dart';
 
 part 'database.g.dart';
 
@@ -165,6 +166,11 @@ class Perspectives extends Table {
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
+
+  // DAO instances
+  PerspectivesDao? _perspectivesDao;
+  PerspectivesDao get perspectivesDao =>
+      _perspectivesDao ??= PerspectivesDao(this);
 
   @override
   int get schemaVersion => 2;
