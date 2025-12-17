@@ -320,7 +320,7 @@
                                {:text "Recurrence"
                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
                               (m/SizedBox .height (comp/space :s))
-                              (m/TextButton
+                              (mgl/MongolTextButton
                                .onPressed (fn []
                                             (when task-detail
                                               (m/showDialog
@@ -331,27 +331,27 @@
                                                            (m/AlertDialog
                                                             .title (mgl/MongolText "Set Recurrence")
                                                             .content (m/Container
-                                                                     .width 300
-                                                                     .height 200
-                                                                     .child (m/ListView
-                                                                             .children
-                                                                             (map (fn [option]
-                                                                                    (m/ListTile
-                                                                                     .title (mgl/MongolText option)
-                                                                                     .selected (= option current-rule)
-                                                                                     .onTap (fn []
-                                                                                             (let [rule (if (= option "None") nil (str/lower-case option))]
-                                                                                               (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
-                                                                                                   (.then (fn []
-                                                                                                           (task/refresh-task-detail! (.-id task-detail))
-                                                                                                           (m/Navigator.pop dialog-ctx)))
-                                                                                                   (.catchError (fn [error]
-                                                                                                                 (dart-core/print (str "Error setting recurrence: " error)))))))))
-                                                                                  recurrence-options))))
+                                                                      .width 300
+                                                                      .height 200
+                                                                      .child (m/ListView
+                                                                              .children
+                                                                              (map (fn [option]
+                                                                                     (m/ListTile
+                                                                                      .title (mgl/MongolText option)
+                                                                                      .selected (= option current-rule)
+                                                                                      .onTap (fn []
+                                                                                               (let [rule (if (= option "None") nil (str/lower-case option))]
+                                                                                                 (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
+                                                                                                     (.then (fn []
+                                                                                                              (task/refresh-task-detail! (.-id task-detail))
+                                                                                                              (m/Navigator.pop dialog-ctx)))
+                                                                                                     (.catchError (fn [error]
+                                                                                                                    (dart-core/print (str "Error setting recurrence: " error)))))))))
+                                                                                   recurrence-options)))
                                                             .actions [(m/TextButton
                                                                        .onPressed (fn [] (m/Navigator.pop dialog-ctx))
                                                                        .child (m/Text "Cancel"))]))))))
-                               .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None"))])
+                               .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])
                             (m/SizedBox .width (comp/space :l))
                             (m/Column
                              .crossAxisAlignment m/CrossAxisAlignment.center
