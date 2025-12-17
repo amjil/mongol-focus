@@ -100,19 +100,39 @@
                             selected? (contains? @selected-tags tid)]
                         (m/RotatedBox
                          .quarterTurns 1
-                         .child (m/FilterChip
-                                 .label (m/Text (.-name t))
-                                 .selected selected?
-                                 .onSelected (fn [v]
-                                               (if v
-                                                 (do
-                                                   (swap! selected-tags conj tid)
-                                                   (tag-svc/refresh-tagged-items! (vec (conj @selected-tags tid)) @filter-mode))
-                                                 (do
-                                                   (swap! selected-tags disj tid)
-                                                   (if (seq (disj @selected-tags tid))
-                                                     (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
-                                                     (state/set-tagged-items! [])))))))))
+                         .child (m/Row
+                                 .mainAxisSize m/MainAxisSize.min
+                                 .children
+                                 [(m/FilterChip
+                                   .label (m/Text (.-name t))
+                                   .selected selected?
+                                   .onSelected (fn [v]
+                                                 (if v
+                                                   (do
+                                                     (swap! selected-tags conj tid)
+                                                     (tag-svc/refresh-tagged-items! (vec (conj @selected-tags tid)) @filter-mode))
+                                                   (do
+                                                     (swap! selected-tags disj tid)
+                                                     (if (seq (disj @selected-tags tid))
+                                                       (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
+                                                       (state/set-tagged-items! []))))))
+                                  (m/IconButton
+                                   .icon (m/Icon m/Icons.delete)
+                                   .iconSize 18
+                                   .color m/Colors.red
+                                   .onPressed (fn []
+                                                (-> (tag-svc/delete-tag tid)
+                                                    (.then (fn []
+                                                             ;; Remove from selected tags if it was selected
+                                                             (swap! selected-tags disj tid)
+                                                             ;; Refresh tag list
+                                                             (tag-svc/refresh-tags!)
+                                                             ;; Refresh tagged items if any tags are still selected
+                                                             (if (seq (disj @selected-tags tid))
+                                                               (tag-svc/refresh-tagged-items! (vec (disj @selected-tags tid)) @filter-mode)
+                                                               (state/set-tagged-items! []))))
+                                                    (.catchError (fn [error]
+                                                                   (dart-core/print (str "Error deleting tag: " error)))))))]))))
                     tags)))
             (m/SizedBox .width (comp/space :l))
             (comp/mongol-text-block
