@@ -7,7 +7,8 @@
    [minii-focus.services.database :as db]
    [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
-   [minii-focus.utils.ids :as ids]))
+   [minii-focus.utils.ids :as ids]
+   [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
 ;; Review record CRUD operations
@@ -120,7 +121,7 @@
                (state/set-reviews-loading! false)
                rows))
       (.catchError (fn [e]
-                     (dart-core/print (str "Error refreshing reviews: " e))
+                     (toast/handle-error-global e "Хяналтыг шинэчлэхэд алдаа гарлаа")
                      (state/set-reviews-loading! false)))))
 
 (defn- next-review-date
@@ -161,7 +162,7 @@
                (state/set-review-due-projects! projects)
                projects))
       (.catchError (fn [e]
-                     (dart-core/print (str "Error refreshing due review projects: " e))
+                     (toast/handle-error-global e "Хяналт хийх төслүүдийг шинэчлэхэд алдаа гарлаа")
                      (dart-core/Future.value [])))))
 
 (defn schedule-project-review-reminder
@@ -196,6 +197,6 @@
                  (dart-core/Future.wait
                   (map schedule-project-review-reminder projects))))
         (.catchError (fn [e]
-                       (dart-core/print (str "Error refreshing project review reminders: " e))
+                       (toast/handle-error-global e "Төслийн хяналтын эргэн санах хувилбарыг шинэчлэхэд алдаа гарлаа")
                        (dart-core/Future.value nil))))))
 

@@ -8,7 +8,8 @@
    [minii-focus.services.task :as task]
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.tag :as tag-svc]
-   [minii-focus.utils.ids :as ids]))
+   [minii-focus.utils.ids :as ids]
+   [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
 ;; Recurrence rule parsing and validation
@@ -144,7 +145,7 @@
                       (map create-next-occurrence completed-tasks))
                      (dart-core/Future.value [])))))
         (.catchError (fn [error]
-                       (dart-core/print (str "Error processing recurring tasks: " error))
+                       (toast/handle-error-global error "Давтагдах ажлыг боловсруулахад алдаа гарлаа")
                        (dart-core/Future.value []))))))
 
 (defn check-and-create-recurrences
@@ -161,6 +162,6 @@
                       (map create-next-occurrence tasks-to-process))
                      (dart-core/Future.value [])))))
         (.catchError (fn [error]
-                       (dart-core/print (str "Error checking recurrences: " error))
+                       (toast/handle-error-global error "Давтагдах ажлыг шалгахад алдаа гарлаа")
                        (dart-core/Future.value []))))))
 

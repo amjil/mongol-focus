@@ -15,13 +15,13 @@
 
 
 (defn- build-filter-conditions
-  "根据本地 UI 状态构建透视过滤条件 Map。
-   - selected-statuses: Clojure 集合/序列，元素为状态字符串
-   - only-flagged?: 是否仅显示已加星任务
-   - selected-tags: Clojure 集合/序列，元素为 tag id 字符串
+  "Build perspective filter conditions Map from local UI state.
+   - selected-statuses: Clojure set/sequence, elements are status strings
+   - only-flagged?: whether to show only flagged tasks
+   - selected-tags: Clojure set/sequence, elements are tag id strings
    - tags-mode: :or / :and
-   - due-soon?: 是否启用 '3 日内到期' 过滤
-   - overdue?: 是否启用 '已逾期' 过滤"
+   - due-soon?: whether to enable 'due within 3 days' filter
+   - overdue?: whether to enable 'overdue' filter"
   [{:keys [selected-statuses only-flagged? selected-tags tags-mode due-soon? overdue?]}]
   (let [m {}
         m (if (seq selected-statuses)
@@ -55,7 +55,7 @@
                               (convert/jsonDecode filter-conditions-str))
                             (catch Exception _ex
                               {"status" ["active"]}))
-        ;; 从已有 filter-conditions 中恢复 UI 状态
+        ;; Restore UI state from existing filter-conditions
         existing-statuses (let [v (get filter-conditions "status")]
                             (if (and v (seq v))
                               (set v)
@@ -73,7 +73,7 @@
         due-soon? (atom (boolean (get filter-conditions "dueSoon")))
         overdue? (atom (boolean (get filter-conditions "overdue")))
         name-controller (m/TextEditingController .text (.-name perspective))
-        ;; 可选状态列表（与 Items.status 约定保持一致）
+        ;; Available status list (consistent with Items.status convention)
         status-options [["active" "Active"]
                         ["blocked" "Blocked"]
                         ["completed" "Completed"]
@@ -135,7 +135,7 @@
                           .onChanged (fn [v] (reset! group-by-state v))
                           .valueBuilder (fn [v] (mgl/MongolText (or v ""))))
                          (m/SizedBox .width (comp/space :s))
-                         ;; 状态过滤
+                         ;; Status filter
                          (m/Column
                           .crossAxisAlignment m/CrossAxisAlignment.start
                           .children
@@ -156,13 +156,13 @@
                                                       (swap! selected-statuses disj status-key))))))
                                  status-options))])
                          (m/SizedBox .width (comp/space :s))
-                         ;; 仅已加星
+                         ;; Flagged only
                          (m/FilterChip
                           .label (m/Text "Flagged only")
                           .selected @only-flagged?
                           .onSelected (fn [v] (reset! only-flagged? v)))
                          (m/SizedBox .width (comp/space :s))
-                         ;; 标签过滤
+                         ;; Tag filter
                          (m/Column
                           .crossAxisAlignment m/CrossAxisAlignment.start
                           .children
@@ -203,7 +203,7 @@
                               .onSelected (fn [v]
                                             (when v (reset! tags-mode :and))))])])
                          (m/SizedBox .width (comp/space :s))
-                         ;; 日期范围过滤
+                         ;; Date range filter
                          (m/Column
                           .crossAxisAlignment m/CrossAxisAlignment.start
                           .children
@@ -303,7 +303,7 @@
           perspectives))))
 
 (defn- create-perspective-section [name-state tags]
-  (let [;; 过滤条件本地状态
+  (let [;; Local state for filter conditions
         selected-statuses (atom #{"active"})
         only-flagged? (atom false)
         selected-tags (atom #{})
@@ -333,7 +333,7 @@
                        ;; .hintText "Perspective name"
                        .onChanged (fn [v] (reset! name-state v)))))
       (m/SizedBox .height (comp/space :s))
-      ;; 状态过滤
+      ;; Status filter
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.start
        .children
@@ -354,13 +354,13 @@
                                    (swap! selected-statuses disj status-key))))))
               status-options))])
       (m/SizedBox .height (comp/space :s))
-      ;; 仅已加星
+      ;; Flagged only
       (m/FilterChip
        .label (m/Text "Flagged only")
        .selected @only-flagged?
        .onSelected (fn [v] (reset! only-flagged? v)))
       (m/SizedBox .height (comp/space :s))
-      ;; 标签过滤
+      ;; Tag filter
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.start
        .children
@@ -401,7 +401,7 @@
            .onSelected (fn [v]
                          (when v (reset! tags-mode :and))))])])
       (m/SizedBox .height (comp/space :s))
-      ;; 日期范围过滤
+      ;; Date range filter
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.start
        .children

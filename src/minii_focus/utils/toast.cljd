@@ -2,7 +2,9 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
-   ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]))
+   ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
+   ["dart:core" :as dart-core]
+   [minii-focus.states.app-state :as state]))
 
 ;; Toast helper methods, reference mgl-notes-app
 
@@ -68,4 +70,61 @@
 
 (defn handle-warning-with-toast [ctx msg]
   (show-warning-toast ctx msg))
+
+;; =============================================================================
+;; Global context helpers for service layer error handling
+;; =============================================================================
+
+(defn- get-global-context
+  "Try to get BuildContext from global navigator key"
+  []
+  (when-let [navigator-state (.-currentState state/navigator-key)]
+    (.-context navigator-state)))
+
+(defn show-error-toast-global
+  "Show error toast using global context if available, otherwise just log"
+  [msg]
+  (if-let [ctx (get-global-context)]
+    (show-error-toast ctx msg)
+    (dart-core/print (str "Error: " msg))))
+
+(defn show-success-toast-global
+  "Show success toast using global context if available, otherwise just log"
+  [msg]
+  (if-let [ctx (get-global-context)]
+    (show-success-toast ctx msg)
+    (dart-core/print (str "Success: " msg))))
+
+(defn show-info-toast-global
+  "Show info toast using global context if available, otherwise just log"
+  [msg]
+  (if-let [ctx (get-global-context)]
+    (show-info-toast ctx msg)
+    (dart-core/print (str "Info: " msg))))
+
+(defn show-warning-toast-global
+  "Show warning toast using global context if available, otherwise just log"
+  [msg]
+  (if-let [ctx (get-global-context)]
+    (show-warning-toast ctx msg)
+    (dart-core/print (str "Warning: " msg))))
+
+(defn handle-error-global
+  "Handle error with toast using global context if available, otherwise just log.
+  Accepts error object or string, and optional fallback message."
+  [error & [fallback-msg]]
+  (let [error-msg (cond
+                   (string? error) error
+                   fallback-msg fallback-msg
+                   :else (str "Алдаа гарлаа: " error))]
+    (show-error-toast-global error-msg)))
+
+(defn handle-error-with-context
+  "Unified error handler that accepts optional context.
+  If context is provided, uses it. Otherwise tries global context.
+  Falls back to logging if no context available."
+  [error & [ctx fallback-msg]]
+  (if ctx
+    (handle-error-with-toast ctx error fallback-msg)
+    (handle-error-global error fallback-msg)))
 

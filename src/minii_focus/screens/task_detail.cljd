@@ -13,11 +13,12 @@
    [minii-focus.services.task :as task]
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.recurring-tasks :as recurring]
+   [minii-focus.utils.toast :as toast]
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
 
 (defn- actions
-  [editing task-detail defer-state due-state content-state status-state editing-state]
+  [ctx editing task-detail defer-state due-state content-state status-state editing-state]
   (if editing
     [(m/IconButton
       .icon (m/Icon m/Icons.check)
@@ -68,7 +69,7 @@
                            (task/refresh-task-detail! (.-id task-detail))))
                   (.catchError
                    (fn [error]
-                     (dart-core/print (str "Error saving task: " error))
+                     (toast/handle-error-with-toast ctx error "Ажлыг хадгалахад алдаа гарлаа")
                      ;; Rollback on error
                      (when task-detail
                        (task/refresh-task-detail! (.-id task-detail)))))))))))
@@ -106,8 +107,8 @@
     .children
     [(mgl/MongolElevatedButton
       .onPressed (fn []
-                   (let [current-status (display-status)]
-                     ;; 只允许从非 completed 状态流转到 completed（终止状态）
+                     (let [current-status (display-status)]
+                     ;; Only allow transition from non-completed status to completed (terminal state)
                      (when (and task-detail
                                 (not= current-status :completed)
                                 (task/valid-status-transition? current-status :completed))
@@ -115,7 +116,7 @@
                            (.then (fn [_]
                                     (task/refresh-task-detail! (.-id task-detail))))
                            (.catchError (fn [error]
-                                          (dart-core/print (str "Error marking task as completed: " error))))))
+                                          (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа")))))
                      nil))
       .child (mgl/MongolText (if (= (display-status) :completed)
                                "Completed"
@@ -205,7 +206,7 @@
                                                                                      (task/refresh-task-detail! (.-id task-detail))
                                                                                      (m/Navigator.pop dialog-ctx)))
                                                                             (.catchError (fn [error]
-                                                                                           (dart-core/print (str "Error setting recurrence: " error)))))))))
+                                                                                           (toast/handle-error-with-toast dialog-ctx error "Давтагдах дүрмийг тохируулахад алдаа гарлаа"))))))))
                                                           recurrence-options)))
                                    .actions [(m/TextButton
                                               .onPressed (fn [] (m/Navigator.pop dialog-ctx))
@@ -213,7 +214,7 @@
                   nil)
      .child (mgl/MongolText (or (some-> task-detail .-recurrenceRule str/capitalize) "None")))])) 
 
-(defn- flagged-section [task-detail]
+(defn- flagged-section [ctx task-detail]
   (m/Column
    .crossAxisAlignment m/CrossAxisAlignment.center
    .children
@@ -235,7 +236,7 @@
                             (-> (task/toggle-task-flag (.-id task-detail))
                                 (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                 (.catchError (fn [error]
-                                               (dart-core/print (str "Error toggling flag: " error)))))))))]))
+                                               (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
 (defn- defer-due-section [ctx task-detail display-defer display-due editing-state defer-state due-state]
   (m/SingleChildScrollView
@@ -260,7 +261,7 @@
                                     (-> (task/update-task (.-id task-detail) nil nil picked nil)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
-                                                       (dart-core/print (str "Error updating defer: " error))))))))))
+                                                       (toast/handle-error-with-toast ctx error "Хойшлуулах огноог шинэчлэхэд алдаа гарлаа")))))))))
                    nil)
       .child (mgl/MongolText (or (dt/format-date (display-defer)) "Not set")))
      (m/SizedBox .height (comp/space :s))
@@ -281,13 +282,13 @@
                                     (-> (task/update-task (.-id task-detail) nil nil nil picked)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
-                                                       (dart-core/print (str "Error updating due: " error))))))))))
+                                                       (toast/handle-error-with-toast ctx error "Дуусах огноог шинэчлэхэд алдаа гарлаа")))))))))
                    nil)
       .child (mgl/MongolText (or (dt/format-date (display-due)) "Not set")))])))
 
 
 
-(defn- status-section [task-detail display-status editing-state status-state]
+(defn- status-section [ctx task-detail display-status editing-state status-state]
   (m/SingleChildScrollView
    .child
    (m/Column
@@ -308,7 +309,7 @@
               .onSelectionChanged (fn [selection]
                                     (let [new-status (first selection)]
                                       (if @editing-state
-                                        ;; 编辑模式：先写入本地状态，提交时统一校验
+                                        ;; Edit mode: write to local state first, validate on submit
                                         (reset! status-state new-status)
                                         (let [current-status (display-status)]
                                           (if (task/valid-status-transition?
@@ -321,7 +322,7 @@
                                                 (.then (fn []
                                                          (task/refresh-task-detail! (.-id task-detail))))
                                                 (.catchError (fn [error]
-                                                               (dart-core/print (str "Error updating status: " error)))))
+                                                               (toast/handle-error-with-toast ctx error "Төлөвийг шинэчлэхэд алдаа гарлаа"))))
                                             (dart-core/print
                                              (str "Invalid status change from "
                                                   current-status " to " new-status)))))))))])))
@@ -349,7 +350,7 @@
                                    (task/refresh-task-detail! (.-id task-detail))
                                    (dart-core/print "Parent removed")))
                           (.catchError (fn [error]
-                                         (dart-core/print (str "Error removing parent: " error))))))
+                                         (toast/handle-error-with-toast ctx error "Эцэг ажлыг устгахад алдаа гарлаа")))))
          .child (mgl/MongolText "Remove parent"))])
       (comp/mongol-text-block
        {:text "None"
@@ -385,7 +386,7 @@
                                                                                            (task/refresh-task-detail! current-id)
                                                                                            (dart-core/print "Parent removed")))
                                                                                   (.catchError (fn [error]
-                                                                                                 (dart-core/print (str "Error removing parent: " error)))))))]
+                                                                                                 (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг устгахад алдаа гарлаа"))))))]
                                                                    (map (fn [t]
                                                                           (let [tid (.-id t)
                                                                                 tcontent (.-content t)]
@@ -399,13 +400,13 @@
                                                                                                    (task/refresh-task-detail! current-id)
                                                                                                    (dart-core/print (str "Parent set to: " tid))))
                                                                                           (.catchError (fn [error]
-                                                                                                         (dart-core/print (str "Error setting parent: " error)))))))))
+                                                                                                         (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))))))
                                                                         available-tasks))))
                                                 .actions [(m/TextButton
                                                            .onPressed (fn [] (m/Navigator.pop dialog-ctx))
                                                            .child (m/Text "Cancel"))]))))))
                         (.catchError (fn [error]
-                                       (dart-core/print (str "Error loading tasks: " error))))))
+                                       (toast/handle-error-with-toast ctx error "Ажлуудыг ачаалахад алдаа гарлаа")))))
                   nil)
      .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))]))
 
@@ -438,7 +439,7 @@
        (m/Scaffold
         .appBar (m/AppBar
                  .actions
-                 (actions editing task-detail defer-state due-state content-state status-state editing-state))
+                 (actions ctx editing task-detail defer-state due-state content-state status-state editing-state))
         .body (cond
                 loading (m/Center .child (m/CircularProgressIndicator))
                 (nil? task-detail) (m/Center
@@ -470,11 +471,11 @@
                             (m/SizedBox .width (comp/space :l))
                             (parent-section ctx task-detail parent-rel)
                             (m/SizedBox .width (comp/space :l))
-                            (status-section task-detail display-status editing-state status-state)
+                            (status-section ctx task-detail display-status editing-state status-state)
                             (m/SizedBox .width (comp/space :l))
                             (defer-due-section ctx task-detail display-defer display-due editing-state defer-state due-state)
                             (m/SizedBox .width (comp/space :l))
-                            (flagged-section task-detail)
+                            (flagged-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))
                             (recurrence-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))

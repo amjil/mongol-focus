@@ -4,7 +4,8 @@
    ["dart:core" :as dart-core]
   ["package:drift/drift.dart" :as d]
   ["package:cljd_mongol_focus/database/database.dart" :as drift]
-   [minii-focus.services.database :as db]))
+   [minii-focus.services.database :as db]
+   [minii-focus.utils.toast :as toast]))
 
 (defonce ^{:doc "Current theme setting"} theme (atom "light"))
 
@@ -107,7 +108,7 @@
                (reset! font-size f)
                (reset! loading false)))
       (.catchError (fn [e]
-                     (dart-core/print (str "Load settings error: " e))
+                     (toast/handle-error-global e "Тохиргоог ачаалахад алдаа гарлаа")
                      (reset! loading false)))))
 
 (defonce ^{:doc "Do an initial refresh when module loads, to avoid page components initializing themselves."}

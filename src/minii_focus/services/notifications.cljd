@@ -4,7 +4,8 @@
    ["dart:core" :as dart-core]
    ["package:flutter_local_notifications/flutter_local_notifications.dart" :as fln]
    ["package:timezone/timezone.dart" :as tz]
-   ["package:timezone/data/latest.dart" :as tzdata]))
+   ["package:timezone/data/latest.dart" :as tzdata]
+   [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
 ;; Notification service implementation
@@ -64,13 +65,12 @@
            .androidScheduleMode fln/AndroidScheduleMode.exactAllowWhileIdle
            .payload (str task-id))
           (.then (fn [_]
-                   (dart-core/print (str "Scheduled reminder for task " task-id " at " reminder-time))
                    nil))
           (.catchError (fn [error]
-                        (dart-core/print (str "Error scheduling reminder: " error))
+                        (toast/handle-error-global error "Эргэн санах хувилбарыг тохируулахад алдаа гарлаа")
                         (dart-core/Future.value nil)))))
     (catch Exception e
-      (dart-core/print (str "Exception scheduling reminder: " e))
+      (toast/handle-error-global e "Эргэн санах хувилбарыг тохируулахад алдаа гарлаа")
       (dart-core/Future.value nil))))
 
 (defn schedule-defer-reminder
@@ -99,13 +99,12 @@
            .androidScheduleMode fln/AndroidScheduleMode.exactAllowWhileIdle
            .payload (str task-id))
           (.then (fn [_]
-                   (dart-core/print (str "Scheduled defer reminder for task " task-id " at " reminder-time))
                    nil))
           (.catchError (fn [error]
-                        (dart-core/print (str "Error scheduling defer reminder: " error))
+                        (toast/handle-error-global error "Хойшлуулах эргэн санах хувилбарыг тохируулахад алдаа гарлаа")
                         (dart-core/Future.value nil)))))
     (catch Exception e
-      (dart-core/print (str "Exception scheduling defer reminder: " e))
+      (toast/handle-error-global e "Хойшлуулах эргэн санах хувилбарыг тохируулахад алдаа гарлаа")
       (dart-core/Future.value nil))))
 
 (defn cancel-task-reminder
@@ -117,13 +116,12 @@
       (-> (.cancel notification-plugin due-id)
           (.then (fn [_] (.cancel notification-plugin defer-id)))
           (.then (fn [_]
-                   (dart-core/print (str "Cancelled reminders for task " task-id))
                    nil))
           (.catchError (fn [error]
-                        (dart-core/print (str "Error cancelling reminders: " error))
+                        (toast/handle-error-global error "Эргэн санах хувилбарыг цуцлахад алдаа гарлаа")
                         (dart-core/Future.value nil)))))
     (catch Exception e
-      (dart-core/print (str "Exception cancelling reminders: " e))
+      (toast/handle-error-global e "Эргэн санах хувилбарыг цуцлахад алдаа гарлаа")
       (dart-core/Future.value nil))))
 
 (defn- handle-notification-payload
@@ -167,6 +165,7 @@
                                                            (.-payload))]
                                    (handle-notification-payload payload))))
                         (.catchError (fn [error]
+                                       ;; Launch details error is not critical, just log
                                        (dart-core/print (str "Error handling launch details: " error))
                                        (dart-core/Future.value nil)))
                         (.then (fn [_]
@@ -176,6 +175,7 @@
                       (dart-core/print "Notifications service initialization returned false")
                       (dart-core/Future.value nil)))))
          (.catchError (fn [error]
+                       ;; Initialization errors are logged but not shown to user
                        (dart-core/print (str "Error initializing notifications: " error))
                        (dart-core/Future.value nil)))))))
 
@@ -192,7 +192,7 @@
                      (dart-core/print (str "Notification permission granted: " granted?))
                      (dart-core/Future.value granted?))
                    (.catchError (fn [error]
-                                  (dart-core/print (str "Error requesting permission: " error))
+                                  (toast/handle-error-global error "Зөвшөөрөл авахад алдаа гарлаа")
                                   (dart-core/Future.value false)))))
         ;; iOS permissions are requested automatically on first notification
         (do

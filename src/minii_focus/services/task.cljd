@@ -17,29 +17,31 @@
 ;; Task status state machine
 ;; =============================================================================
 
-;; 任务状态流转规则：
+;; Task status transition rules:
 ;; - idle      -> active, blocked
 ;; - active    -> idle, blocked, completed
 ;; - blocked   -> idle, active
-;; - completed -> （终止状态，不再允许流转到其他状态）
+;; - completed -> (terminal state, no transitions allowed to other states)
 (def ^:private allowed-status-transitions
   {:idle #{:active :blocked}
    :active #{:idle :blocked :completed}
    :blocked #{:idle :active}
    :completed #{}})
+ 
+(declare get-task-by-id)
 
 (defn valid-status-transition?
-  "校验任务状态是否允许从 from-status 流转到 to-status。
-  传入和返回都使用关键字状态（如 :active / :completed）。"
+  "Check if task status transition from from-status to to-status is allowed.
+   Both input and return use keyword statuses (e.g., :active / :completed)."
   [from-status to-status]
   (if (= from-status to-status)
     true
     (contains? (get allowed-status-transitions from-status #{}) to-status)))
 
-;; 内部辅助：带状态机校验的状态更新，仅修改 status 字段
+;; Internal helper: status update with state machine validation, only modifies status field
 (defn- update-task-status!
-  "根据状态机规则安全地更新任务状态。
-  new-status 为字符串形式（\"active\" 等），供底层数据库使用。"
+  "Safely update task status according to state machine rules.
+  new-status is a string (e.g., \"active\") for use by the underlying database."
   [id ^String new-status]
   (-> (get-task-by-id id)
       (.then
@@ -63,7 +65,7 @@
 ;; =============================================================================
 
 ;; Forward declaration so that reminder helpers can be defined later
-;; 以及在状态更新辅助函数中使用的 get-task-by-id
+;; Also used by get-task-by-id in status update helper functions
 (declare update-task-reminders get-task-by-id)
 
 (defn create-task
@@ -99,7 +101,7 @@
                  (update-task-reminders task-id)
                  nil))
         (.catchError (fn [error]
-                      (dart-core/print (str "Error creating task: " error))
+                      (toast/handle-error-global error "Ажлыг үүсгэхэд алдаа гарлаа")
                       (dart-core/Future.value nil))))))
 
 (defn update-task
@@ -112,7 +114,7 @@
                  (update-task-reminders id)
                  nil))
         (.catchError (fn [error]
-                      (dart-core/print (str "Error updating task: " error))
+                      (toast/handle-error-global error "Ажлыг шинэчлэхэд алдаа гарлаа")
                       (dart-core/Future.value nil))))))
 
 (defn delete-task
@@ -142,7 +144,7 @@
                   (doto (.delete database (.-items database))
                     (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
         (.catchError (fn [error]
-                      (dart-core/print (str "Error deleting task: " error))
+                      (toast/handle-error-global error "Ажлыг устгахад алдаа гарлаа")
                       (dart-core/Future.value nil))))))
 
 (defn get-task-by-id
@@ -293,7 +295,7 @@
                (state/set-inbox-loading! false)
                tasks))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing inbox tasks: " error))
+                     (toast/handle-error-global error "Inbox-ийг шинэчлэхэд алдаа гарлаа")
                      (state/set-inbox-loading! false)))))
 
 (defn show-toast
@@ -306,8 +308,7 @@
   [ctx]
   (-> (refresh-inbox-tasks!)
       (.catchError (fn [e]
-                     (dart-core/print e)
-                     (toast/handle-error-with-toast ctx e "Refresh failed")))))
+                     (toast/handle-error-with-toast ctx e "Inbox-ийг шинэчлэхэд алдаа гарлаа")))))
 
 (defn refresh-today-tasks!
   "Refresh Today page task list and write to app-state"
@@ -321,7 +322,7 @@
                (state/set-today-loading! false)
                tasks))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing today tasks: " error))
+                     (toast/handle-error-global error "Өнөөдрийн ажлыг шинэчлэхэд алдаа гарлаа")
                      (state/set-today-loading! false)))))
 
 (defn refresh-focus-tasks!
@@ -334,7 +335,7 @@
                (state/set-focus-loading! false)
                tasks))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing focus tasks: " error))
+                     (toast/handle-error-global error "Focus ажлыг шинэчлэхэд алдаа гарлаа")
                      (state/set-focus-loading! false)))))
 
 (defn refresh-forecast-items!
@@ -347,7 +348,7 @@
                (state/set-forecast-loading! false)
                items))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing forecast items: " error))
+                     (toast/handle-error-global error "Forecast-ийг шинэчлэхэд алдаа гарлаа")
                      (state/set-forecast-loading! false)))))
 
 (defn refresh-projects!
@@ -360,7 +361,7 @@
                (state/set-projects-loading! false)
                rows))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing projects: " error))
+                     (toast/handle-error-global error "Төслүүдийг шинэчлэхэд алдаа гарлаа")
                      (state/set-projects-loading! false)))))
 
 (defn refresh-focus-sessions!
@@ -373,7 +374,7 @@
                (state/set-focus-sessions-loading! false)
                sessions))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing focus sessions: " error))
+                     (toast/handle-error-global error "Focus сессийг шинэчлэхэд алдаа гарлаа")
                      (state/set-focus-sessions-loading! false)))))
 
 (defn- reset-task-detail-state!
@@ -405,7 +406,7 @@
                    (state/set-task-detail-parent! parent-rel)
                    (state/set-task-detail-loading! false)))
           (.catchError (fn [error]
-                         (dart-core/print (str "Error refreshing task detail: " error))
+                         (toast/handle-error-global error "Ажлын дэлгэрэнгүйг шинэчлэхэд алдаа гарлаа")
                          (reset-task-detail-state!)
                          (state/set-task-detail-loading! false)))))
     (do
@@ -482,7 +483,7 @@
                (notif/cancel-task-reminder id)
                nil))
       (.catchError (fn [error]
-                    (dart-core/print (str "Error marking task as completed: " error))
+                    (toast/handle-error-global error "Ажлыг дуусгахад алдаа гарлаа")
                     (dart-core/Future.value nil)))))
 
 (defn mark-task-active
@@ -541,7 +542,7 @@
                (state/set-flagged-tasks! tasks)
                tasks))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing flagged tasks: " error))))))
+                     (toast/handle-error-global error "Туглуулсан ажлыг шинэчлэхэд алдаа гарлаа")))))
 
 ;; =============================================================================
 ;; Smart filter queries

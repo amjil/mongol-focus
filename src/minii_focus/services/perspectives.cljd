@@ -6,7 +6,8 @@
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
    [minii-focus.services.database :as db]
    [minii-focus.utils.ids :as ids]
-   [minii-focus.states.app-state :as state]))
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
 ;; Perspective CRUD operations
@@ -107,5 +108,5 @@
                (state/set-perspectives! perspectives)
                perspectives))
       (.catchError (fn [error]
-                     (dart-core/print (str "Error refreshing perspectives: " error))))))
+                     (toast/handle-error-global error "Хэтийн төлөвийг шинэчлэхэд алдаа гарлаа")))))
 

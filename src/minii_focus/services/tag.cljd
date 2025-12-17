@@ -7,7 +7,8 @@
    [clojure.set :as set]
    [minii-focus.services.database :as db]
    [minii-focus.states.app-state :as state]
-   [minii-focus.utils.ids :as ids]))
+   [minii-focus.utils.ids :as ids]
+   [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
 ;; Tag CRUD operations
@@ -80,7 +81,7 @@
                (state/set-tags-loading! false)
                rows))
       (.catchError (fn [e]
-                     (dart-core/print (str "Error refreshing tags: " e))
+                     (toast/handle-error-global e "Тагийг шинэчлэхэд алдаа гарлаа")
                      (state/set-tags-loading! false)))))
 
 (defn get-tags-by-parent
@@ -184,7 +185,7 @@
                 (state/set-tags-loading! false)
                 items))
         (.catchError (fn [e]
-                     (dart-core/print (str "Error refreshing tagged items: " e))
+                     (toast/handle-error-global e "Тагтай ажлыг шинэчлэхэд алдаа гарлаа")
                      (state/set-tagged-items! [])
                      (state/set-tags-loading! false))))))
 
