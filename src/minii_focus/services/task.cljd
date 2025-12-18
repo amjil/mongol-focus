@@ -295,6 +295,14 @@
      (doto (.select database (.-focusSessions database))
        (.orderBy [(fn [tbl] (d/OrderingTerm.desc (.-startAt tbl)))])))))
 
+(defn get-current-focus-session
+  "Get current Focus session by session-id"
+  [session-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getSingle
+     (doto (.select database (.-focusSessions database))
+       (.where (fn [^drift/FocusSessions tbl] (.equals (.-id tbl) session-id)))))))
+
 ;; =============================================================================
 ;; Page data loading/refresh (side effects in services, pages only trigger)
 ;; =============================================================================

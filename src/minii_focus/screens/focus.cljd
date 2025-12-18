@@ -3,58 +3,182 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["dart:core" :as dart-core]
+   ["dart:async" :as async]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
    [minii-focus.services.task :as task]
-   [minii-focus.states.app-state :as state]))
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.datetime :as dt]))
+
+;; Local state for timer management
+(defonce focus-timer-state (atom {:timer nil :current-time (dt/now)}))
+
+(defn- start-focus-timer! []
+  (when-not (:timer @focus-timer-state)
+    (let [timer (async/Timer.periodic
+                 (dart-core/Duration .seconds 1)
+                 (fn [_]
+                   (swap! focus-timer-state assoc :current-time (dt/now))))]
+      (swap! focus-timer-state assoc :timer timer))))
+
+(defn- stop-focus-timer! []
+  (when-let [timer (:timer @focus-timer-state)]
+    (.cancel timer)
+    (swap! focus-timer-state assoc :timer nil)))
+
+(defn- load-session-info! [session-id]
+  (when session-id
+    (-> (task/get-current-focus-session session-id)
+        (.then (fn [session]
+                 (when session
+                   (state/set-focus-session-start! (.-startAt session)))))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error loading session info: " error)))))))
 
 (defn focus-screen []
-  (f/widget
-   :watch [{loading :focus-loading
-            tasks :focus-tasks
-            depth :focus-depth
-            session-id :focus-session-id} state/app-state]
-   (let [main-view (cond
-                     loading
-                     (m/Center
-                      .child (m/CircularProgressIndicator))
+  (let [prev-session-id (atom nil)]
+    (f/widget
+     :context ctx
+     :watch [{loading :focus-loading
+              tasks :focus-tasks
+              depth :focus-depth
+              session-id :focus-session-id
+              session-start :focus-session-start} state/app-state
+             _timer-state focus-timer-state]
+     :let [;; Handle session-id changes: load session info and manage timer
+           _session-handler (when (not= @prev-session-id session-id)
+                              (reset! prev-session-id session-id)
+                              (cond
+                                ;; New session started: load info and start timer
+                                (and session-id (seq tasks) (not session-start))
+                                (do
+                                  (load-session-info! session-id)
+                                  (start-focus-timer!))
+                                ;; Active session: ensure timer is running
+                                (and session-id (seq tasks))
+                                (start-focus-timer!)
+                                ;; No session: stop timer
+                                (or (nil? session-id) (empty? tasks))
+                                (stop-focus-timer!))
+                              nil)
+             current-time (:current-time @focus-timer-state)
+         duration-minutes (when (and session-start current-time)
+                            (dt/duration-minutes session-start current-time))
+         formatted-duration (when duration-minutes
+                              (dt/format-duration duration-minutes))
+         formatted-start-time (when session-start
+                                (dt/format-time session-start))
+         theme (m/Theme.of ctx)
+         is-dark (= (.-brightness theme) m/Brightness.dark)
+         bg-color (if is-dark
+                   (m/Colors.grey.shade900)
+                   (m/Colors.grey.shade100))
+         text-color (if is-dark
+                     m/Colors.white
+                     m/Colors.black)
+         text-weak-color (if is-dark
+                         m/Colors.grey.shade400
+                         (comp/color :text-weak))]
+   (m/Scaffold
+    .backgroundColor bg-color
+    .appBar (m/AppBar
+             .actions [(m/IconButton
+                        .tooltip "Refresh"
+                        .icon (m/Icon m/Icons.refresh)
+                        .onPressed (fn []
+                                     (task/refresh-focus-tasks!)
+                                     (when session-id
+                                       (load-session-info! session-id))))])
+    .body (comp/mongol-row-layout
+           {:main-row (comp/vertical-reveal-motion
+                       {:child (cond
+                                 loading
+                                 (m/Center
+                                  .child (m/CircularProgressIndicator))
 
-                     (empty? tasks)
-                     (m/Center
-                      .child (comp/mongol-text-block
-                              {:text "No Focus task currently"
-                               :style (m/TextStyle
-                                       .color (comp/color :text-weak)
-                                       .fontSize (comp/font-size :m))}))
+                                 (empty? tasks)
+                                 (m/Center
+                                  .child (comp/mongol-text-block
+                                          {:text "No Focus task currently"
+                                           :style (m/TextStyle
+                                                   .color text-weak-color
+                                                   .fontSize (comp/font-size :m))}))
 
-                     :else
-                     (let [focused-task (first tasks)]
-                       (comp/focus-container
-                        {:is-focused true
-                         :child (m/Column
-                                 .mainAxisAlignment m/MainAxisAlignment.center
-                                 .crossAxisAlignment m/CrossAxisAlignment.center
-                                 .children
-                                 [(comp/mongol-text-block
-                                   {:text (.-content focused-task)
-                                    :style (m/TextStyle
-                                            .fontSize (comp/font-size :xl)
-                                            .height (comp/line-height (comp/font-size :xl)))})
-                                  (m/SizedBox .height (comp/space :l))
-                                  (comp/focus-depth-bar
-                                   {:depth-score depth
-                                    :max-score 100})])})))]
-     (m/Scaffold
-      .appBar (m/AppBar
-               .actions [(m/IconButton
-                          .tooltip "Refresh"
-                          .icon (m/Icon m/Icons.refresh)
-                          .onPressed (fn []
-                                       (task/refresh-focus-tasks!)))])
-      .body (comp/mongol-row-layout
-             {:main-row (comp/vertical-reveal-motion
-                         {:child main-view})
-              :side-row (m/Container
+                                 :else
+                                 (let [focused-task (first tasks)]
+                                   (comp/focus-container
+                                    {:is-focused true
+                                     :is-dark is-dark
+                                     :child
+                                     (m/SingleChildScrollView
+                                      .child
+                                      (m/Column
+                                       .mainAxisAlignment m/MainAxisAlignment.center
+                                       .crossAxisAlignment m/CrossAxisAlignment.center
+                                       .children
+                                       [(comp/mongol-text-block
+                                         {:text (.-content focused-task)
+                                          :style (m/TextStyle
+                                                  .fontSize (comp/font-size :xl)
+                                                  .height (comp/line-height (comp/font-size :xl))
+                                                  .color text-color)})
+                                        (m/SizedBox .height (comp/space :l))
+                                        ;; Session info
+                                        (if session-start
+                                          (m/Column
+                                           .mainAxisAlignment m/MainAxisAlignment.center
+                                           .crossAxisAlignment m/CrossAxisAlignment.center
+                                           .children
+                                            [(comp/mongol-text-block
+                                              {:text (str "Started: " formatted-start-time)
+                                               :style (m/TextStyle
+                                                       .fontSize (comp/font-size :s)
+                                                       .color text-weak-color)})
+                                             (if formatted-duration
+                                               (comp/mongol-text-block
+                                                {:text (str "Duration: " formatted-duration)
+                                                 :style (m/TextStyle
+                                                         .fontSize (comp/font-size :s)
+                                                         .color text-weak-color)})
+                                               (m/SizedBox))
+                                             (comp/mongol-text-block
+                                              {:text (str "Depth Score: " depth "/100")
+                                               :style (m/TextStyle
+                                                       .fontSize (comp/font-size :s)
+                                                       .color text-weak-color)})])
+                                          (m/SizedBox))
+                                        (m/SizedBox .height (comp/space :m))
+                                        ;; Depth score display and slider
+                                        (m/Column
+                                         .mainAxisAlignment m/MainAxisAlignment.center
+                                         .crossAxisAlignment m/CrossAxisAlignment.center
+                                         .children
+                                         [(comp/mongol-text-block
+                                           {:text (str "Depth: " depth "/100")
+                                            :style (m/TextStyle
+                                                    .fontSize (comp/font-size :m)
+                                                    .fontWeight m/FontWeight.bold
+                                                    .color text-color)})
+                                          (m/SizedBox .height (comp/space :s))
+                                          (m/Slider
+                                           .value (double depth)
+                                           .min 0.0
+                                           .max 100.0
+                                           .divisions 100
+                                           .label (str depth)
+                                           .onChanged (fn [new-value]
+                                                        (let [new-depth (int new-value)]
+                                                          (state/update-focus-depth! new-depth)
+                                                          (when session-id
+                                                            (-> (task/update-focus-depth session-id new-depth)
+                                                                (.catchError (fn [error]
+                                                                               (dart-core/print (str "Error updating focus depth: " error)))))))))
+                                          (m/SizedBox .height (comp/space :m))
+                                          (comp/focus-depth-bar
+                                           {:depth-score depth
+                                            :max-score 100
+                                            :is-dark is-dark})])]))})))})
+                       :side-row (m/Container
                          .padding (m/EdgeInsets.all (comp/space :m))
                          .child (m/Column
                                  .mainAxisAlignment m/MainAxisAlignment.center
@@ -68,8 +192,10 @@
                                                   (let [focused-task (first tasks)]
                                                     (-> (task/exit-focus (.-id focused-task) session-id depth)
                                                         (.then (fn []
+                                                                 (stop-focus-timer!)
                                                                  (state/set-focused-task! nil)
                                                                  (state/set-focus-session-id! nil)
+                                                                 (state/set-focus-session-start! nil)
                                                                  (state/update-focus-depth! 0)
                                                                  (task/refresh-focus-tasks!)
                                                                  (task/refresh-today-tasks!)))
@@ -77,4 +203,3 @@
                                                                        (dart-core/print (str "Error exiting focus: " error)))))))))]))})))))
 
 ;; NOTE: Loading/refresh is handled by services.task; pages only subscribe to state and trigger refresh via buttons.
-

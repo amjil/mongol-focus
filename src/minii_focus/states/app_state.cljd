@@ -12,6 +12,7 @@
          :current-page :today
          :focused-task nil
          :focus-session-id nil
+         :focus-session-start nil
          :focus-depth 0
          :focus-sessions []
          ;; Page data (avoid writing loading side effects in widget render)
@@ -78,6 +79,10 @@
 ;; Set Focus session ID
 (defn set-focus-session-id! [session-id]
   (update-state! assoc :focus-session-id session-id))
+
+;; Set Focus session start time
+(defn set-focus-session-start! [start-time]
+  (update-state! assoc :focus-session-start start-time))
 
 ;; Update Focus depth
 (defn update-focus-depth! [depth]

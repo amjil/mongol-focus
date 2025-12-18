@@ -10,11 +10,13 @@
 
 (defn focus-container
   "Auto-hide non-essential components, reduce background contrast"
-  [{:keys [child is-focused]}]
+  [{:keys [child is-focused is-dark]}]
   (f/widget
-   :let [bg-color (if is-focused
-                    (m/Colors.grey.shade100)
-                    m/Colors.white)]
+   :let [bg-color (cond
+                    (and is-focused is-dark) (m/Colors.grey.shade900)
+                    (and is-focused (not is-dark)) (m/Colors.grey.shade100)
+                    is-dark (m/Colors.grey.shade800)
+                    :else m/Colors.white)]
    (m/AnimatedContainer
     .duration (dart:core/Duration .milliseconds 300)
     .curve m/Curves.easeOut
@@ -28,16 +30,22 @@
 
 (defn focus-depth-bar
   "Vertical growth, does not display minutes"
-  [{:keys [depth-score max-score]}]
+  [{:keys [depth-score max-score is-dark]}]
   (f/widget
    :let [score (or depth-score 0)
          max-s (or max-score 100)
-         percentage (/ score max-s)]
+         percentage (/ score max-s)
+         bg-color (if is-dark
+                   m/Colors.grey.shade700
+                   m/Colors.grey.shade300)
+         fill-color (if is-dark
+                     m/Colors.blue.shade300
+                     m/Colors.blue.shade400)]
    (m/Container
     .width 8
     .height 200
     .decoration (m/BoxDecoration
-                 .color m/Colors.grey.shade300
+                 .color bg-color
                  .borderRadius (m/BorderRadius.circular 4))
     .child (m/Align
             .alignment m/Alignment.bottomCenter
@@ -45,6 +53,6 @@
                     .width 8
                     .height (* 200 percentage)
                     .decoration (m/BoxDecoration
-                                 .color m/Colors.blue.shade400
+                                 .color fill-color
                                  .borderRadius (m/BorderRadius.circular 4)))))))
 
