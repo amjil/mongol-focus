@@ -12,10 +12,13 @@
    [minii-focus.services.tag :as tag-svc]
    [minii-focus.services.task :as task]
    [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.task-dependencies :as dep-svc]
    [minii-focus.services.recurring-tasks :as recurring]
    [minii-focus.utils.toast :as toast]
    [minii-focus.utils.datetime :as dt]
    [minii-focus.states.app-state :as state]))
+
+(declare task-detail-screen)
 
 (defn- actions
   [ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state project-type-state]
@@ -518,6 +521,175 @@
                   nil)
      .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))]))
 
+(defn- dependencies-section [ctx task-detail dependencies dependents]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Dependencies"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (m/SizedBox .height (comp/space :s))
+    ;; Show tasks this task depends on
+    (if (not (empty? dependencies))
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [(comp/mongol-text-block
+         {:text "Depends on:"
+          :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
+        (m/SizedBox .height (comp/space :xs))
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.center
+         .children
+         (map (fn [dep-task]
+                (let [dep-id (.-id dep-task)
+                      dep-content (.-content dep-task)
+                      dep-status (keyword (.-status dep-task))]
+                  (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.center
+                   .children
+                   [(m/RotatedBox
+                     .quarterTurns 1
+                     .child (m/InkWell
+                             .onTap (fn []
+                                      (task/refresh-task-detail! dep-id)
+                                      (m/Navigator.push
+                                       ctx
+                                       (m/MaterialPageRoute
+                                        .builder (fn [_]
+                                                   (task-detail-screen dep-id))))
+                                      nil)
+                             .child (m/Container
+                                     .padding (m/EdgeInsets.all (comp/space :xs))
+                                     .child (m/Row
+                                             .mainAxisSize m/MainAxisSize.min
+                                             .children
+                                             [(m/Icon
+                                               (m/Icon m/Icons.arrow_back)
+                                               .size 16
+                                               .color (comp/color :text-weak))
+                                              (m/SizedBox .width (comp/space :xs))
+                                              (comp/mongol-text-block
+                                               {:text (str dep-content " (" (name dep-status) ")")
+                                                :style (m/TextStyle
+                                                        .fontSize (comp/font-size :s)
+                                                        .color (if (= dep-status :completed)
+                                                                 (comp/color :text-weak)
+                                                                 (comp/color :text-main)))})
+                                              (m/SizedBox .width (comp/space :xs))
+                                              (m/IconButton
+                                               .icon (m/Icon m/Icons.close)
+                                               .iconSize 16
+                                               .onPressed (fn []
+                                                            (-> (dep-svc/delete-dependency (.-id task-detail) dep-id)
+                                                                (.then (fn []
+                                                                         (task/refresh-task-detail! (.-id task-detail))
+                                                                         (toast/show-success-toast ctx "Dependency removed")))
+                                                                (.catchError (fn [error]
+                                                                               (toast/handle-error-with-toast ctx error "Dependency устгахад алдаа гарлаа"))))))]))))
+                    (m/SizedBox .height (comp/space :xs))])))
+              dependencies))])
+      (comp/mongol-text-block
+       {:text "No dependencies"
+        :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
+    (m/SizedBox .height (comp/space :s))
+    ;; Show tasks that depend on this task
+    (if (not (empty? dependents))
+      (m/Column
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [(comp/mongol-text-block
+         {:text "Dependent tasks:"
+          :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
+        (m/SizedBox .height (comp/space :xs))
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.center
+         .children
+         (map (fn [dep-task]
+                (let [dep-id (.-id dep-task)
+                      dep-content (.-content dep-task)
+                      dep-status (keyword (.-status dep-task))]
+                  (m/RotatedBox
+                   .quarterTurns 1
+                   .child (m/InkWell
+                           .onTap (fn []
+                                    (task/refresh-task-detail! dep-id)
+                                    (m/Navigator.push
+                                     ctx
+                                     (m/MaterialPageRoute
+                                      .builder (fn [_]
+                                                 (task-detail-screen dep-id))))
+                                    nil)
+                           .child (m/Container
+                                   .padding (m/EdgeInsets.all (comp/space :xs))
+                                   .child (m/Row
+                                           .mainAxisSize m/MainAxisSize.min
+                                           .children
+                                           [(comp/mongol-text-block
+                                             {:text (str dep-content " (" (name dep-status) ")")
+                                              :style (m/TextStyle
+                                                      .fontSize (comp/font-size :s)
+                                                      .color (if (= dep-status :completed)
+                                                               (comp/color :text-weak)
+                                                               (comp/color :text-main)))})
+                                            (m/SizedBox .width (comp/space :xs))
+                                            (m/Icon
+                                             (m/Icon m/Icons.arrow_forward)
+                                             .size 16
+                                             .color (comp/color :text-weak))]))))))
+              dependents))])
+      (comp/mongol-text-block
+       {:text "No dependent tasks"
+        :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
+    (m/SizedBox .height (comp/space :s))
+    ;; Add dependency button
+    (mgl/MongolTextButton
+     .onPressed (fn []
+                  (let [all-tasks-promise (task/get-all-tasks)]
+                    (-> all-tasks-promise
+                        (.then (fn [all-tasks]
+                                 ;; Filter out current task and tasks that would create circular dependencies
+                                 (let [current-id (.-id task-detail)
+                                       dependency-ids (set (map (fn [t] (.-id t)) dependencies))
+                                       available-tasks (filter (fn [t]
+                                                                 (let [tid (.-id t)]
+                                                                   (and (not= tid current-id)
+                                                                        (not (contains? dependency-ids tid)))))
+                                                               all-tasks)]
+                                   (m/showDialog
+                                    .context ctx
+                                    .builder (fn [dialog-ctx]
+                                               (m/AlertDialog
+                                                .title (mgl/MongolText "Add Dependency")
+                                                .content (m/Container
+                                                          .width 300
+                                                          .height 400
+                                                          .child (m/ListView
+                                                                  .children
+                                                                  (if (empty? available-tasks)
+                                                                    [(m/ListTile
+                                                                      .title (mgl/MongolText "No available tasks"))]
+                                                                    (map (fn [t]
+                                                                           (let [tid (.-id t)
+                                                                                 tcontent (.-content t)]
+                                                                             (m/ListTile
+                                                                              .title (mgl/MongolText tcontent)
+                                                                              .onTap (fn []
+                                                                                       (m/Navigator.pop dialog-ctx)
+                                                                                       (-> (dep-svc/create-dependency current-id tid)
+                                                                                           (.then (fn []
+                                                                                                    (task/refresh-task-detail! current-id)
+                                                                                                    (toast/show-success-toast dialog-ctx "Dependency added")))
+                                                                                           (.catchError (fn [error]
+                                                                                                          (toast/handle-error-with-toast dialog-ctx error "Dependency нэмэхэд алдаа гарлаа")))))))
+                                                                           available-tasks)))))
+                                                .actions [(m/TextButton
+                                                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                           .child (m/Text "Cancel"))])))))))
+                    (.catchError (fn [error]
+                                   (toast/handle-error-with-toast ctx error "Ажлуудыг авахад алдаа гарлаа")))))
+     .child (mgl/MongolText "Add dependency"))]))
+
 
 (defn task-detail-screen
   "Task detail page"
@@ -535,7 +707,9 @@
               loading :task-detail-loading
               tag-ids :task-detail-tags
               all-tags :task-detail-all-tags
-              parent-rel :task-detail-parent} state/app-state
+              parent-rel :task-detail-parent
+              dependencies :task-detail-dependencies
+              dependents :task-detail-dependents} state/app-state
 
              editing editing-state
              content content-state
@@ -597,7 +771,9 @@
                             (m/SizedBox .width (comp/space :l))
                             (recurrence-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))
-                            (tags-section task-detail tag-ids all-tags)]
+                            (tags-section task-detail tag-ids all-tags)
+                            (m/SizedBox .width (comp/space :l))
+                            (dependencies-section ctx task-detail dependencies dependents)]
                             (when (is-project?)
                               [(m/SizedBox .width (comp/space :l))
                                (project-type-section ctx task-detail display-project-type editing-state project-type-state)])

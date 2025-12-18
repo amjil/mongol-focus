@@ -7,6 +7,7 @@
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
    [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.tag :as tag-svc]
+   [minii-focus.services.task-dependencies :as dep-svc]
    [minii-focus.services.database :as db]
    [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
@@ -143,7 +144,7 @@
                        (dart-core/Future.value nil)))))))
 
 (defn delete-task
-  "Delete task with cascade deletion of related data (ItemTree, ItemTags)"
+  "Delete task with cascade deletion of related data (ItemTree, ItemTags, TaskDependencies)"
   [id]
   (let [^drift/AppDatabase database (db/get-database)]
     ;; Cancel reminders before deleting task
@@ -158,6 +159,9 @@
                  (.go
                   (doto (.delete database (.-itemTree database))
                     (.where (fn [^drift/ItemTree tbl] (.equals (.-childId tbl) id)))))))
+        (.then (fn [_]
+                 ;; Delete TaskDependencies relations (both as dependent and depended-on)
+                 (dep-svc/delete-all-dependencies-for-task id)))
         (.then (fn [_]
                  ;; Delete ItemTags relations
                  (.go
@@ -415,7 +419,9 @@
   (state/set-task-detail! nil)
   (state/set-task-detail-tags! #{})
   (state/set-task-detail-all-tags! [])
-  (state/set-task-detail-parent! nil))
+  (state/set-task-detail-parent! nil)
+  (state/set-task-detail-dependencies! [])
+  (state/set-task-detail-dependents! []))
 
 (defn refresh-task-detail!
   "Refresh task detail data and write to app-state"
@@ -428,8 +434,10 @@
            [(get-task-by-id task-id)
             (tag-svc/get-item-tags task-id)
             (tag-svc/get-all-tags)
-            (tree-svc/get-parent task-id)])
-          (.then (fn [[task-data tag-links tag-list parent-rel]]
+            (tree-svc/get-parent task-id)
+            (dep-svc/get-dependency-tasks task-id)
+            (dep-svc/get-dependent-tasks task-id)])
+          (.then (fn [[task-data tag-links tag-list parent-rel dependencies dependents]]
                    (state/set-task-detail! task-data)
                    (state/set-task-detail-tags!
                     (if tag-links
@@ -437,6 +445,8 @@
                       #{}))
                    (state/set-task-detail-all-tags! (or tag-list []))
                    (state/set-task-detail-parent! parent-rel)
+                   (state/set-task-detail-dependencies! (or dependencies []))
+                   (state/set-task-detail-dependents! (or dependents []))
                    (state/set-task-detail-loading! false)))
           (.catchError (fn [error]
                          (toast/handle-error-global error "Ажлын дэлгэрэнгүйг шинэчлэхэд алдаа гарлаа")

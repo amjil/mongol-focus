@@ -5,7 +5,8 @@
    ["package:drift/drift.dart" :as d]
    ;; Corresponds to package name `cljd_mongol_focus` in pubspec.yaml
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
-   [minii-focus.services.database :as db]))
+   [minii-focus.services.database :as db]
+   [minii-focus.services.task-dependencies :as dep-svc]))
 
 ;; =============================================================================
 ;; ItemTree CRUD operations
@@ -113,45 +114,50 @@
                                                     nested-hierarchies))))))))))))))
 
 (defn is-task-blocked?
-  "Check if task is blocked by parent task or sequential project rules (returns Future<bool>)"
+  "Check if task is blocked by parent task, sequential project rules, or dependencies (returns Future<bool>)"
   [task-id]
-  (let [parent-relation (get-parent task-id)]
-    (-> parent-relation
-        (.then (fn [parent-rel]
-                 (if parent-rel
-                   (let [^drift/AppDatabase database (db/get-database)
-                         parent-id (.-parentId parent-rel)]
-                     (-> (.getSingleOrNull
-                          (doto (.select database (.-items database))
-                            (.where (fn [^drift/Items tbl] (.equals (.-id tbl) parent-id)))))
-                         (.then (fn [parent-item]
-                                  (if parent-item
-                                    ;; Check if parent is completed
-                                    (if (= (.-status parent-item) "completed")
-                                      false
-                                      ;; Check sequential project rules
-                                      (let [project-type (.-projectType parent-item)]
-                                        (if (= project-type "sequential")
-                                          ;; For sequential projects, check if previous sibling is completed
-                                          (-> (get-children parent-id)
-                                              (.then (fn [siblings]
-                                                      (let [current-rel (first (filter (fn [rel] (= (.-childId rel) task-id)) siblings))
-                                                            current-pos (if current-rel (.-position current-rel) -1)
-                                                            prev-siblings (filter (fn [rel] (< (.-position rel) current-pos)) siblings)]
-                                                        (if (empty? prev-siblings)
-                                                          ;; First task, not blocked by siblings
-                                                          false
-                                                          ;; Check if all previous siblings are completed
-                                                          (let [prev-ids (map (fn [rel] (.-childId rel)) prev-siblings)]
-                                                            (-> (doto (.select database (.-items database))
-                                                                  (.where (fn [^drift/Items tbl] (.isIn (.-id tbl) prev-ids))))
-                                                                (.get)
-                                                                (.then (fn [prev-items]
-                                                                         (not (every? (fn [item] (= (.-status item) "completed")) prev-items)))))))))))
-                                          ;; For parallel projects or no project type, only check parent status
-                                          true)))
-                                    false)))))
-                   false))))))
+  (let [parent-relation (get-parent task-id)
+        dependency-check (dep-svc/has-uncompleted-dependencies? task-id)]
+    (-> (dart-core/Future.wait [parent-relation dependency-check])
+        (.then (fn [[parent-rel has-uncompleted-deps?]]
+                 ;; Check if blocked by dependencies first
+                 (if has-uncompleted-deps?
+                   true
+                   ;; Then check parent relationship
+                   (if parent-rel
+                     (let [^drift/AppDatabase database (db/get-database)
+                           parent-id (.-parentId parent-rel)]
+                       (-> (.getSingleOrNull
+                            (doto (.select database (.-items database))
+                              (.where (fn [^drift/Items tbl] (.equals (.-id tbl) parent-id)))))
+                           (.then (fn [parent-item]
+                                    (if parent-item
+                                      ;; Check if parent is completed
+                                      (if (= (.-status parent-item) "completed")
+                                        false
+                                        ;; Check sequential project rules
+                                        (let [project-type (.-projectType parent-item)]
+                                          (if (= project-type "sequential")
+                                            ;; For sequential projects, check if previous sibling is completed
+                                            (-> (get-children parent-id)
+                                                (.then (fn [siblings]
+                                                        (let [current-rel (first (filter (fn [rel] (= (.-childId rel) task-id)) siblings))
+                                                              current-pos (if current-rel (.-position current-rel) -1)
+                                                              prev-siblings (filter (fn [rel] (< (.-position rel) current-pos)) siblings)]
+                                                          (if (empty? prev-siblings)
+                                                            ;; First task, not blocked by siblings
+                                                            false
+                                                            ;; Check if all previous siblings are completed
+                                                            (let [prev-ids (map (fn [rel] (.-childId rel)) prev-siblings)]
+                                                              (-> (doto (.select database (.-items database))
+                                                                    (.where (fn [^drift/Items tbl] (.isIn (.-id tbl) prev-ids))))
+                                                                  (.get)
+                                                                  (.then (fn [prev-items]
+                                                                           (not (every? (fn [item] (= (.-status item) "completed")) prev-items)))))))))))
+                                            ;; For parallel projects or no project type, only check parent status
+                                            true)))
+                                      false))))
+                     false))))))))
 
 (defn check-tasks-blocked-status
   "Check blocked status for multiple tasks, returns map of task-id -> blocked?"

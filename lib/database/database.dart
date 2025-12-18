@@ -7,6 +7,7 @@ import 'connection/connection.dart' as impl;
 import 'perspectives_dao.dart';
 import 'tags_dao.dart';
 import 'search_dao.dart';
+import 'task_dependencies_dao.dart';
 
 part 'database.g.dart';
 
@@ -185,6 +186,17 @@ class SearchHistory extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// TaskDependencies table - task dependency relationships
+// Represents that dependentTaskId depends on dependsOnTaskId
+// (dependentTaskId cannot be executed until dependsOnTaskId is completed)
+class TaskDependencies extends Table {
+  TextColumn get dependentTaskId => text()();  // Task that depends on another task
+  TextColumn get dependsOnTaskId => text()();   // Task that must be completed first
+
+  @override
+  Set<Column> get primaryKey => {dependentTaskId, dependsOnTaskId};
+}
+
 @DriftDatabase(
   tables: [
     Items,
@@ -196,6 +208,7 @@ class SearchHistory extends Table {
     Settings,
     Perspectives,
     SearchHistory,
+    TaskDependencies,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -212,8 +225,12 @@ class AppDatabase extends _$AppDatabase {
   SearchDao? _searchDao;
   SearchDao get searchDao => _searchDao ??= SearchDao(this);
 
+  TaskDependenciesDao? _taskDependenciesDao;
+  TaskDependenciesDao get taskDependenciesDao =>
+      _taskDependenciesDao ??= TaskDependenciesDao(this);
+
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -268,6 +285,11 @@ class AppDatabase extends _$AppDatabase {
           // Migration from version 6 to 7
           // Add contextType field to Tags table
           await m.addColumn(tags, tags.contextType);
+        }
+        if (from < 8) {
+          // Migration from version 7 to 8
+          // Create TaskDependencies table for task dependency relationships
+          await m.createTable(taskDependencies);
         }
       },
     );

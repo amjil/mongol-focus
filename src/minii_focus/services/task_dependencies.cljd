@@ -1,0 +1,124 @@
+(ns minii-focus.services.task-dependencies
+  "Task dependencies management service - task dependency relationship management"
+  (:require
+   ["dart:core" :as dart-core]
+   ["package:drift/drift.dart" :as d]
+   ;; Corresponds to package name `cljd_mongol_focus` in pubspec.yaml
+   ["package:cljd_mongol_focus/database/database.dart" :as drift]
+   [minii-focus.services.database :as db]))
+
+;; =============================================================================
+;; TaskDependencies CRUD operations
+;; =============================================================================
+
+(defn create-dependency
+  "Create a dependency relationship: dependent-task-id depends on depends-on-task-id
+   (dependent-task-id cannot be executed until depends-on-task-id is completed)"
+  [dependent-task-id depends-on-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.createDependency (.-taskDependenciesDao database) dependent-task-id depends-on-task-id)))
+
+(defn delete-dependency
+  "Delete a dependency relationship"
+  [dependent-task-id depends-on-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.deleteDependency (.-taskDependenciesDao database) dependent-task-id depends-on-task-id)))
+
+(defn delete-all-dependencies-for-task
+  "Delete all dependencies involving a task (both as dependent and depended-on)"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.deleteAllDependenciesForTask (.-taskDependenciesDao database) task-id)))
+
+;; =============================================================================
+;; Query operations
+;; =============================================================================
+
+(defn get-dependencies
+  "Get all tasks that the specified task depends on (returns Future<List<TaskDependency>>)"
+  [dependent-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDependencies (.-taskDependenciesDao database) dependent-task-id)))
+
+(defn get-dependents
+  "Get all tasks that depend on the specified task (returns Future<List<TaskDependency>>)"
+  [depends-on-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDependents (.-taskDependenciesDao database) depends-on-task-id)))
+
+(defn get-dependency-tasks
+  "Get all tasks that the specified task depends on (with task details, returns Future<List<Item>>)"
+  [dependent-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDependencyTasks (.-taskDependenciesDao database) dependent-task-id)))
+
+(defn get-dependent-tasks
+  "Get all tasks that depend on the specified task (with task details, returns Future<List<Item>>)"
+  [depends-on-task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDependentTasks (.-taskDependenciesDao database) depends-on-task-id)))
+
+(defn has-uncompleted-dependencies?
+  "Check if a task has any uncompleted dependencies (returns Future<bool>)"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.hasUncompletedDependencies (.-taskDependenciesDao database) task-id)))
+
+;; =============================================================================
+;; Dependency chain operations
+;; =============================================================================
+
+(defn get-dependency-chain
+  "Get complete dependency chain (all tasks in the dependency path)
+   Returns Future<Map<String, List<String>>>: taskId -> list of taskIds it depends on"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.getDependencyChain (.-taskDependenciesDao database) task-id)))
+
+(defn get-full-dependency-tree
+  "Get full dependency tree starting from a task
+   Returns Future<Map> with structure:
+   {:task-id task-id
+    :direct-dependencies [list of direct dependency task IDs]
+    :all-dependencies [list of all dependency task IDs (direct + indirect)]
+    :dependents [list of tasks that depend on this task]}"
+  [task-id]
+  (let [dependencies-future (get-dependency-tasks task-id)
+        dependents-future (get-dependent-tasks task-id)
+        chain-future (get-dependency-chain task-id)]
+    (-> (dart-core/Future.wait [dependencies-future dependents-future chain-future])
+        (.then (fn [[dependencies dependents chain-map]]
+                 (let [direct-dep-ids (map (fn [item] (.-id item)) dependencies)
+                       all-dep-ids (if (contains? chain-map task-id)
+                                     (get chain-map task-id)
+                                     [])
+                       dependent-ids (map (fn [item] (.-id item)) dependents)]
+                   {:task-id task-id
+                    :direct-dependencies direct-dep-ids
+                    :all-dependencies all-dep-ids
+                    :dependents dependent-ids
+                    :dependency-tasks dependencies
+                    :dependent-tasks dependents}))))))
+
+(defn has-circular-dependency?
+  "Check for circular dependencies involving the given task (returns Future<bool>)"
+  [task-id]
+  (let [^drift/AppDatabase database (db/get-database)]
+    (.hasCircularDependency (.-taskDependenciesDao database) task-id)))
+
+;; =============================================================================
+;; Dependency validation
+;; =============================================================================
+
+(defn validate-dependency
+  "Validate if a dependency can be created (checks for circular dependencies)
+   Returns Future<Map> with :valid? boolean and :error message if invalid"
+  [_dependent-task-id depends-on-task-id]
+  (let [circular-check (has-circular-dependency? depends-on-task-id)]
+    (-> circular-check
+        (.then (fn [has-circular?]
+                 (if has-circular?
+                   {:valid? false
+                    :error "Creating this dependency would create a circular dependency"}
+                   {:valid? true}))))))
+

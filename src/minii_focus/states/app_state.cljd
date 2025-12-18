@@ -28,6 +28,8 @@
          :task-detail-tags #{}
          :task-detail-all-tags []
          :task-detail-parent nil
+         :task-detail-dependencies []
+         :task-detail-dependents []
          :task-detail-loading false
          :today-loading false
          :focus-loading false
@@ -158,6 +160,12 @@
 
 (defn set-task-detail-parent! [parent]
   (update-state! assoc :task-detail-parent parent))
+
+(defn set-task-detail-dependencies! [dependencies]
+  (update-state! assoc :task-detail-dependencies dependencies))
+
+(defn set-task-detail-dependents! [dependents]
+  (update-state! assoc :task-detail-dependents dependents))
 
 (defn set-task-detail-loading! [loading]
   (update-state! assoc :task-detail-loading loading))
