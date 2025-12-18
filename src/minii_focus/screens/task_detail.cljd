@@ -18,7 +18,7 @@
    [minii-focus.states.app-state :as state]))
 
 (defn- actions
-  [ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state]
+  [ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state project-type-state]
   (if editing
     [(m/IconButton
       .icon (m/Icon m/Icons.check)
@@ -36,6 +36,7 @@
                 ^dart-core/DateTime? defer-dt @defer-state
                 ^dart-core/DateTime? due-dt @due-state
                 estimated-mins @estimated-minutes-state
+                project-type-val @project-type-state
                 ^#/(d/Value dart-core/DateTime?)
                 defer-value (if defer-dt
                              (d/Value defer-dt)
@@ -43,7 +44,11 @@
                 ^#/(d/Value dart-core/DateTime?)
                 due-value (if due-dt
                            (d/Value due-dt)
-                           (d/Value nil))]
+                           (d/Value nil))
+                ^#/(d/Value String?)
+                project-type-value (if project-type-val
+                                   (d/Value project-type-val)
+                                   (d/Value nil))]
             (when (not valid?)
               (dart-core/print
                (str "Invalid status change in edit from "
@@ -56,7 +61,8 @@
                                          .content @content-state
                                          .status (name status-to-save)
                                          .deferAt defer-value
-                                         .dueAt due-value))
+                                         .dueAt due-value
+                                         .projectType project-type-value))
                        s)))
             (when valid?
               (reset! editing-state false)
@@ -66,7 +72,8 @@
                                   (name status-to-save)
                                   @defer-state
                                   @due-state
-                                  estimated-mins)
+                                  estimated-mins
+                                  project-type-val)
                   (.then (fn [_]
                            (task/refresh-task-detail! (.-id task-detail))))
                   (.catchError
@@ -85,7 +92,8 @@
           (reset! status-state (keyword (.-status task-detail)))
           (reset! defer-state (.-deferAt task-detail))
           (reset! due-state (.-dueAt task-detail))
-          (reset! estimated-minutes-state (.-estimatedMinutes task-detail)))
+          (reset! estimated-minutes-state (.-estimatedMinutes task-detail))
+          (reset! project-type-state (.-projectType task-detail)))
         nil))]
     [(m/IconButton
       .tooltip "Refresh"
@@ -101,6 +109,7 @@
           (reset! defer-state (.-deferAt task-detail))
           (reset! due-state (.-dueAt task-detail))
           (reset! estimated-minutes-state (.-estimatedMinutes task-detail))
+          (reset! project-type-state (.-projectType task-detail))
           (reset! editing-state true))))]))
 
 (defn- elavated-buttons [ctx task-detail display-status]
@@ -242,6 +251,63 @@
                                 (.catchError (fn [error]
                                                (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
+(defn- project-type-section [ctx _task-detail display-project-type editing-state project-type-state]
+  (m/Row
+   .crossAxisAlignment m/CrossAxisAlignment.center
+   .children
+   [(comp/mongol-text-block
+     {:text "Project Type"
+      :style (m/TextStyle .fontSize (comp/font-size :m))})
+    (if @editing-state
+      (mgl/MongolTextButton
+       .onPressed (fn []
+                    (m/showDialog
+                     .context ctx
+                     .builder (fn [dialog-ctx]
+                                (let [project-type-options ["None" "Sequential" "Parallel" "Single Action List"]
+                                      current-type (or (display-project-type) "None")
+                                      type-map {"None" nil
+                                                "Sequential" "sequential"
+                                                "Parallel" "parallel"
+                                                "Single Action List" "single_action_list"}]
+                                  (m/AlertDialog
+                                   .title (mgl/MongolText "Set Project Type")
+                                   .content (m/Container
+                                             .width 300
+                                             .height 200
+                                             .child (m/ListView
+                                                     .children
+                                                     (map (fn [option]
+                                                            (m/ListTile
+                                                             .title (mgl/MongolText option)
+                                                             .selected (= option current-type)
+                                                             .onTap (fn []
+                                                                      (let [selected-type (get type-map option)]
+                                                                        (reset! project-type-state selected-type)
+                                                                        (m/Navigator.pop dialog-ctx)))))
+                                                          project-type-options)))
+                                   .actions [(m/TextButton
+                                              .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                              .child (m/Text "Cancel"))]))))
+                     nil)
+
+                    .child (mgl/MongolText (let [current (display-project-type)]
+                                             (cond
+                                               (= current "sequential") "Sequential"
+                                               (= current "parallel") "Parallel"
+                                               (= current "single_action_list") "Single Action List"
+                                               :else "None"))))
+       (mgl/MongolTextButton
+        .onPressed (fn []
+                     (reset! editing-state true)
+                     nil)
+        .child (mgl/MongolText (let [current (display-project-type)]
+                                 (cond
+                                   (= current "sequential") "Sequential"
+                                   (= current "parallel") "Parallel"
+                                   (= current "single_action_list") "Single Action List"
+                                   :else "Not set")))))]))
+
 (defn- estimated-duration-section [ctx task-detail display-estimated editing-state estimated-state]
   (m/Column
    .crossAxisAlignment m/CrossAxisAlignment.center
@@ -297,7 +363,7 @@
                                 (when picked
                                   (if @editing-state
                                     (reset! defer-state picked)
-                                    (-> (task/update-task (.-id task-detail) nil nil picked nil nil)
+                                    (-> (task/update-task (.-id task-detail) nil nil picked nil nil nil)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Хойшлуулах огноог шинэчлэхэд алдаа гарлаа")))))))))
@@ -318,7 +384,7 @@
                                 (when picked
                                   (if @editing-state
                                     (reset! due-state picked)
-                                    (-> (task/update-task (.-id task-detail) nil nil nil picked nil)
+                                    (-> (task/update-task (.-id task-detail) nil nil nil picked nil nil)
                                         (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Дуусах огноог шинэчлэхэд алдаа гарлаа")))))))))
@@ -356,6 +422,7 @@
                                             (-> (task/update-task (.-id task-detail)
                                                                   nil
                                                                   (name new-status)
+                                                                  nil
                                                                   nil
                                                                   nil
                                                                   nil)
@@ -444,7 +511,8 @@
                                                                         available-tasks))))
                                                 .actions [(m/TextButton
                                                            .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                           .child (m/Text "Cancel"))]))))))
+                                                           .child (m/Text "Cancel"))])))
+                                   nil)))
                         (.catchError (fn [error]
                                        (toast/handle-error-with-toast ctx error "Ажлуудыг ачаалахад алдаа гарлаа")))))
                   nil)
@@ -453,13 +521,14 @@
 
 (defn task-detail-screen
   "Task detail page"
-  [task-id]
+  [_task-id]
   (let [editing-state (atom false)
         content-state (atom "")
         status-state (atom :active)
         defer-state (atom nil)
         due-state (atom nil)
-        estimated-minutes-state (atom nil)]
+        estimated-minutes-state (atom nil)
+        project-type-state (atom nil)]
     (f/widget
      :context ctx
      :watch [{task-detail :task-detail
@@ -473,16 +542,19 @@
              status status-state
              defer defer-state
              due due-state
-             estimated-minutes estimated-minutes-state]
+             estimated-minutes estimated-minutes-state
+             project-type project-type-state]
      :let [display-content #(if editing content (or (some-> task-detail .-content) ""))
            display-status #(if editing status (or (some-> task-detail .-status keyword) :active))
            display-defer #(if editing defer (some-> task-detail .-deferAt))
            display-due #(if editing due (some-> task-detail .-dueAt))
-           display-estimated #(if editing estimated-minutes (some-> task-detail .-estimatedMinutes))]
+           display-estimated #(if editing estimated-minutes (some-> task-detail .-estimatedMinutes))
+           display-project-type #(if editing project-type (some-> task-detail .-projectType))
+           is-project? #(= (some-> task-detail .-type) "project")]
        (m/Scaffold
         .appBar (m/AppBar
                  .actions
-                 (actions ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state))
+                 (actions ctx editing task-detail defer-state due-state content-state status-state editing-state estimated-minutes-state project-type-state))
         .body (cond
                 loading (m/Center .child (m/CircularProgressIndicator))
                 (nil? task-detail) (m/Center
@@ -499,7 +571,8 @@
                            .scrollDirection m/Axis.horizontal
                            .padding (m/EdgeInsets.all (comp/space :m))
                            .children
-                           [(if editing
+                           (concat
+                            [(if editing
                               (mgl/MongolTextField
                                .controller (m/TextEditingController .text (display-content))
                                .onChanged (fn [value] (reset! content-state value))
@@ -524,7 +597,9 @@
                             (m/SizedBox .width (comp/space :l))
                             (recurrence-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))
-                            (tags-section task-detail tag-ids all-tags)
-
-                            (elavated-buttons ctx task-detail display-status)]))
+                            (tags-section task-detail tag-ids all-tags)]
+                            (when (is-project?)
+                              [(m/SizedBox .width (comp/space :l))
+                               (project-type-section ctx task-detail display-project-type editing-state project-type-state)])
+                            [(elavated-buttons ctx task-detail display-status)])))
                   (keyboard/keyboard {:custom-fns {}})]))))))

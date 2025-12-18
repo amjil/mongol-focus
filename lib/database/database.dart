@@ -52,6 +52,10 @@ class Items extends Table {
   // estimated duration in minutes
   IntColumn get estimatedMinutes => integer().nullable()();
 
+  // project type: "sequential", "parallel", "single_action_list", or null
+  // Only applicable when type = "project"
+  TextColumn get projectType => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -206,7 +210,7 @@ class AppDatabase extends _$AppDatabase {
   SearchDao get searchDao => _searchDao ??= SearchDao(this);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -251,6 +255,11 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'INSERT INTO items_fts(content, id) SELECT content, id FROM items',
           );
+        }
+        if (from < 6) {
+          // Migration from version 5 to 6
+          // Add projectType field to Items table
+          await m.addColumn(items, items.projectType);
         }
       },
     );
@@ -322,6 +331,7 @@ class AppDatabase extends _$AppDatabase {
     DateTime? deferAt,
     DateTime? dueAt,
     int? estimatedMinutes,
+    String? projectType,
   ) async {
     final companion = ItemsCompanion(
       content: content != null ? Value(content) : const Value.absent(),
@@ -329,6 +339,7 @@ class AppDatabase extends _$AppDatabase {
       deferAt: deferAt != null ? Value(deferAt) : const Value.absent(),
       dueAt: dueAt != null ? Value(dueAt) : const Value.absent(),
       estimatedMinutes: estimatedMinutes != null ? Value(estimatedMinutes) : const Value.absent(),
+      projectType: projectType != null ? Value(projectType) : const Value.absent(),
       updatedAt: Value(DateTime.now()),
     );
     await (update(items)..where((t) => t.id.equals(id))).write(companion);

@@ -78,8 +78,10 @@
 (defn create-task
   "Create new task"
   ([^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at]
-   (create-task content type status defer-at due-at nil))
+   (create-task content type status defer-at due-at nil nil))
   ([^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at estimated-minutes]
+   (create-task content type status defer-at due-at estimated-minutes nil))
+  ([^String content type status ^dart-core/DateTime? defer-at ^dart-core/DateTime? due-at estimated-minutes project-type]
    (let [^drift/AppDatabase database (db/get-database)
          ^String task-id (ids/generate-id)
          ^String task-type (or type "task")
@@ -97,6 +99,10 @@
          estimated-value (if (some? estimated-minutes)
                           (d/Value estimated-minutes)
                           (d/Value nil))
+         ^#/(d/Value String?)
+         project-type-value (if (and (= task-type "project") (some? project-type))
+                            (d/Value project-type)
+                            (d/Value nil))
          companion (drift/ItemsCompanion.insert
                     .id task-id
                     .type task-type
@@ -105,6 +111,7 @@
                     .deferAt defer-value
                     .dueAt due-value
                     .estimatedMinutes estimated-value
+                    .projectType project-type-value
                     .createdAt (d/Value now)
                     .updatedAt (d/Value now))]
     (-> (.insert
@@ -121,10 +128,12 @@
 (defn update-task
   "Update task with automatic refresh of related pages"
   ([id content status defer-at due-at]
-   (update-task id content status defer-at due-at nil))
+   (update-task id content status defer-at due-at nil nil))
   ([id content status defer-at due-at estimated-minutes]
+   (update-task id content status defer-at due-at estimated-minutes nil))
+  ([id content status defer-at due-at estimated-minutes project-type]
    (let [^drift/AppDatabase database (db/get-database)]
-     (-> (.updateTask database id content status defer-at due-at estimated-minutes)
+     (-> (.updateTask database id content status defer-at due-at estimated-minutes project-type)
          (.then (fn [_]
                   ;; Update reminders when task is modified
                   (update-task-reminders id)

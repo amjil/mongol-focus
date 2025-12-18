@@ -153,6 +153,17 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _projectTypeMeta = const VerificationMeta(
+    'projectType',
+  );
+  @override
+  late final GeneratedColumn<String> projectType = GeneratedColumn<String>(
+    'project_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -192,6 +203,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
     lastReviewedAt,
     reviewIntervalDays,
     estimatedMinutes,
+    projectType,
     createdAt,
     updatedAt,
   ];
@@ -303,6 +315,15 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         ),
       );
     }
+    if (data.containsKey('project_type')) {
+      context.handle(
+        _projectTypeMeta,
+        projectType.isAcceptableOrUnknown(
+          data['project_type']!,
+          _projectTypeMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -376,6 +397,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, Item> {
         DriftSqlType.int,
         data['${effectivePrefix}estimated_minutes'],
       ),
+      projectType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_type'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -407,6 +432,7 @@ class Item extends DataClass implements Insertable<Item> {
   final DateTime? lastReviewedAt;
   final int? reviewIntervalDays;
   final int? estimatedMinutes;
+  final String? projectType;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Item({
@@ -423,6 +449,7 @@ class Item extends DataClass implements Insertable<Item> {
     this.lastReviewedAt,
     this.reviewIntervalDays,
     this.estimatedMinutes,
+    this.projectType,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -455,6 +482,9 @@ class Item extends DataClass implements Insertable<Item> {
     }
     if (!nullToAbsent || estimatedMinutes != null) {
       map['estimated_minutes'] = Variable<int>(estimatedMinutes);
+    }
+    if (!nullToAbsent || projectType != null) {
+      map['project_type'] = Variable<String>(projectType);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -490,6 +520,9 @@ class Item extends DataClass implements Insertable<Item> {
       estimatedMinutes: estimatedMinutes == null && nullToAbsent
           ? const Value.absent()
           : Value(estimatedMinutes),
+      projectType: projectType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectType),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -516,6 +549,7 @@ class Item extends DataClass implements Insertable<Item> {
       lastReviewedAt: serializer.fromJson<DateTime?>(json['lastReviewedAt']),
       reviewIntervalDays: serializer.fromJson<int?>(json['reviewIntervalDays']),
       estimatedMinutes: serializer.fromJson<int?>(json['estimatedMinutes']),
+      projectType: serializer.fromJson<String?>(json['projectType']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -537,6 +571,7 @@ class Item extends DataClass implements Insertable<Item> {
       'lastReviewedAt': serializer.toJson<DateTime?>(lastReviewedAt),
       'reviewIntervalDays': serializer.toJson<int?>(reviewIntervalDays),
       'estimatedMinutes': serializer.toJson<int?>(estimatedMinutes),
+      'projectType': serializer.toJson<String?>(projectType),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -556,6 +591,7 @@ class Item extends DataClass implements Insertable<Item> {
     Value<DateTime?> lastReviewedAt = const Value.absent(),
     Value<int?> reviewIntervalDays = const Value.absent(),
     Value<int?> estimatedMinutes = const Value.absent(),
+    Value<String?> projectType = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Item(
@@ -582,6 +618,7 @@ class Item extends DataClass implements Insertable<Item> {
     estimatedMinutes: estimatedMinutes.present
         ? estimatedMinutes.value
         : this.estimatedMinutes,
+    projectType: projectType.present ? projectType.value : this.projectType,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -610,6 +647,9 @@ class Item extends DataClass implements Insertable<Item> {
       estimatedMinutes: data.estimatedMinutes.present
           ? data.estimatedMinutes.value
           : this.estimatedMinutes,
+      projectType: data.projectType.present
+          ? data.projectType.value
+          : this.projectType,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -631,6 +671,7 @@ class Item extends DataClass implements Insertable<Item> {
           ..write('lastReviewedAt: $lastReviewedAt, ')
           ..write('reviewIntervalDays: $reviewIntervalDays, ')
           ..write('estimatedMinutes: $estimatedMinutes, ')
+          ..write('projectType: $projectType, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -652,6 +693,7 @@ class Item extends DataClass implements Insertable<Item> {
     lastReviewedAt,
     reviewIntervalDays,
     estimatedMinutes,
+    projectType,
     createdAt,
     updatedAt,
   );
@@ -672,6 +714,7 @@ class Item extends DataClass implements Insertable<Item> {
           other.lastReviewedAt == this.lastReviewedAt &&
           other.reviewIntervalDays == this.reviewIntervalDays &&
           other.estimatedMinutes == this.estimatedMinutes &&
+          other.projectType == this.projectType &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -690,6 +733,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
   final Value<DateTime?> lastReviewedAt;
   final Value<int?> reviewIntervalDays;
   final Value<int?> estimatedMinutes;
+  final Value<String?> projectType;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -707,6 +751,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.lastReviewedAt = const Value.absent(),
     this.reviewIntervalDays = const Value.absent(),
     this.estimatedMinutes = const Value.absent(),
+    this.projectType = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -725,6 +770,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     this.lastReviewedAt = const Value.absent(),
     this.reviewIntervalDays = const Value.absent(),
     this.estimatedMinutes = const Value.absent(),
+    this.projectType = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -745,6 +791,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Expression<DateTime>? lastReviewedAt,
     Expression<int>? reviewIntervalDays,
     Expression<int>? estimatedMinutes,
+    Expression<String>? projectType,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -764,6 +811,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       if (reviewIntervalDays != null)
         'review_interval_days': reviewIntervalDays,
       if (estimatedMinutes != null) 'estimated_minutes': estimatedMinutes,
+      if (projectType != null) 'project_type': projectType,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -784,6 +832,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     Value<DateTime?>? lastReviewedAt,
     Value<int?>? reviewIntervalDays,
     Value<int?>? estimatedMinutes,
+    Value<String?>? projectType,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -802,6 +851,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
       reviewIntervalDays: reviewIntervalDays ?? this.reviewIntervalDays,
       estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
+      projectType: projectType ?? this.projectType,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -850,6 +900,9 @@ class ItemsCompanion extends UpdateCompanion<Item> {
     if (estimatedMinutes.present) {
       map['estimated_minutes'] = Variable<int>(estimatedMinutes.value);
     }
+    if (projectType.present) {
+      map['project_type'] = Variable<String>(projectType.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -878,6 +931,7 @@ class ItemsCompanion extends UpdateCompanion<Item> {
           ..write('lastReviewedAt: $lastReviewedAt, ')
           ..write('reviewIntervalDays: $reviewIntervalDays, ')
           ..write('estimatedMinutes: $estimatedMinutes, ')
+          ..write('projectType: $projectType, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -3437,6 +3491,7 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<DateTime?> lastReviewedAt,
       Value<int?> reviewIntervalDays,
       Value<int?> estimatedMinutes,
+      Value<String?> projectType,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -3456,6 +3511,7 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<DateTime?> lastReviewedAt,
       Value<int?> reviewIntervalDays,
       Value<int?> estimatedMinutes,
+      Value<String?> projectType,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -3531,6 +3587,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<int> get estimatedMinutes => $composableBuilder(
     column: $table.estimatedMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectType => $composableBuilder(
+    column: $table.projectType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3619,6 +3680,11 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get projectType => $composableBuilder(
+    column: $table.projectType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3688,6 +3754,11 @@ class $$ItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get projectType => $composableBuilder(
+    column: $table.projectType,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -3736,6 +3807,7 @@ class $$ItemsTableTableManager
                 Value<DateTime?> lastReviewedAt = const Value.absent(),
                 Value<int?> reviewIntervalDays = const Value.absent(),
                 Value<int?> estimatedMinutes = const Value.absent(),
+                Value<String?> projectType = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3753,6 +3825,7 @@ class $$ItemsTableTableManager
                 lastReviewedAt: lastReviewedAt,
                 reviewIntervalDays: reviewIntervalDays,
                 estimatedMinutes: estimatedMinutes,
+                projectType: projectType,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -3772,6 +3845,7 @@ class $$ItemsTableTableManager
                 Value<DateTime?> lastReviewedAt = const Value.absent(),
                 Value<int?> reviewIntervalDays = const Value.absent(),
                 Value<int?> estimatedMinutes = const Value.absent(),
+                Value<String?> projectType = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -3789,6 +3863,7 @@ class $$ItemsTableTableManager
                 lastReviewedAt: lastReviewedAt,
                 reviewIntervalDays: reviewIntervalDays,
                 estimatedMinutes: estimatedMinutes,
+                projectType: projectType,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
