@@ -29,7 +29,7 @@
    :blocked #{:idle :active}
    :completed #{}})
  
-(declare get-task-by-id)
+(declare get-task-by-id refresh-today-tasks! refresh-inbox-tasks! refresh-focus-tasks! refresh-forecast-items! refresh-projects!)
 
 (defn valid-status-transition?
   "Check if task status transition from from-status to to-status is allowed.
@@ -126,6 +126,17 @@
                       (toast/handle-error-global error "Ажлыг үүсгэхэд алдаа гарлаа")
                       (dart-core/Future.value nil)))))))
 
+(defn- refresh-related-pages!
+  "Refresh all pages that might be affected by task changes"
+  []
+  ;; Refresh all task list pages in background (non-blocking)
+  (refresh-today-tasks!)
+  (refresh-inbox-tasks!)
+  (refresh-focus-tasks!)
+  (refresh-forecast-items!)
+  (refresh-projects!)
+  nil)
+
 (defn update-task
   "Update task with automatic refresh of related pages"
   ([id content status defer-at due-at]
@@ -138,6 +149,8 @@
          (.then (fn [_]
                   ;; Update reminders when task is modified
                   (update-task-reminders id)
+                  ;; Auto-refresh related pages
+                  (refresh-related-pages!)
                   nil))
          (.catchError (fn [error]
                        (toast/handle-error-global error "Ажлыг шинэчлэхэд алдаа гарлаа")
@@ -172,6 +185,10 @@
                  (.go
                   (doto (.delete database (.-items database))
                     (.where (fn [^drift/Items tbl] (.equals (.-id tbl) id)))))))
+        (.then (fn [_]
+                 ;; Auto-refresh related pages after deletion
+                 (refresh-related-pages!)
+                 nil))
         (.catchError (fn [error]
                       (toast/handle-error-global error "Ажлыг устгахад алдаа гарлаа")
                       (dart-core/Future.value nil))))))
@@ -524,6 +541,8 @@
       (.then (fn [_]
                ;; Cancel reminders for completed tasks
                (notif/cancel-task-reminder id)
+               ;; Auto-refresh related pages
+               (refresh-related-pages!)
                nil))
       (.catchError (fn [error]
                     (toast/handle-error-global error "Ажлыг дуусгахад алдаа гарлаа")

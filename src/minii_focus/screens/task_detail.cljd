@@ -67,24 +67,31 @@
                                          .dueAt due-value
                                          .projectType project-type-value))
                        s)))
-            (when valid?
-              (reset! editing-state false)
-              ;; Then persist to database (auto-refresh happens in update-task)
-              (-> (task/update-task (.-id task-detail)
-                                  @content-state
-                                  (name status-to-save)
-                                  @defer-state
-                                  @due-state
-                                  estimated-mins
-                                  project-type-val)
-                  (.then (fn [_]
-                           (task/refresh-task-detail! (.-id task-detail))))
-                  (.catchError
-                   (fn [error]
-                     (toast/handle-error-with-toast ctx error "Ажлыг хадгалахад алдаа гарлаа")
-                     ;; Rollback on error
-                     (when task-detail
-                       (task/refresh-task-detail! (.-id task-detail)))))))))))
+            ;; Validate content before saving
+            (if (empty? @content-state)
+              (toast/show-warning-toast ctx "Ажлын агуулга хоосон байна")
+              (when valid?
+                (reset! editing-state false)
+                ;; Show saving indicator
+                (toast/show-info-toast ctx "Хадгалж байна...")
+                ;; Then persist to database (auto-refresh happens in update-task)
+                (-> (task/update-task (.-id task-detail)
+                                    @content-state
+                                    (name status-to-save)
+                                    @defer-state
+                                    @due-state
+                                    estimated-mins
+                                    project-type-val)
+                    (.then (fn [_]
+                             (task/refresh-task-detail! (.-id task-detail))
+                             (toast/show-success-toast ctx "Амжилттай хадгаллаа")))
+                    (.catchError
+                     (fn [error]
+                       (reset! editing-state true) ; Re-enable editing on error
+                       (toast/handle-error-with-toast ctx error "Ажлыг хадгалахад алдаа гарлаа")
+                       ;; Rollback on error
+                       (when task-detail
+                         (task/refresh-task-detail! (.-id task-detail))))))))))))
      (m/IconButton
       .icon (m/Icon m/Icons.close)
       .onPressed

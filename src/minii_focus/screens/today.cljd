@@ -77,6 +77,16 @@
                                               (m/MaterialPageRoute
                                                .builder (fn [_]
                                                           (task-detail/task-detail-screen task-id)))))
+                                   :on-complete (fn []
+                                                  ;; Mark task as completed
+                                                  (when (and (not= task-status :completed)
+                                                             (task/valid-status-transition? task-status :completed))
+                                                    (-> (task/mark-task-completed task-id)
+                                                        (.then (fn [_]
+                                                                 (refresh-today-with-blocked!)
+                                                                 (toast/show-success-toast ctx "Ажлыг дуусгалаа")))
+                                                        (.catchError (fn [error]
+                                                                       (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа"))))))
                                    :on-long-press
                                    (fn []
                                      ;; Structure adjustment: integrate item-tree hierarchy & ordering

@@ -46,8 +46,9 @@
    Swipe left: Enter Focus (horizontal swipe left, for compatibility)
    Swipe right: Return/move
    Long press: Structure adjustment
-   Supports showing blocked status and hierarchy level"
-  [{:keys [content status on-long-press on-tap on-swipe-up on-swipe-left on-swipe-right blocked? level parent-content]}]
+   Supports showing blocked status and hierarchy level
+   on-complete: callback for marking task as completed"
+  [{:keys [content status on-long-press on-tap on-swipe-up on-swipe-left on-swipe-right blocked? level parent-content on-complete]}]
   (f/widget
    :let [effective-status (if (and blocked? (not= status :completed)) :blocked status)
          effective-color (get task-status-colors effective-status m/Colors.grey)
@@ -93,38 +94,52 @@
                                                    .color effective-color
                                                    .width 3))
                                    .color (when blocked? m/Colors.grey.shade100))
-                      .child (m/Column
+                      .child (m/Row
                               .crossAxisAlignment m/CrossAxisAlignment.start
+                              .mainAxisSize m/MainAxisSize.min
                               .children
-                              [(if parent-content
-                                 (m/Row
-                                  .children
-                                  [(m/Icon m/Icons.subdirectory_arrow_right
-                                           .size 12
-                                           .color m/Colors.grey.shade600)
-                                   (m/SizedBox .width 4)
-                                   (mongol-text-block
-                                    {:text parent-content
-                                     :style (m/TextStyle
-                                             .fontSize 12
-                                             .color m/Colors.grey.shade600)})])
-                                 (m/SizedBox))
-                               (mongol-text-block
-                                {:text content
-                                 :is-focused (= status :active)})
-                               (if blocked?
-                                 (m/Row
-                                  .children
-                                  [(m/Icon m/Icons.block
-                                           .size 12
-                                           .color m/Colors.red.shade600)
-                                   (m/SizedBox .width 4)
-                                   (mongol-text-block
-                                    {:text "Blocked by parent"
-                                     :style (m/TextStyle
-                                             .fontSize 10
-                                             .color m/Colors.red.shade600)})])
-                                 (m/SizedBox))])))]))))
+                              [(m/Column
+                                .crossAxisAlignment m/CrossAxisAlignment.start
+                                .mainAxisSize m/MainAxisSize.min
+                                .children
+                                [(if parent-content
+                                   (m/Row
+                                    .children
+                                    [(m/Icon m/Icons.subdirectory_arrow_right
+                                             .size 12
+                                             .color m/Colors.grey.shade600)
+                                     (m/SizedBox .width 4)
+                                     (mongol-text-block
+                                      {:text parent-content
+                                       :style (m/TextStyle
+                                               .fontSize 12
+                                               .color m/Colors.grey.shade600)})])
+                                   (m/SizedBox))
+                                 (mongol-text-block
+                                  {:text content
+                                   :is-focused (= status :active)})
+                                 (if blocked?
+                                   (m/Row
+                                    .children
+                                    [(m/Icon m/Icons.block
+                                             .size 12
+                                             .color m/Colors.red.shade600)
+                                     (m/SizedBox .width 4)
+                                     (mongol-text-block
+                                      {:text "Blocked by parent"
+                                       :style (m/TextStyle
+                                               .fontSize 10
+                                               .color m/Colors.red.shade600)})])
+                                   (m/SizedBox))])
+                               (m/SizedBox .width 8)
+                               ;; Completion checkbox/button
+                               (when (and on-complete (not= status :completed))
+                                 (m/IconButton
+                                  .icon (m/Icon m/Icons.check_circle_outline)
+                                  .iconSize 20
+                                  .color m/Colors.green.shade600
+                                  .onPressed (fn [] (on-complete))
+                                  .tooltip "Mark as completed"))])))])))
 
 ;; ============================================
 ;; 3.3 MongolNoteBlock
