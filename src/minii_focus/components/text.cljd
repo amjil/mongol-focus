@@ -42,10 +42,12 @@
 
 (defn mongol-task-item
   "Status: idle, active, blocked, completed
-   Swipe left: Enter Focus
+   Swipe up: Enter Focus (vertical swipe up)
+   Swipe left: Enter Focus (horizontal swipe left, for compatibility)
+   Swipe right: Return/move
    Long press: Structure adjustment
    Supports showing blocked status and hierarchy level"
-  [{:keys [content status on-long-press on-tap on-swipe-left blocked? level parent-content]}]
+  [{:keys [content status on-long-press on-tap on-swipe-up on-swipe-left on-swipe-right blocked? level parent-content]}]
   (f/widget
    :let [effective-status (if (and blocked? (not= status :completed)) :blocked status)
          effective-color (get task-status-colors effective-status m/Colors.grey)
@@ -53,11 +55,27 @@
    (m/GestureDetector
     .onLongPress on-long-press
     .onTap on-tap
-    .onHorizontalDragEnd (when on-swipe-left
-                           (fn [details]
-                             (let [velocity (.-primaryVelocity details)]
-                               (when (and velocity (< velocity -500) on-swipe-left)
-                                 (on-swipe-left)))))
+    ;; Vertical swipe up: Enter Focus (for vertical writing layout)
+    .onVerticalDragEnd (when (or on-swipe-up on-swipe-left)
+                        (fn [details]
+                          (let [velocity (.-primaryVelocity details)]
+                            ;; Upward swipe (negative velocity in vertical direction)
+                            (when (and velocity (< velocity -500))
+                              (when on-swipe-up (on-swipe-up))
+                              ;; Fallback to on-swipe-left if on-swipe-up not provided
+                              (when (and (not on-swipe-up) on-swipe-left) (on-swipe-left))))))
+    ;; Horizontal swipe left: Enter Focus (for compatibility)
+    .onHorizontalDragEnd (fn [details]
+                          (let [velocity (.-primaryVelocity details)]
+                            (cond
+                              ;; Swipe left: Enter Focus
+                              (and velocity (< velocity -500) (or on-swipe-left on-swipe-up))
+                              (do
+                                (when on-swipe-left (on-swipe-left))
+                                (when (and (not on-swipe-left) on-swipe-up) (on-swipe-up)))
+                              ;; Swipe right: Return/move
+                              (and velocity (> velocity 500) on-swipe-right)
+                              (on-swipe-right)))))
     .child (m/Row
             .mainAxisSize m/MainAxisSize.min
             .children

@@ -147,30 +147,162 @@
    (fn [_]
      (m/Wrap
       .children
-      [(mgl/MongolListTile
-        .leading (m/Icon m/Icons.check)
-        .title (mgl/MongolText "Mark as completed")
-        .onTap
-        (fn []
-          (-> (task-svc/mark-task-completed item-id)
-              (.then (fn [_]
-                       (refresh-projects-with-blocked!)
-                       (task-svc/refresh-projects!)))
-              (.catchError (fn [error]
-                             (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа"))))
-          (m/Navigator.pop ctx)))
+      [
+       ;; Structure adjustment options
+       (m/ListTile
+          .leading (m/Icon m/Icons.subdirectory_arrow_right)
+          .title (m/Text "Set as subtask")
+          .onTap
+          (fn []
+            ;; Get previous sibling as parent (if exists)
+            (-> (tree-svc/get-parent item-id)
+                (.then
+                 (fn [parent-rel]
+                   (if parent-rel
+                     (let [parent-id (.-parentId parent-rel)]
+                       (-> (tree-svc/get-children parent-id)
+                           (.then
+                            (fn [relations]
+                              (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                    idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))
+                                    prev-task-id (when (and idx (pos? idx)) (nth child-ids (dec idx)))]
+                                (if prev-task-id
+                                  (-> (tree-svc/set-parent-task item-id prev-task-id)
+                                      (.then (fn [_]
+                                               (dart-core/print (str "Set task " item-id " as child of " prev-task-id))
+                                               (refresh-projects-with-blocked!)
+                                               (task-svc/refresh-projects!)))
+                                      (.catchError
+                                       (fn [error]
+                                         (toast/handle-error-with-toast ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))
+                                  (do
+                                    (dart-core/print "No previous task to set as parent")
+                                    (toast/show-toast ctx "No previous task to set as parent" :info)))
+                                (m/Navigator.pop ctx)))))
+                           (.catchError
+                            (fn [error]
+                              (m/Navigator.pop ctx)
+                              (toast/handle-error-with-toast ctx error "Дэд ажлыг тохируулахад алдаа гарлаа"))))
+                     (do
+                       (m/Navigator.pop ctx)
+                       (toast/show-toast ctx "No parent task found" :info))))))
+                (.catchError
+                 (fn [error]
+                   (m/Navigator.pop ctx)
+                   (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+            nil)
+         (m/ListTile
+          .leading (m/Icon m/Icons.arrow_upward)
+          .title (m/Text "Move up")
+          .onTap
+          (fn []
+            ;; Move task up among siblings
+            (-> (tree-svc/get-parent item-id)
+                (.then
+                 (fn [parent-rel]
+                   (if parent-rel
+                     (let [parent-id (.-parentId parent-rel)]
+                       (-> (tree-svc/get-children parent-id)
+                           (.then
+                            (fn [relations]
+                              (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                    idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))]
+                                (if (and idx (pos? idx))
+                                  (let [new-child-ids (-> child-ids
+                                                          (assoc idx (nth child-ids (dec idx)))
+                                                          (assoc (dec idx) item-id))]
+                                    (-> (tree-svc/reorder-siblings parent-id new-child-ids)
+                                        (.then
+                                         (fn [_]
+                                           (dart-core/print (str "Moved task up: " item-id))
+                                           (refresh-projects-with-blocked!)
+                                           (task-svc/refresh-projects!)))
+                                        (.catchError
+                                         (fn [error]
+                                           (toast/handle-error-with-toast ctx error "Ажлыг дээш шилжүүлэхэд алдаа гарлаа")))))
+                                  (dart-core/print "Task is already at the top or not found among siblings"))
+                                (m/Navigator.pop ctx))))
+                           (.catchError
+                            (fn [error]
+                              (m/Navigator.pop ctx)
+                              (toast/handle-error-with-toast ctx error "Дээш шилжүүлэхэд алдаа гарлаа")))))
+                     (do
+                       (m/Navigator.pop ctx)
+                       (toast/show-toast ctx "Task has no parent; cannot move up" :info)))))
+                (.catchError
+                 (fn [error]
+                   (m/Navigator.pop ctx)
+                   (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+            nil))
+         (m/ListTile
+          .leading (m/Icon m/Icons.arrow_downward)
+          .title (m/Text "Move down")
+          .onTap
+          (fn []
+            ;; Move task down among siblings
+            (-> (tree-svc/get-parent item-id)
+                (.then
+                 (fn [parent-rel]
+                   (if parent-rel
+                     (let [parent-id (.-parentId parent-rel)]
+                       (-> (tree-svc/get-children parent-id)
+                           (.then
+                            (fn [relations]
+                              (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                    idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))
+                                    last-idx (dec (count child-ids))]
+                                (if (and idx (< idx last-idx))
+                                  (let [new-child-ids (-> child-ids
+                                                          (assoc idx (nth child-ids (inc idx)))
+                                                          (assoc (inc idx) item-id))]
+                                    (-> (tree-svc/reorder-siblings parent-id new-child-ids)
+                                        (.then
+                                         (fn [_]
+                                           (dart-core/print (str "Moved task down: " item-id))
+                                           (refresh-projects-with-blocked!)
+                                           (task-svc/refresh-projects!)))
+                                        (.catchError
+                                         (fn [error]
+                                           (toast/handle-error-with-toast ctx error "Ажлыг доош шилжүүлэхэд алдаа гарлаа")))))
+                                  (dart-core/print "Task is already at the bottom or not found among siblings"))
+                                (m/Navigator.pop ctx))))
+                           (.catchError
+                            (fn [error]
+                              (m/Navigator.pop ctx)
+                              (toast/handle-error-with-toast ctx error "Доош шилжүүлэхэд алдаа гарлаа")))))
+                     (do
+                       (m/Navigator.pop ctx)
+                       (toast/show-toast ctx "Task has no parent; cannot move down" :info)))))
+                (.catchError
+                 (fn [error]
+                   (m/Navigator.pop ctx)
+                   (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+            nil))
+       ;; Basic operations
        (mgl/MongolListTile
-        .leading (m/Icon m/Icons.delete)
-        .title (mgl/MongolText "Delete task")
-        .onTap
-        (fn []
-          (m/Navigator.pop ctx)
-          (-> (task-svc/delete-task item-id)
-              (.then (fn [_]
-                       (refresh-projects-with-blocked!)
-                       (task-svc/refresh-projects!)))
-              (.catchError (fn [error]
-                             (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))))]))))
+          .leading (m/Icon m/Icons.check)
+          .title (mgl/MongolText "Mark as completed")
+          .onTap
+          (fn []
+            (-> (task-svc/mark-task-completed item-id)
+                (.then (fn [_]
+                         (refresh-projects-with-blocked!)
+                         (task-svc/refresh-projects!)))
+                (.catchError (fn [error]
+                               (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа"))))
+            (m/Navigator.pop ctx)))
+         (mgl/MongolListTile
+          .leading (m/Icon m/Icons.delete)
+          .title (mgl/MongolText "Delete task")
+          .onTap
+          (fn []
+            (m/Navigator.pop ctx)
+            (-> (task-svc/delete-task item-id)
+                (.then (fn [_]
+                         (refresh-projects-with-blocked!)
+                         (task-svc/refresh-projects!)))
+                (.catchError (fn [error]
+                               (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))))]))))
 
 (defn- item-swipe-left-fn [ctx item-id item]
   (-> (task-svc/enter-focus item-id)
@@ -255,10 +387,20 @@
                       ;; Structure adjustment menu
                       (item-long-press-fn ctx item-id refresh-projects-with-blocked!)
                       nil)
+                    :on-swipe-up
+                    (fn []
+                      ;; Swipe up to enter Focus (vertical gesture)
+                      (item-swipe-left-fn ctx item-id item)
+                      nil)
                     :on-swipe-left
                     (fn []
-                      ;; Swipe left to enter Focus
+                      ;; Swipe left to enter Focus (horizontal gesture, for compatibility)
                       (item-swipe-left-fn ctx item-id item)
+                      nil)
+                    :on-swipe-right
+                    (fn []
+                      ;; Swipe right: Return/move (navigate back)
+                      (m/Navigator.pop ctx)
                       nil)})))
               _child-items))
         [(mgl/MongolListTile
