@@ -113,7 +113,7 @@
         (.then (fn [_]
                  ;; Schedule reminders for new task
                  (update-task-reminders task-id)
-                 nil))
+                 task-id))
         (.catchError (fn [error]
                       (toast/handle-error-global error "Ажлыг үүсгэхэд алдаа гарлаа")
                       (dart-core/Future.value nil)))))))

@@ -2,13 +2,16 @@
   "Inbox / Quick Entry"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
    [minii-focus.components.dialog :as dialog]
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.services.task :as task]
-   [minii-focus.states.app-state :as state]))
+   [minii-focus.services.text-parser :as text-parser]
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.toast :as toast]))
 
 (defn- side-panel [tasks tasks-with-info defer-date due-date]
   (m/Container
@@ -40,6 +43,93 @@
                       "Due Not set")
               :style (m/TextStyle .color (comp/color :text-weak))})])))
 
+(defn- quick-entry-button [ctx content defer-date due-date controller]
+  (m/InkWell
+   .onTap (fn []
+            (dialog/show-mongol-input-dialog
+             ctx
+             {:controller controller
+              :defer-date defer-date
+              :due-date due-date
+              :content content}))
+   .child (m/Container
+           .padding (m/EdgeInsets.all (comp/space :s))
+           .decoration (m/BoxDecoration
+                        .border (m/Border.all
+                                 .color m/Colors.grey.shade300
+                                 .width 1)
+                        .borderRadius (m/BorderRadius.circular 4))
+           .child (m/Column
+                   .mainAxisSize m/MainAxisSize.max
+                   .mainAxisAlignment m/MainAxisAlignment.center
+                   .children
+                   [(m/Icon m/Icons.add .size (comp/font-size :m) .color m/Colors.grey.shade600)
+                    (m/SizedBox .height (comp/space :xs))
+                    (comp/mongol-text-block
+                     {:text (if (empty? @content)
+                              "Quick entry"
+                              @content)
+                      :style (m/TextStyle
+                              .fontSize (comp/font-size :m)
+                              .color (if (empty? @content)
+                                       m/Colors.blue.shade300
+                                       m/Colors.black))})]))))
+
+(defn- quick-entry-from-clipboard [ctx content defer-date due-date controller]
+  (m/InkWell
+   .onTap (fn []
+            ;; Read from clipboard and parse
+            (-> (services/Clipboard.getData services/Clipboard.kTextPlain)
+                (.then (fn [clipboard-data]
+                         (if (and clipboard-data (.-text clipboard-data) (not (empty? (.-text clipboard-data))))
+                           (let [clipboard-text (.-text clipboard-data)
+                                 parsed (text-parser/parse-quick-entry-text clipboard-text)
+                                 parsed-content (:content parsed)
+                                 parsed-defer-date (:defer-date parsed)
+                                 parsed-due-date (:due-date parsed)
+                                 parsed-tag-names (:tag-names parsed)
+                                 parsed-is-flagged (:is-flagged parsed)]
+                             ;; Pre-fill dialog with parsed content
+                             (reset! content parsed-content)
+                             (reset! defer-date parsed-defer-date)
+                             (reset! due-date parsed-due-date)
+                             (set! (.-text controller) parsed-content)
+                             ;; Show dialog
+                             (dialog/show-mongol-input-dialog
+                              ctx
+                              {:controller controller
+                               :defer-date defer-date
+                               :due-date due-date
+                               :content content
+                               :parsed-tag-names parsed-tag-names
+                               :parsed-is-flagged parsed-is-flagged}))
+                           (toast/show-warning-toast ctx "Clipboard is empty"))))
+                (.catchError (fn [error]
+                               (dart-core/print (str "Error reading clipboard: " error))
+                               (toast/show-error-toast ctx "Failed to read clipboard"))))
+            nil)
+   .child (m/Container
+           .padding (m/EdgeInsets.all (comp/space :s))
+           .decoration (m/BoxDecoration
+                        .border (m/Border.all
+                                 .color m/Colors.grey.shade300
+                                 .width 1)
+                        .borderRadius (m/BorderRadius.circular 4))
+           .child (m/Column
+                   .mainAxisSize m/MainAxisSize.max
+                   .mainAxisAlignment m/MainAxisAlignment.center
+                   .children
+                   [(m/Icon m/Icons.paste .size (comp/font-size :m) .color m/Colors.grey.shade600)
+                    (m/SizedBox .height (comp/space :xs))
+                    (comp/mongol-text-block
+                     {:text "From clipboard"
+                      :style (m/TextStyle
+                              .fontSize (comp/font-size :m)
+                              .color (if (empty? @content)
+                                       m/Colors.blue.shade300
+                                       m/Colors.black))})]))))
+
+
 (defn inbox-screen []
   (let [content (atom "")
         defer-date (atom nil)
@@ -65,34 +155,12 @@
          .mainAxisSize m/MainAxisSize.max
          .mainAxisAlignment m/MainAxisAlignment.spaceAround
          .children
-         [(m/InkWell
-           .onTap (fn []
-                    (dialog/show-mongol-input-dialog
-                     ctx
-                     {:controller controller
-                      :defer-date defer-date
-                      :due-date due-date
-                      :content content}))
-           .child (m/Container
-                   .padding (m/EdgeInsets.all (comp/space :s))
-                   .decoration (m/BoxDecoration
-                                .border (m/Border.all
-                                         .color m/Colors.grey.shade300
-                                         .width 1)
-                                .borderRadius (m/BorderRadius.circular 4))
-                   .child (m/Column
-                           .mainAxisSize m/MainAxisSize.max
-                           .mainAxisAlignment m/MainAxisAlignment.center
-                           .children
-                           [(comp/mongol-text-block
-                             {:text (if (empty? @content)
-                                      "Quick entry"
-                                      @content)
-                              :style (m/TextStyle
-                                      .fontSize (comp/font-size :m)
-                                      .color (if (empty? @content)
-                                               m/Colors.grey.shade600
-                                               m/Colors.black))})])))
+         [(m/Column
+           .mainAxisSize m/MainAxisSize.max
+           .children
+           [(m/Expanded .child (quick-entry-button ctx content defer-date due-date controller))
+            (m/SizedBox .height (comp/space :s))
+            (m/Expanded .child (quick-entry-from-clipboard ctx content defer-date due-date controller))])
           (m/SizedBox .width (comp/space :s))
           (m/Divider)
           (do
@@ -100,9 +168,9 @@
             (when (and (not loading) (seq tasks) (empty? @tasks-with-info))
               (-> (task/get-tasks-with-blocked-info tasks)
                   (.then (fn [info-list]
-                          (reset! tasks-with-info info-list)))
+                           (reset! tasks-with-info info-list)))
                   (.catchError (fn [error]
-                                (dart-core/print (str "Error loading blocked info: " error))))))
+                                 (dart-core/print (str "Error loading blocked info: " error))))))
             (cond
               loading (m/Center .child (m/CircularProgressIndicator))
               (empty? tasks) (comp/mongol-text-block
@@ -118,18 +186,18 @@
                          (swap! state/app-state
                                 (fn [s]
                                   (update s :inbox-tasks
-                                         (fn [ts] (filter #(not= (.-id %) task-id) ts)))))
+                                          (fn [ts] (filter #(not= (.-id %) task-id) ts)))))
                          (-> (task/mark-task-completed task-id)
                              (.then (fn []
-                                     (task/reload-inbox! ctx)
-                                     (task/show-toast ctx "Completed" :success)))
+                                      (task/reload-inbox! ctx)
+                                      (task/show-toast ctx "Completed" :success)))
                              (.catchError (fn [e]
-                                           (dart-core/print e)
-                                           ;; Rollback on error
-                                           (swap! state/app-state
-                                                  (fn [s]
-                                                    (update s :inbox-tasks #(conj % task))))
-                                           (task/show-toast ctx "Update failed" :error))))))
+                                            (dart-core/print e)
+                                            ;; Rollback on error
+                                            (swap! state/app-state
+                                                   (fn [s]
+                                                     (update s :inbox-tasks #(conj % task))))
+                                            (task/show-toast ctx "Update failed" :error))))))
                      (fn [task]
                        ;; Navigate to task detail page
                        (task/refresh-task-detail! (.-id task))

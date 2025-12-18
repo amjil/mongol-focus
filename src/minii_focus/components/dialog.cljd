@@ -10,7 +10,8 @@
    [minii-focus.utils.datetime :as dt]
    [minii-focus.components.tokens :as tokens]
    [minii-focus.components.text :as text]
-   [minii-focus.services.task :as task]))
+   [minii-focus.services.task :as task]
+   [minii-focus.services.tag :as tag-svc]))
 
 ;; ============================================
 ;; Input Dialog Component
@@ -28,10 +29,12 @@
   - defer-date: Atom for defer date (optional)
   - due-date: Atom for due date (optional)
   - content: Atom for content (optional)
+  - parsed-tag-names: Vector of tag names from parsing (optional)
+  - parsed-is-flagged: Boolean flag from parsing (optional)
   
   Note: The virtual keyboard section needs to be integrated according to the actual API of the virtual-keyboard package.
   Currently using a placeholder, please replace with the actual keyboard widget."
-  [{:keys [controller title _on-submit on-cancel keyboard-options defer-date due-date content]}]
+  [{:keys [controller title _on-submit on-cancel keyboard-options defer-date due-date content parsed-tag-names parsed-is-flagged]}]
   (f/widget
    :context ctx
    :let [_keyboard-info (merge keyboard-options/keyboard-option
@@ -140,7 +143,29 @@
                                         (if error-msg
                                           (task/show-toast ctx error-msg :warning)
                                           (-> (task/create-task content-value "task" "active" defer-value due-value)
-                                              (.then (fn [_]
+                                              (.then (fn [task-id]
+                                                       (when task-id
+                                                         ;; Set flagged status if parsed
+                                                         (when parsed-is-flagged
+                                                           (-> (task/set-task-flagged task-id true)
+                                                               (.catchError (fn [e] (dart-core/print (str "Failed to set flag: " e))))))
+                                                         ;; Create and associate tags if parsed
+                                                         (when (and parsed-tag-names (seq parsed-tag-names))
+                                                           (-> (tag-svc/get-all-tags)
+                                                               (.then (fn [all-tags]
+                                                                        (dart-core/Future.wait
+                                                                         (map (fn [tag-name]
+                                                                                (let [existing-tag (first (filter #(= tag-name (.-name %)) all-tags))]
+                                                                                  (if existing-tag
+                                                                                    ;; Tag exists, associate it
+                                                                                    (tag-svc/add-tag-to-item task-id (.-id existing-tag))
+                                                                                    ;; Create new tag and associate
+                                                                                    (-> (tag-svc/create-tag {:name tag-name})
+                                                                                        (.then (fn [new-tag-id]
+                                                                                                 (tag-svc/add-tag-to-item task-id new-tag-id)))))))
+                                                                              parsed-tag-names)))))
+                                                               (.catchError (fn [e] (dart-core/print (str "Failed to process tags: " e))))))
+                                                       ;; Clean up
                                                        (when content (reset! content ""))
                                                        (when defer-date (reset! defer-date nil))
                                                        (when due-date (reset! due-date nil))
@@ -172,8 +197,10 @@
   - keyboard-options: Keyboard configuration options (optional)
   - defer-date: Atom for defer date (optional)
   - due-date: Atom for due date (optional)
-  - content: Atom for content (optional)"
-  [context {:keys [controller title on-submit on-cancel keyboard-options defer-date due-date content]}]
+  - content: Atom for content (optional)
+  - parsed-tag-names: Vector of tag names from parsing (optional)
+  - parsed-is-flagged: Boolean flag from parsing (optional)"
+  [context {:keys [controller title on-submit on-cancel keyboard-options defer-date due-date content parsed-tag-names parsed-is-flagged]}]
   (m/showDialog
        .context context
        .builder (fn [_ctx]
@@ -185,5 +212,7 @@
                    :keyboard-options keyboard-options
                    :defer-date defer-date
                    :due-date due-date
-                   :content content}))))
+                   :content content
+                   :parsed-tag-names parsed-tag-names
+                   :parsed-is-flagged parsed-is-flagged}))))
 
