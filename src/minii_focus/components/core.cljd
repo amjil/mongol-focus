@@ -9,7 +9,8 @@
    [minii-focus.components.status :as status]
    [minii-focus.components.tokens :as tokens]
    [minii-focus.components.list :as list]
-   [minii-focus.components.dialog :as dialog]))
+   [minii-focus.components.dialog :as dialog]
+   [minii-focus.components.project-dialog :as project-dialog]))
 
 ;; Export all components for easy use
 (def mongol-column-layout layout/mongol-column-layout)
@@ -35,6 +36,8 @@
 
 (def mongol-input-dialog dialog/mongol-input-dialog)
 (def show-mongol-input-dialog dialog/show-mongol-input-dialog)
+
+(def show-project-input-dialog project-dialog/show-project-input-dialog)
 
 (def spacing tokens/spacing)
 (def font-sizes tokens/font-sizes)

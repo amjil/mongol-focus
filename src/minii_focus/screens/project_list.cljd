@@ -2,117 +2,390 @@
   "Project list page - display projects and subtask hierarchy"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.components.core :as comp]
+   [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.services.task :as task-svc]
    [minii-focus.services.item-tree :as tree-svc]
-   [minii-focus.states.app-state :as state]))
+   [minii-focus.states.app-state :as state]
+   [minii-focus.utils.toast :as toast]))
 
 (defn- load-children [parent-id]
   (tree-svc/get-children-with-items parent-id))
 
+(defn- side-panel [projects tasks-with-info]
+  (m/Container
+   .padding (m/EdgeInsets.all (comp/space :m))
+   .child (m/Column
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(comp/mongol-text-block
+             {:text "Projects overview"
+              :style (m/TextStyle .fontSize (comp/font-size :m))})
+            (m/SizedBox .height (comp/space :s))
+            (comp/mongol-text-block
+             {:text (str "Total " (count projects))
+              :style (m/TextStyle .color (comp/color :text-weak))})
+            (m/SizedBox .height (comp/space :s))
+            (comp/mongol-text-block
+             {:text (str "Active " (count (filter #(= "active" (.-status %)) projects)))
+              :style (m/TextStyle .color (comp/color :text-weak))})
+            (m/SizedBox .height (comp/space :s))
+            (comp/mongol-text-block
+             {:text (str "Blocked " (count (filter :blocked tasks-with-info)))
+              :style (m/TextStyle .color (comp/color :text-weak))})])))
+
+(defn- long-press-fn [ctx pid controller adding-to-project refresh-projects-with-blocked!]
+  (m/showModalBottomSheet
+   .context ctx
+   .builder
+   (fn [_]
+     (m/Wrap
+      .children
+      [(mgl/MongolListTile
+        .leading (m/Icon m/Icons.edit)
+        .title (mgl/MongolText "Edit project")
+        .onTap
+        (fn []
+          (task-svc/refresh-task-detail! pid)
+          (m/Navigator.pop ctx)
+          (m/Navigator.push
+           ctx
+           (m/MaterialPageRoute
+            .builder (fn [_]
+                       (task-detail/task-detail-screen pid))))
+          nil))
+       (mgl/MongolListTile
+        .leading (m/Icon m/Icons.add)
+        .title (mgl/MongolText "Add subtask")
+        .onTap
+        (fn []
+          (reset! adding-to-project pid)
+          (set! (.-text controller) "")
+          (m/Navigator.pop ctx)
+          (comp/show-project-input-dialog
+           ctx
+           {:controller controller
+            :title "Add subtask"
+            :on-submit (fn [subtask-content]
+                         (when (and (not (empty? subtask-content)) pid)
+                           (-> (task-svc/create-task subtask-content "task" "active" nil nil)
+                               (.then (fn [task-id]
+                                        (when task-id
+                                          (-> (tree-svc/set-parent-task task-id pid)
+                                              (.then (fn [_]
+                                                       (dart-core/print (str "Added subtask " task-id " to project " pid))
+                                                       (reset! adding-to-project nil)
+                                                       (refresh-projects-with-blocked!)
+                                                       (task-svc/refresh-projects!)))
+                                              (.catchError (fn [error]
+                                                             (toast/handle-error-with-toast ctx error "Дэд ажлыг нэмэхэд алдаа гарлаа")))))))
+                               (.catchError (fn [error]
+                                              (toast/handle-error-with-toast ctx error "Дэд ажлыг үүсгэхэд алдаа гарлаа"))))))})
+          nil))
+       (mgl/MongolListTile
+        .leading (m/Icon m/Icons.delete)
+        .title (mgl/MongolText "Delete project")
+        .onTap
+        (fn []
+          (m/Navigator.pop ctx)
+          (m/showDialog
+           .context ctx
+           .builder
+           (fn [_]
+             (m/AlertDialog
+              .content
+              (m/Row
+               .children
+               [(mgl/MongolText "Delete project?")
+                (mgl/MongolText "This will delete the project and all its subtasks.")])
+              .actions
+              [(mgl/MongolTextButton
+                .child (mgl/MongolText "Cancel")
+                .onPressed (fn [] (m/Navigator.pop ctx)))
+               (mgl/MongolTextButton
+                .child (mgl/MongolText "Delete")
+                .onPressed
+                (fn []
+                  (-> (task-svc/delete-task pid)
+                      (.then (fn [_]
+                               (refresh-projects-with-blocked!)
+                               (task-svc/refresh-projects!)
+                               (m/Navigator.pop ctx)))
+                      (.catchError (fn [error]
+                                     (toast/handle-error-with-toast ctx error "Төслийг устгахад алдаа гарлаа"))))))])))
+          nil))]))))
+
+(defn- load-children-fn [pid child-items children-map tasks-with-info]
+  (when (nil? child-items)
+    (-> (load-children pid)
+        (.then (fn [res]
+                 (swap! children-map assoc pid res)
+                 ;; Load blocked info for newly loaded children
+                 (when (seq res)
+                   (let [child-tasks (map :item res)]
+                     (-> (task-svc/get-tasks-with-blocked-info child-tasks)
+                         (.then (fn [info-list]
+                                  (swap! tasks-with-info
+                                         (fn [current]
+                                           (reduce (fn [acc info]
+                                                     (assoc acc (.-id (:task info)) info))
+                                                   current info-list)))))
+                         (.catchError (fn [e]
+                                        (dart-core/print (str "Error loading blocked info: " e)))))))))
+        (.catchError (fn [e]
+                       (dart-core/print (str "Load children error: " e))))))
+  nil)
+
+(defn- item-long-press-fn [ctx item-id refresh-projects-with-blocked!]
+  (m/showModalBottomSheet
+   .context ctx
+   .builder
+   (fn [_]
+     (m/Wrap
+      .children
+      [(mgl/MongolListTile
+        .leading (m/Icon m/Icons.check)
+        .title (mgl/MongolText "Mark as completed")
+        .onTap
+        (fn []
+          (-> (task-svc/mark-task-completed item-id)
+              (.then (fn [_]
+                       (refresh-projects-with-blocked!)
+                       (task-svc/refresh-projects!)))
+              (.catchError (fn [error]
+                             (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа"))))
+          (m/Navigator.pop ctx)))
+       (mgl/MongolListTile
+        .leading (m/Icon m/Icons.delete)
+        .title (mgl/MongolText "Delete task")
+        .onTap
+        (fn []
+          (m/Navigator.pop ctx)
+          (-> (task-svc/delete-task item-id)
+              (.then (fn [_]
+                       (refresh-projects-with-blocked!)
+                       (task-svc/refresh-projects!)))
+              (.catchError (fn [error]
+                             (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))))]))))
+
+(defn- item-swipe-left-fn [ctx item-id item]
+  (-> (task-svc/enter-focus item-id)
+      (.then (fn [session-id]
+               (state/set-focused-task! item)
+               (state/set-focus-session-id! session-id)
+               (task-svc/refresh-focus-tasks!)
+               (dart-core/print (str "Entered focus: " item-id))))
+      (.catchError (fn [error]
+                     (toast/handle-error-with-toast ctx error "Focus-д ороход алдаа гарлаа")))))
+
+(defn- create-subtask-fn [ctx pid adding-to-project refresh-projects-with-blocked! subtask-content]
+  (when (and (not (empty? subtask-content)) pid)
+    (-> (task-svc/create-task subtask-content "task" "active" nil nil)
+        (.then (fn [task-id]
+                 (when task-id
+                   (-> (tree-svc/set-parent-task task-id pid)
+                       (.then (fn [_]
+                                (dart-core/print (str "Added subtask " task-id " to project " pid))
+                                (reset! adding-to-project nil)
+                                (refresh-projects-with-blocked!)
+                                (task-svc/refresh-projects!)))
+                       (.catchError (fn [error]
+                                      (toast/handle-error-with-toast ctx error "Дэд ажлыг нэмэхэд алдаа гарлаа")))))))
+        (.catchError (fn [error]
+                       (toast/handle-error-with-toast ctx error "Дэд ажлыг үүсгэхэд алдаа гарлаа"))))))
+
+(defn- expansion-tile [ctx pid child-items tasks-with-info 
+                       expanded children-map 
+                       refresh-projects-with-blocked!
+                       controller adding-to-project is-open proj]
+  (m/ExpansionTile
+   .key (m/ValueKey pid)
+   .title (m/GestureDetector
+           .onTap (fn []
+                    ;; Navigate to project detail page
+                    (task-svc/refresh-task-detail! pid)
+                    (m/Navigator.push
+                     ctx
+                     (m/MaterialPageRoute
+                      .builder (fn [_]
+                                 (task-detail/task-detail-screen pid))))
+                    nil)
+           .onLongPress (fn []
+                          ;; Show project menu
+                          (long-press-fn ctx pid controller adding-to-project refresh-projects-with-blocked!)
+                          nil)
+           .child (comp/mongol-text-block
+                   {:text (.-content proj)
+                    :style (m/TextStyle .fontSize (comp/font-size :l))}))
+   .initiallyExpanded is-open
+   .onExpansionChanged (fn [v]
+                         (if v
+                           (do
+                             (swap! expanded conj pid)
+                             (load-children-fn pid child-items children-map tasks-with-info))
+                           (swap! expanded disj pid)))
+   .children
+   [(if (and child-items (seq child-items))
+      (m/ListView
+       .scrollDirection m/Axis.horizontal
+       .padding (m/EdgeInsets.only .left (comp/space :m))
+       .children
+       (map-indexed
+        (fn [index row]
+          (let [item (:item row)
+                item-id (.-id item)
+                task-info (get @tasks-with-info item-id)
+                blocked? (:blocked task-info false)
+                task-status (keyword (.-status item))]
+            (comp/mongol-task-item
+             {:key item-id
+              :content (.-content item)
+              :status task-status
+              :blocked? blocked?
+              :on-tap (fn []
+                        ;; Navigate to task detail page
+                        (task-svc/refresh-task-detail! item-id)
+                        (m/Navigator.push
+                         ctx
+                         (m/MaterialPageRoute
+                          .builder (fn [_]
+                                     (task-detail/task-detail-screen item-id))))
+                        nil)
+              :on-long-press
+              (fn []
+                ;; Structure adjustment menu
+                (item-long-press-fn ctx item-id refresh-projects-with-blocked!)
+                nil)
+              :on-swipe-left
+              (fn []
+                ;; Swipe left to enter Focus
+                (item-swipe-left-fn ctx item-id item)
+                nil)})))
+        child-items))
+      (m/SizedBox))
+    (mgl/MongolListTile
+     .title (comp/mongol-text-block
+             {:text "No subtasks"
+              :style (m/TextStyle .color (comp/color :text-weak))})
+     .trailing (m/IconButton
+                .icon (m/Icon m/Icons.add)
+                .tooltip "Add subtask"
+                .onPressed (fn []
+                             (reset! adding-to-project pid)
+                             (set! (.-text controller) "")
+                             (comp/show-project-input-dialog
+                              ctx
+                              {:controller controller
+                               :title "Add subtask"
+                               :on-submit (fn [subtask-content]
+                                            (create-subtask-fn ctx pid adding-to-project refresh-projects-with-blocked! subtask-content))})
+                             nil)))]))
+
+(defn- create-project-fn [ctx refresh-projects-with-blocked! project-content]
+  (when (not (empty? project-content))
+    (-> (task-svc/create-task project-content "project" "active" nil nil)
+        (.then (fn [project-id]
+                 (when project-id
+                   (dart-core/print (str "Created project: " project-id))
+                   (refresh-projects-with-blocked!)
+                   (task-svc/refresh-projects!)))
+               (.catchError (fn [error]
+                              (toast/handle-error-with-toast ctx error "Төслийг үүсгэхэд алдаа гарлаа")))))))
+
 (defn project-list-screen []
   (let [expanded (atom #{})
         children-map (atom {})
-        tasks-with-info (atom [])]
+        tasks-with-info (atom {})
+        controller (m/TextEditingController.)
+        adding-to-project (atom nil)]
     (f/widget
-     :context _ctx
+     :context ctx
      :watch [{projects :projects loading :projects-loading} state/app-state
              _exp expanded
              _cm children-map
              _twi tasks-with-info]
-     (m/Scaffold
-      .appBar (m/AppBar
-               .actions [(m/IconButton
-                          .tooltip "Refresh"
-                          .icon (m/Icon m/Icons.refresh)
-                          .onPressed (fn [] (task-svc/refresh-projects!)))])
-      .body (cond
-              loading (m/Center .child (m/CircularProgressIndicator))
-              (empty? projects) (m/Center
-                                 .child (comp/mongol-text-block
-                                         {:text "No projects"
-                                          :style (m/TextStyle .color (comp/color :text-weak))}))
-              :else
-              (m/ListView
-               .children
-               (map (fn [proj]
-                      (let [pid (.-id proj)
-                            is-open (contains? @expanded pid)
-                            child-items (get @children-map pid)]
-                        (m/ExpansionTile
-                         .key (m/ValueKey pid)
-                         .title (comp/mongol-text-block
-                                 {:text (.-content proj)
-                                  :style (m/TextStyle .fontSize (comp/font-size :l))})
-                         .initiallyExpanded is-open
-                         .onExpansionChanged (fn [v]
-                                               (if v
-                                                 (do
-                                                   (swap! expanded conj pid)
-                                                   (when (nil? child-items)
-                                                     (-> (load-children pid)
-                                                         (.then (fn [res]
-                                                                  (swap! children-map assoc pid res)))
-                                                         (.catchError (fn [e]
-                                                                        (dart-core/print (str "Load children error: " e)))))))
-                                                 (swap! expanded disj pid)))
-                         .children
-                         [(if (and child-items (seq child-items))
-                            (do
-                              ;; Load blocked info when children are shown
-                              (when (and (seq child-items) (empty? @tasks-with-info))
-                                (let [child-tasks (map :item child-items)]
-                                  (-> (task-svc/get-tasks-with-blocked-info child-tasks)
-                                      (.then (fn [info-list]
-                                              (reset! tasks-with-info info-list)))
-                                      (.catchError (fn [e]
-                                                     (dart-core/print (str "Error loading blocked info: " e)))))))
-                              (m/ReorderableListView
-                               .scrollDirection m/Axis.horizontal
-                               .onReorder (fn [old-index new-index]
-                                           (let [reordered-items (vec child-items)
-                                                 item (nth reordered-items old-index)
-                                                 without-item (concat (subvec reordered-items 0 old-index)
-                                                                      (subvec reordered-items (inc old-index)))
-                                                 new-items (vec (concat (take new-index without-item)
-                                                                       [item]
-                                                                       (drop new-index without-item)))
-                                                 new-child-ids (map (fn [row] (.-id (:item row))) new-items)]
-                                             ;; Optimistic update
-                                             (swap! children-map assoc pid new-items)
-                                             ;; Persist to database
-                                             (-> (tree-svc/reorder-siblings pid new-child-ids)
-                                                 (.then (fn []
-                                                         (dart-core/print (str "Reordered children of " pid))
-                                                         (reset! tasks-with-info [])))
-                                                 (.catchError (fn [e]
-                                                               (dart-core/print (str "Error reordering: " e))
-                                                               ;; Rollback on error
-                                                               (swap! children-map assoc pid child-items))))))
-                               .children
-                               (map (fn [row]
-                                      (let [item (:item row)
-                                            item-id (.-id item)
-                                            task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
-                                            blocked? (:blocked task-info false)]
-                                        (m/ListTile
-                                         .key (m/ValueKey item-id)
-                                         .leading (m/Icon m/Icons.drag_handle)
-                                         .title (m/Row
-                                                 .children
-                                                 [(m/Text (.-content item))
-                                                  (when blocked?
-                                                    (m/Container
-                                                     .margin (m/EdgeInsets.only .left 8)
-                                                     .padding (m/EdgeInsets.symmetric .horizontal 8 .vertical 4)
-                                                     .decoration (m/BoxDecoration
-                                                                 .color m/Colors.red.shade100
-                                                                 .borderRadius (m/BorderRadius.circular 4))
-                                                     .child (m/Text "Blocked" .style (m/TextStyle .fontSize 12 .color m/Colors.red.shade700))))])
-                                         .subtitle (m/Text (str "Position " (:position row))))))
-                                    child-items)))
-                            (m/ListTile .title (m/Text "No subtasks")))])))
-                    projects)))))))
-
+     :let [refresh-projects-with-blocked!
+           (fn []
+             (reset! tasks-with-info {})
+             (task-svc/refresh-projects!)
+             (-> (task-svc/get-projects)
+                 (.then (fn [refreshed-projects]
+                          (when (seq refreshed-projects)
+                            ;; Load blocked info for all child tasks
+                            (let [all-child-tasks (->> @children-map
+                                                        vals
+                                                        (mapcat (fn [rows] (map :item rows)))
+                                                        (vec))]
+                              (when (seq all-child-tasks)
+                                (-> (task-svc/get-tasks-with-blocked-info all-child-tasks)
+                                    (.then (fn [info-list]
+                                             (reset! tasks-with-info
+                                                     (reduce (fn [acc info]
+                                                               (assoc acc (.-id (:task info)) info))
+                                                             {} info-list))))
+                                    (.catchError (fn [error]
+                                                   (toast/handle-error-with-toast ctx error "Хориглосон мэдээллийг ачаалахад алдаа гарлаа")))))))))
+                 (.catchError (fn [error]
+                                (toast/handle-error-with-toast ctx error "Төслүүдийг шинэчлэхэд алдаа гарлаа")))))
+           main-view (cond
+                      loading (m/Center .child (m/CircularProgressIndicator))
+                      (empty? projects) (m/Center
+                                         .child (comp/mongol-text-block
+                                                 {:text "No projects"
+                                                  :style (m/TextStyle .color (comp/color :text-weak))}))
+                      :else
+                      (m/ListView
+                       .scrollDirection m/Axis.horizontal
+                       .padding (m/EdgeInsets.all (comp/space :m))
+                       .children
+                       (map (fn [proj]
+                              (let [pid (.-id proj)
+                                    is-open (contains? @expanded pid)
+                                    child-items (get @children-map pid)]
+                                (expansion-tile
+                                 ctx pid child-items
+                                 tasks-with-info @expanded @children-map 
+                                 refresh-projects-with-blocked! controller 
+                                 adding-to-project is-open proj)))
+                            projects)))]
+     (do
+       ;; Load blocked info when children are loaded
+       (when (and (not loading) (seq projects))
+         (let [all-child-tasks (->> @children-map
+                                     vals
+                                     (mapcat (fn [rows] (map :item rows)))
+                                     (vec))]
+           (when (and (seq all-child-tasks) (empty? @tasks-with-info))
+             (-> (task-svc/get-tasks-with-blocked-info all-child-tasks)
+                 (.then (fn [info-list]
+                          (reset! tasks-with-info
+                                  (reduce (fn [acc info]
+                                            (assoc acc (.-id (:task info)) info))
+                                          {} info-list))))
+                 (.catchError (fn [error]
+                                (dart-core/print (str "Error loading blocked info: " error))))))))
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .actions [(m/IconButton
+                            .tooltip "Add project"
+                            .icon (m/Icon m/Icons.add)
+                            .onPressed (fn []
+                                         (set! (.-text controller) "")
+                                         (comp/show-project-input-dialog
+                                          ctx
+                                          {:controller controller
+                                           :title "New project"
+                                           :on-submit (fn [project-content]
+                                                        (create-project-fn ctx refresh-projects-with-blocked! project-content))})))
+                           (m/IconButton
+                            .tooltip "Refresh"
+                            .icon (m/Icon m/Icons.refresh)
+                            .onPressed (fn []
+                                         (refresh-projects-with-blocked!)))])
+        .body (comp/mongol-row-layout
+               {:main-row (comp/vertical-reveal-motion
+                           {:child main-view})
+                :side-row (side-panel projects (vals @tasks-with-info))}))))))
