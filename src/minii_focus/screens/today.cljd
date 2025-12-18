@@ -86,100 +86,130 @@
                                       (fn [_]
                                         (m/Wrap
                                          .children
-                                         [(m/ListTile
-                                           .leading (m/Icon m/Icons.subdirectory_arrow_right)
-                                           .title (m/Text "Set as subtask")
-                                           .onTap
-                                           (fn []
-                                             (if parent-task-id
-                                               (-> (item-tree/set-parent-task task-id parent-task-id)
-                                                   (.then (fn [_]
-                                                            (dart-core/print (str "Set task " task-id " as child of " parent-task-id))
-                                                            (refresh-today-with-blocked!)))
+                                         (vec
+                                          (concat
+                                           ;; Show "Go to parent" option when task is blocked
+                                           (when blocked
+                                             [(m/ListTile
+                                               .leading (m/Icon m/Icons.arrow_upward)
+                                               .title (m/Text "Go to parent")
+                                               .onTap
+                                               (fn []
+                                                 ;; Get parent task and navigate to it
+                                                 (-> (item-tree/get-parent task-id)
+                                                     (.then
+                                                      (fn [parent-rel]
+                                                        (if parent-rel
+                                                          (let [parent-id (.-parentId parent-rel)]
+                                                            (m/Navigator.pop ctx)
+                                                            (task/refresh-task-detail! parent-id)
+                                                            (m/Navigator.push
+                                                             ctx
+                                                             (m/MaterialPageRoute
+                                                              .builder (fn [_]
+                                                                         (task-detail/task-detail-screen parent-id)))))
+                                                          (do
+                                                            (m/Navigator.pop ctx)
+                                                            (toast/show-toast ctx "No parent task found" :warning)))))
+                                                     (.catchError
+                                                      (fn [error]
+                                                        (m/Navigator.pop ctx)
+                                                        (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+                                                 nil))])
+                                           [(m/ListTile
+                                             .leading (m/Icon m/Icons.subdirectory_arrow_right)
+                                             .title (m/Text "Set as subtask")
+                                             .onTap
+                                             (fn []
+                                               (if parent-task-id
+                                                 (-> (item-tree/set-parent-task task-id parent-task-id)
+                                                     (.then (fn [_]
+                                                              (dart-core/print (str "Set task " task-id " as child of " parent-task-id))
+                                                              (refresh-today-with-blocked!)))
+                                                     (.catchError
+                                                      (fn [error]
+                                                        (toast/handle-error-with-toast ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))
+
+                                                 (do
+                                                   (dart-core/print "No previous task to set as parent")
+                                                   (m/Navigator.pop ctx)))
+                                               nil))
+                                            (m/ListTile
+                                             .leading (m/Icon m/Icons.arrow_upward)
+                                             .title (m/Text "Move up")
+                                             .onTap
+                                             (fn []
+                                               ;; Move task up among siblings in ItemTree
+                                               (-> (item-tree/get-parent task-id)
+                                                   (.then
+                                                    (fn [parent-rel]
+                                                      (if parent-rel
+                                                        (let [parent-id (.-parentId parent-rel)]
+                                                          (-> (item-tree/get-children parent-id)
+                                                              (.then
+                                                               (fn [relations]
+                                                                 (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                                                       idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))]
+                                                                   (if (and idx (pos? idx))
+                                                                     (let [new-child-ids (-> child-ids
+                                                                                             (assoc idx (nth child-ids (dec idx)))
+                                                                                             (assoc (dec idx) task-id))]
+                                                                       (-> (item-tree/reorder-siblings parent-id new-child-ids)
+                                                                           (.then
+                                                                            (fn [_]
+                                                                              (dart-core/print (str "Moved task up: " task-id))
+                                                                              (refresh-today-with-blocked!)))
+                                                                           (.catchError
+                                                                            (fn [error]
+                                                                              (toast/handle-error-with-toast ctx error "Ажлыг дээш шилжүүлэхэд алдаа гарлаа")))))
+                                                                     (dart-core/print "Task is already at the top or not found among siblings")))))
+                                                              (.catchError
+                                                               (fn [error]
+                                                                 (toast/handle-error-with-toast ctx error "Дээш шилжүүлэхэд алдаа гарлаа")))))
+                                                        (dart-core/print "Task has no parent; cannot move up"))))
                                                    (.catchError
                                                     (fn [error]
-                                                      (toast/handle-error-with-toast ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))
-
-                                               (do
-                                                 (dart-core/print "No previous task to set as parent")
-                                                 (m/Navigator.pop ctx)))
-                                             nil))
-                                          (m/ListTile
-                                           .leading (m/Icon m/Icons.arrow_upward)
-                                           .title (m/Text "Move up")
-                                           .onTap
-                                           (fn []
-                                             ;; Move task up among siblings in ItemTree
-                                             (-> (item-tree/get-parent task-id)
-                                                 (.then
-                                                  (fn [parent-rel]
-                                                    (if parent-rel
-                                                      (let [parent-id (.-parentId parent-rel)]
-                                                        (-> (item-tree/get-children parent-id)
-                                                            (.then
-                                                             (fn [relations]
-                                                               (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
-                                                                     idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))]
-                                                                 (if (and idx (pos? idx))
-                                                                   (let [new-child-ids (-> child-ids
-                                                                                           (assoc idx (nth child-ids (dec idx)))
-                                                                                           (assoc (dec idx) task-id))]
-                                                                     (-> (item-tree/reorder-siblings parent-id new-child-ids)
-                                                                         (.then
-                                                                          (fn [_]
-                                                                            (dart-core/print (str "Moved task up: " task-id))
-                                                                            (refresh-today-with-blocked!)))
-                                                                         (.catchError
-                                                                          (fn [error]
-                                                                            (toast/handle-error-with-toast ctx error "Ажлыг дээш шилжүүлэхэд алдаа гарлаа")))))
-                                                                   (dart-core/print "Task is already at the top or not found among siblings")))))
-                                                            (.catchError
-                                                             (fn [error]
-                                                               (toast/handle-error-with-toast ctx error "Дээш шилжүүлэхэд алдаа гарлаа")))))
-                                                      (dart-core/print "Task has no parent; cannot move up"))))
-                                                 (.catchError
-                                                  (fn [error]
-                                                    (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
-                                             (m/Navigator.pop ctx)
-                                             nil))
-                                          (m/ListTile
-                                           .leading (m/Icon m/Icons.arrow_downward)
-                                           .title (m/Text "Move down")
-                                           .onTap
-                                           (fn []
-                                             ;; Move task down among siblings in ItemTree
-                                             (-> (item-tree/get-parent task-id)
-                                                 (.then
-                                                  (fn [parent-rel]
-                                                    (if parent-rel
-                                                      (let [parent-id (.-parentId parent-rel)]
-                                                        (-> (item-tree/get-children parent-id)
-                                                            (.then
-                                                             (fn [relations]
-                                                               (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
-                                                                     idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))
-                                                                     last-idx (dec (count child-ids))]
-                                                                 (if (and idx (< idx last-idx))
-                                                                   (let [new-child-ids (-> child-ids
-                                                                                           (assoc idx (nth child-ids (inc idx)))
-                                                                                           (assoc (inc idx) task-id))]
-                                                                     (-> (item-tree/reorder-siblings parent-id new-child-ids)
-                                                                         (.then
-                                                                          (fn [_]
-                                                                            (dart-core/print (str "Moved task down: " task-id))
-                                                                            (refresh-today-with-blocked!)))
-                                                                         (.catchError
-                                                                          (fn [error]
-                                                                            (toast/handle-error-with-toast ctx error "Ажлыг доош шилжүүлэхэд алдаа гарлаа")))))
-                                                                   (dart-core/print "Task is already at the bottom or not found among siblings")))))
-                                                            (.catchError
-                                                             (fn [error]
-                                                               (toast/handle-error-with-toast ctx error "Доош шилжүүлэхэд алдаа гарлаа")))))
-                                                      (dart-core/print "Task has no parent; cannot move down"))))
-                                                 (.catchError
-                                                  (fn [error]
-                                                    (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
-                                             (m/Navigator.pop ctx)))]))))
+                                                      (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+                                               (m/Navigator.pop ctx)
+                                               nil))
+                                            (m/ListTile
+                                             .leading (m/Icon m/Icons.arrow_downward)
+                                             .title (m/Text "Move down")
+                                             .onTap
+                                             (fn []
+                                               ;; Move task down among siblings in ItemTree
+                                               (-> (item-tree/get-parent task-id)
+                                                   (.then
+                                                    (fn [parent-rel]
+                                                      (if parent-rel
+                                                        (let [parent-id (.-parentId parent-rel)]
+                                                          (-> (item-tree/get-children parent-id)
+                                                              (.then
+                                                               (fn [relations]
+                                                                 (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
+                                                                       idx (first (keep-indexed (fn [i cid] (when (= cid task-id) i)) child-ids))
+                                                                       last-idx (dec (count child-ids))]
+                                                                   (if (and idx (< idx last-idx))
+                                                                     (let [new-child-ids (-> child-ids
+                                                                                             (assoc idx (nth child-ids (inc idx)))
+                                                                                             (assoc (inc idx) task-id))]
+                                                                       (-> (item-tree/reorder-siblings parent-id new-child-ids)
+                                                                           (.then
+                                                                            (fn [_]
+                                                                              (dart-core/print (str "Moved task down: " task-id))
+                                                                              (refresh-today-with-blocked!)))
+                                                                           (.catchError
+                                                                            (fn [error]
+                                                                              (toast/handle-error-with-toast ctx error "Ажлыг доош шилжүүлэхэд алдаа гарлаа")))))
+                                                                     (dart-core/print "Task is already at the bottom or not found among siblings")))))
+                                                              (.catchError
+                                                               (fn [error]
+                                                                 (toast/handle-error-with-toast ctx error "Доош шилжүүлэхэд алдаа гарлаа")))))
+                                                        (dart-core/print "Task has no parent; cannot move down"))))
+                                                   (.catchError
+                                                    (fn [error]
+                                                      (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
+                                               (m/Navigator.pop ctx)))]))))))
                                    :on-swipe-left
                                    (fn []
                                      ;; Swipe left to enter Focus (refresh Today/Focus list after successful entry)

@@ -345,8 +345,8 @@
                          (m/ButtonSegment .value :completed .label (m/Text "Completed"))
                          (m/ButtonSegment .value :blocked .label (m/Text "Blocked"))]
               .selected #{(display-status)}
-              .onSelectionChanged (fn [selection]
-                                    (let [new-status (first selection)]
+              .onSelectionChanged (fn [^dart-core/Set selection]
+                                    (let [new-status (.-first selection)]
                                       (if @editing-state
                                         ;; Edit mode: write to local state first, validate on submit
                                         (reset! status-state new-status)
@@ -359,7 +359,7 @@
                                                                   nil
                                                                   nil
                                                                   nil)
-                                                (.then (fn []
+                                                (.then (fn [_]
                                                          (task/refresh-task-detail! (.-id task-detail))))
                                                 (.catchError (fn [error]
                                                                (toast/handle-error-with-toast ctx error "Төлөвийг шинэчлэхэд алдаа гарлаа"))))
