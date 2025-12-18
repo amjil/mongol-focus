@@ -1240,8 +1240,19 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _contextTypeMeta = const VerificationMeta(
+    'contextType',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, parentId];
+  late final GeneratedColumn<String> contextType = GeneratedColumn<String>(
+    'context_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, parentId, contextType];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1273,6 +1284,15 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
       );
     }
+    if (data.containsKey('context_type')) {
+      context.handle(
+        _contextTypeMeta,
+        contextType.isAcceptableOrUnknown(
+          data['context_type']!,
+          _contextTypeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1294,6 +1314,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         DriftSqlType.string,
         data['${effectivePrefix}parent_id'],
       ),
+      contextType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context_type'],
+      ),
     );
   }
 
@@ -1307,7 +1331,13 @@ class Tag extends DataClass implements Insertable<Tag> {
   final String id;
   final String name;
   final String? parentId;
-  const Tag({required this.id, required this.name, this.parentId});
+  final String? contextType;
+  const Tag({
+    required this.id,
+    required this.name,
+    this.parentId,
+    this.contextType,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1315,6 +1345,9 @@ class Tag extends DataClass implements Insertable<Tag> {
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
+    }
+    if (!nullToAbsent || contextType != null) {
+      map['context_type'] = Variable<String>(contextType);
     }
     return map;
   }
@@ -1326,6 +1359,9 @@ class Tag extends DataClass implements Insertable<Tag> {
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
+      contextType: contextType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextType),
     );
   }
 
@@ -1338,6 +1374,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       parentId: serializer.fromJson<String?>(json['parentId']),
+      contextType: serializer.fromJson<String?>(json['contextType']),
     );
   }
   @override
@@ -1347,6 +1384,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'parentId': serializer.toJson<String?>(parentId),
+      'contextType': serializer.toJson<String?>(contextType),
     };
   }
 
@@ -1354,16 +1392,21 @@ class Tag extends DataClass implements Insertable<Tag> {
     String? id,
     String? name,
     Value<String?> parentId = const Value.absent(),
+    Value<String?> contextType = const Value.absent(),
   }) => Tag(
     id: id ?? this.id,
     name: name ?? this.name,
     parentId: parentId.present ? parentId.value : this.parentId,
+    contextType: contextType.present ? contextType.value : this.contextType,
   );
   Tag copyWithCompanion(TagsCompanion data) {
     return Tag(
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      contextType: data.contextType.present
+          ? data.contextType.value
+          : this.contextType,
     );
   }
 
@@ -1372,37 +1415,42 @@ class Tag extends DataClass implements Insertable<Tag> {
     return (StringBuffer('Tag(')
           ..write('id: $id, ')
           ..write('name: $name, ')
-          ..write('parentId: $parentId')
+          ..write('parentId: $parentId, ')
+          ..write('contextType: $contextType')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, parentId);
+  int get hashCode => Object.hash(id, name, parentId, contextType);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Tag &&
           other.id == this.id &&
           other.name == this.name &&
-          other.parentId == this.parentId);
+          other.parentId == this.parentId &&
+          other.contextType == this.contextType);
 }
 
 class TagsCompanion extends UpdateCompanion<Tag> {
   final Value<String> id;
   final Value<String> name;
   final Value<String?> parentId;
+  final Value<String?> contextType;
   final Value<int> rowid;
   const TagsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.parentId = const Value.absent(),
+    this.contextType = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TagsCompanion.insert({
     required String id,
     required String name,
     this.parentId = const Value.absent(),
+    this.contextType = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name);
@@ -1410,12 +1458,14 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Expression<String>? id,
     Expression<String>? name,
     Expression<String>? parentId,
+    Expression<String>? contextType,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (parentId != null) 'parent_id': parentId,
+      if (contextType != null) 'context_type': contextType,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1424,12 +1474,14 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Value<String>? id,
     Value<String>? name,
     Value<String?>? parentId,
+    Value<String?>? contextType,
     Value<int>? rowid,
   }) {
     return TagsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       parentId: parentId ?? this.parentId,
+      contextType: contextType ?? this.contextType,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1446,6 +1498,9 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     if (parentId.present) {
       map['parent_id'] = Variable<String>(parentId.value);
     }
+    if (contextType.present) {
+      map['context_type'] = Variable<String>(contextType.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1458,6 +1513,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('parentId: $parentId, ')
+          ..write('contextType: $contextType, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4057,6 +4113,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       required String id,
       required String name,
       Value<String?> parentId,
+      Value<String?> contextType,
       Value<int> rowid,
     });
 typedef $$TagsTableUpdateCompanionBuilder =
@@ -4064,6 +4121,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> name,
       Value<String?> parentId,
+      Value<String?> contextType,
       Value<int> rowid,
     });
 
@@ -4087,6 +4145,11 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
 
   ColumnFilters<String> get parentId => $composableBuilder(
     column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contextType => $composableBuilder(
+    column: $table.contextType,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4113,6 +4176,11 @@ class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
     column: $table.parentId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get contextType => $composableBuilder(
+    column: $table.contextType,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TagsTableAnnotationComposer
@@ -4132,6 +4200,11 @@ class $$TagsTableAnnotationComposer
 
   GeneratedColumn<String> get parentId =>
       $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<String> get contextType => $composableBuilder(
+    column: $table.contextType,
+    builder: (column) => column,
+  );
 }
 
 class $$TagsTableTableManager
@@ -4165,11 +4238,13 @@ class $$TagsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> contextType = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TagsCompanion(
                 id: id,
                 name: name,
                 parentId: parentId,
+                contextType: contextType,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4177,11 +4252,13 @@ class $$TagsTableTableManager
                 required String id,
                 required String name,
                 Value<String?> parentId = const Value.absent(),
+                Value<String?> contextType = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TagsCompanion.insert(
                 id: id,
                 name: name,
                 parentId: parentId,
+                contextType: contextType,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

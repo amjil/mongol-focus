@@ -83,6 +83,9 @@ class Tags extends Table {
   // hierarchical tag support
   TextColumn get parentId => text().nullable()();
 
+  // context type: null (regular tag), "location", "tool", "person"
+  TextColumn get contextType => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -210,7 +213,7 @@ class AppDatabase extends _$AppDatabase {
   SearchDao get searchDao => _searchDao ??= SearchDao(this);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -260,6 +263,11 @@ class AppDatabase extends _$AppDatabase {
           // Migration from version 5 to 6
           // Add projectType field to Items table
           await m.addColumn(items, items.projectType);
+        }
+        if (from < 7) {
+          // Migration from version 6 to 7
+          // Add contextType field to Tags table
+          await m.addColumn(tags, tags.contextType);
         }
       },
     );

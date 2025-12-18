@@ -13,29 +13,51 @@
 ;; =============================================================================
 
 (defn create-tag
-  "Create tag"
-  [{:keys [name parent-id]}]
+  "Create tag
+  Options:
+  - :name - tag name (required)
+  - :parent-id - parent tag ID (optional)
+  - :context-type - context type: \"location\", \"tool\", \"person\", or nil for regular tag (optional)"
+  [{:keys [name parent-id context-type]}]
   (let [^drift/AppDatabase database (db/get-database)
         tag-id (ids/generate-id)
         tags-dao (.-tagsDao database)
-        create-future (if parent-id
+        create-future (cond
+                        (and parent-id context-type)
+                        (.createTag tags-dao tag-id name .parentId parent-id .contextType context-type)
+                        parent-id
                         (.createTag tags-dao tag-id name .parentId parent-id)
+                        context-type
+                        (.createTag tags-dao tag-id name .contextType context-type)
+                        :else
                         (.createTag tags-dao tag-id name))]
     (-> create-future
         (.then (fn [_] tag-id)))))
 
 (defn update-tag
-  "Update tag"
-  [id {:keys [name parent-id]}]
+  "Update tag
+  Options:
+  - :name - tag name (optional)
+  - :parent-id - parent tag ID (optional)
+  - :context-type - context type: \"location\", \"tool\", \"person\", or nil for regular tag (optional)"
+  [id {:keys [name parent-id context-type]}]
   (let [^drift/AppDatabase database (db/get-database)
         tags-dao (.-tagsDao database)]
     (cond
+      (and name parent-id context-type)
+      (.updateTag tags-dao id .name name .parentId parent-id .contextType context-type)
       (and name parent-id)
       (.updateTag tags-dao id .name name .parentId parent-id)
+      (and name context-type)
+      (.updateTag tags-dao id .name name .contextType context-type)
+      (and parent-id context-type)
+      (.updateTag tags-dao id .parentId parent-id .contextType context-type)
       name
       (.updateTag tags-dao id .name name)
       parent-id
       (.updateTag tags-dao id .parentId parent-id)
+      context-type
+      (.updateTag tags-dao id .contextType context-type)
       :else
       (.updateTag tags-dao id))))
 
@@ -59,6 +81,33 @@
   (let [^drift/AppDatabase database (db/get-database)
         tags-dao (.-tagsDao database)]
     (.getAllTags tags-dao)))
+
+(defn get-contexts
+  "Get all contexts (tags with contextType not null)"
+  []
+  (-> (get-all-tags)
+      (.then (fn [tags]
+               (filter (fn [tag]
+                        (some? (.-contextType tag)))
+                      tags)))))
+
+(defn get-contexts-by-type
+  "Get contexts by type: \"location\", \"tool\", or \"person\""
+  [context-type]
+  (-> (get-all-tags)
+      (.then (fn [tags]
+               (filter (fn [tag]
+                        (= context-type (.-contextType tag)))
+                      tags)))))
+
+(defn get-regular-tags
+  "Get regular tags (contextType is null)"
+  []
+  (-> (get-all-tags)
+      (.then (fn [tags]
+               (filter (fn [tag]
+                        (nil? (.-contextType tag)))
+                      tags)))))
 
 ;; =============================================================================
 ;; Page data loading/refresh (side effects in service)

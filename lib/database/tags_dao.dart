@@ -9,11 +9,12 @@ class TagsDao {
   TagsDao(this._db);
 
   /// Create a new tag
-  Future<Null> createTag(String id, String name, {String? parentId}) async {
+  Future<Null> createTag(String id, String name, {String? parentId, String? contextType}) async {
     final companion = TagsCompanion.insert(
       id: id,
       name: name,
       parentId: parentId != null ? Value(parentId) : const Value.absent(),
+      contextType: contextType != null ? Value(contextType) : const Value.absent(),
     );
     await (_db.into(_db.tags)).insert(companion);
     return null;
@@ -24,10 +25,12 @@ class TagsDao {
     String id, {
     String? name,
     String? parentId,
+    String? contextType,
   }) async {
     final companion = TagsCompanion(
       name: name != null ? Value(name) : const Value.absent(),
       parentId: parentId != null ? Value(parentId) : const Value.absent(),
+      contextType: contextType != null ? Value(contextType) : const Value.absent(),
     );
     await (_db.update(_db.tags)
           ..where((tbl) => tbl.id.equals(id)))
