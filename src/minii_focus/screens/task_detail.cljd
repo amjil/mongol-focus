@@ -490,6 +490,7 @@
                                      .builder
                                      (fn [dialog-ctx]
                                        (m/Dialog
+                                        .insetPadding (m/EdgeInsets.zero)
                                         .child
                                         (m/Container
                                          .padding (m/EdgeInsets.only .top (comp/space :m) .left (comp/space :m) .right (comp/space :m))
@@ -515,41 +516,39 @@
                                                {:text "Select Parent task"
                                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
                                               (m/SizedBox .width (comp/space :s))
+                                              (mgl/MongolTextField
+                                              ;;  .controller (m/TextEditingController .text "")
+                                              ;;  .onChanged (fn [value] (reset! parent-state value))
+                                              ;;  .decoration (m/InputDecoration
+                                              ;;               .labelText "Search"
+                                              ;;               .border (m/OutlineInputBorder))
+                                               )
+                                              (m/SizedBox .width (comp/space :s))
                                               (m/Expanded
                                                .child
-                                               (m/ListView
+                                               (m/ListView.builder
                                                 .scrollDirection m/Axis.horizontal
-                                                .children
-                                                (concat
-                                                 [(mgl/MongolListTile
-                                                   .title (mgl/MongolText "None (Remove parent)")
-                                                   .onTap (fn []
-                                                            (m/Navigator.pop dialog-ctx)
-                                                            (-> (tree-svc/remove-parent-task current-id)
-                                                                (.then (fn [_]
-                                                                         (task/refresh-task-detail! current-id)
-                                                                         (dart-core/print "Parent removed")))
-                                                                (.catchError (fn [error]
-                                                                               (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг устгахад алдаа гарлаа"))))))]
-                                                 (map (fn [t]
-                                                        (let [tid (.-id t)
-                                                              tcontent (.-content t)]
-                                                          (mgl/MongolListTile
-                                                           .title (mgl/MongolText tcontent)
-                                                           .subtitle (mgl/MongolText (str "ID: " tid))
-                                                           .onTap (fn []
-                                                                    (m/Navigator.pop dialog-ctx)
-                                                                    (-> (tree-svc/set-parent-task current-id tid)
-                                                                        (.then (fn [_]
-                                                                                 (task/refresh-task-detail! current-id)
-                                                                                 (dart-core/print (str "Parent set to: " tid))))
-                                                                        (.catchError (fn [error]
-                                                                                       (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))))))
-                                                      available-tasks))))
+                                                .itemCount (count available-tasks)
+                                                .itemBuilder
+                                                (fn [_context index]
+                                                  (let [t (nth available-tasks index)
+                                                        tid (.-id t)
+                                                        tcontent (.-content t)]
+                                                    (mgl/MongolListTile
+                                                     .title (mgl/MongolText tcontent)
+                                                     .subtitle (mgl/MongolText (str "ID: " tid))
+                                                     .onTap (fn []
+                                                              (m/Navigator.pop dialog-ctx)
+                                                              (-> (tree-svc/set-parent-task current-id tid)
+                                                                  (.then (fn [_]
+                                                                           (task/refresh-task-detail! current-id)
+                                                                           (dart-core/print (str "Parent set to: " tid))))
+                                                                  (.catchError (fn [error]
+                                                                                 (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))))))))
                                               (mgl/MongolTextButton
                                                .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                               .child (mgl/MongolText "Cancel"))]))])
-                                         ))))
+                                               .child (mgl/MongolText "Cancel"))]))
+                                           (keyboard/keyboard {:custom-fns {}})])))))
                                     nil)))
                          (.catchError (fn [error]
                                         (toast/handle-error-with-toast ctx error "Ажлуудыг ачаалахад алдаа гарлаа")))))
