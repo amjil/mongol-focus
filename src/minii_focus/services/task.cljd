@@ -636,3 +636,66 @@
    (let [^drift/AppDatabase database (db/get-database)]
      (.getTasksByEstimatedDuration database .ascending ascending))))
 
+;; =============================================================================
+;; Batch operations
+;; =============================================================================
+
+(defn batch-update-status
+  "Batch update task status for multiple tasks"
+  [task-ids ^String new-status]
+  (if (empty? task-ids)
+    (dart-core/Future.value [])
+    (let [^drift/AppDatabase database (db/get-database)
+          now (dart-core/DateTime.now)
+          companion (drift/ItemsCompanion.
+                     .status (d/Value new-status)
+                     .updatedAt (d/Value now))
+          update-promises (map (fn [task-id]
+                                (-> (get-task-by-id task-id)
+                                    (.then (fn [task]
+                                             (if task
+                                               (let [current-status (some-> task .-status keyword)
+                                                     target-status (keyword new-status)]
+                                                 (if (valid-status-transition? current-status target-status)
+                                                   (do
+                                                     (.go
+                                                      (doto (.update database (.-items database))
+                                                        (.where (fn [^drift/Items tbl] (.equals (.-id tbl) task-id)))
+                                                        (.write companion)))
+                                                     ;; Cancel reminders for completed tasks
+                                                     (when (= target-status :completed)
+                                                       (notif/cancel-task-reminder task-id))
+                                                     task-id)
+                                                   (do
+                                                     (dart-core/print
+                                                      (str "Invalid status transition for task " task-id
+                                                           ": " current-status " -> " target-status))
+                                                     nil)))
+                                               nil)))))
+                              task-ids)]
+      (-> (dart-core/Future.wait update-promises)
+          (.then (fn [results]
+                   (let [successful-ids (filter some? results)]
+                     ;; Auto-refresh related pages
+                     (refresh-related-pages!)
+                     successful-ids)))
+          (.catchError (fn [error]
+                        (toast/handle-error-global error "Ажлын төлөвийг бөөнөөр шинэчлэхэд алдаа гарлаа")
+                        []))))))
+
+(defn batch-delete-tasks
+  "Batch delete multiple tasks"
+  [task-ids]
+  (if (empty? task-ids)
+    (dart-core/Future.value [])
+    (let [delete-promises (map delete-task task-ids)]
+      (-> (dart-core/Future.wait delete-promises)
+          (.then (fn [results]
+                   (let [successful-count (count (filter some? results))]
+                     ;; Auto-refresh related pages
+                     (refresh-related-pages!)
+                     successful-count)))
+          (.catchError (fn [error]
+                        (toast/handle-error-global error "Ажлыг бөөнөөр устгахад алдаа гарлаа")
+                        0))))))
+

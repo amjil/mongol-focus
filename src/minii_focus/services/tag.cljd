@@ -201,3 +201,27 @@
                      (state/set-tagged-items! [])
                      (state/set-tags-loading! false))))))
 
+;; =============================================================================
+;; Batch operations
+;; =============================================================================
+
+(defn batch-add-tag-to-items
+  "Batch add tag to multiple tasks"
+  [task-ids tag-id]
+  (if (empty? task-ids)
+    (dart-core/Future.value 0)
+    (let [add-promises (map (fn [task-id]
+                             (-> (add-tag-to-item task-id tag-id)
+                                 (.then (fn [_] task-id))
+                                 (.catchError (fn [error]
+                                               (dart-core/print (str "Error adding tag to task " task-id ": " error))
+                                               nil))))
+                           task-ids)]
+      (-> (dart-core/Future.wait add-promises)
+          (.then (fn [results]
+                   (let [successful-count (count (filter some? results))]
+                     successful-count)))
+          (.catchError (fn [error]
+                        (toast/handle-error-global error "Тагийг бөөнөөр нэмэхэд алдаа гарлаа")
+                        0))))))
+

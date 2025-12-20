@@ -47,17 +47,23 @@
    Swipe right: Return/move
    Long press: Structure adjustment
    Supports showing blocked status and hierarchy level
-   on-complete: callback for marking task as completed"
-  [{:keys [content status on-long-press on-tap on-swipe-up on-swipe-left on-swipe-right blocked? level parent-content on-complete]}]
+   on-complete: callback for marking task as completed
+   selection-mode: boolean, if true shows checkbox for selection
+   selected: boolean, if true checkbox is checked
+   on-selection-changed: callback when selection changes"
+  [{:keys [content status on-long-press on-tap on-swipe-up on-swipe-left on-swipe-right blocked? level parent-content on-complete selection-mode selected on-selection-changed]}]
   (f/widget
    :let [effective-status (if (and blocked? (not= status :completed)) :blocked status)
          effective-color (get task-status-colors effective-status m/Colors.grey)
          indent-width (* (or level 0) 20)]
    (m/GestureDetector
-    .onLongPress on-long-press
-    .onTap on-tap
+    .onLongPress (when (not selection-mode) on-long-press)
+    .onTap (if selection-mode
+             (when on-selection-changed
+               (fn [] (on-selection-changed (not selected))))
+             on-tap)
     ;; Vertical swipe up: Enter Focus (for vertical writing layout)
-    .onVerticalDragEnd (when (or on-swipe-up on-swipe-left)
+    .onVerticalDragEnd (when (and (not selection-mode) (or on-swipe-up on-swipe-left))
                         (fn [details]
                           (let [velocity (.-primaryVelocity details)]
                             ;; Upward swipe (negative velocity in vertical direction)
@@ -66,17 +72,18 @@
                               ;; Fallback to on-swipe-left if on-swipe-up not provided
                               (when (and (not on-swipe-up) on-swipe-left) (on-swipe-left))))))
     ;; Horizontal swipe left: Enter Focus (for compatibility)
-    .onHorizontalDragEnd (fn [details]
-                          (let [velocity (.-primaryVelocity details)]
-                            (cond
-                              ;; Swipe left: Enter Focus
-                              (and velocity (< velocity -500) (or on-swipe-left on-swipe-up))
-                              (do
-                                (when on-swipe-left (on-swipe-left))
-                                (when (and (not on-swipe-left) on-swipe-up) (on-swipe-up)))
-                              ;; Swipe right: Return/move
-                              (and velocity (> velocity 500) on-swipe-right)
-                              (on-swipe-right)))))
+    .onHorizontalDragEnd (when (not selection-mode)
+                          (fn [details]
+                            (let [velocity (.-primaryVelocity details)]
+                              (cond
+                                ;; Swipe left: Enter Focus
+                                (and velocity (< velocity -500) (or on-swipe-left on-swipe-up))
+                                (do
+                                  (when on-swipe-left (on-swipe-left))
+                                  (when (and (not on-swipe-left) on-swipe-up) (on-swipe-up)))
+                                ;; Swipe right: Return/move
+                                (and velocity (> velocity 500) on-swipe-right)
+                                (on-swipe-right)))))
     .child (m/Row
             .mainAxisSize m/MainAxisSize.min
             .children
@@ -93,12 +100,21 @@
                                             .left (m/BorderSide
                                                    .color effective-color
                                                    .width 3))
-                                   .color (when blocked? m/Colors.grey.shade100))
+                                   .color (cond
+                                           (and selection-mode selected) m/Colors.blue.shade50
+                                           blocked? m/Colors.grey.shade100
+                                           :else nil))
                       .child (m/Row
                               .crossAxisAlignment m/CrossAxisAlignment.start
                               .mainAxisSize m/MainAxisSize.min
                               .children
-                              [(m/Column
+                              [(when selection-mode
+                                 (m/Checkbox
+                                  .value selected
+                                  .onChanged (when on-selection-changed
+                                              (fn [value]
+                                                (on-selection-changed value)))))
+                               (m/Column
                                 .crossAxisAlignment m/CrossAxisAlignment.start
                                 .mainAxisSize m/MainAxisSize.min
                                 .children
@@ -133,13 +149,13 @@
                                    (m/SizedBox))])
                                (m/SizedBox .width 8)
                                ;; Completion checkbox/button
-                               (when (and on-complete (not= status :completed))
+                               (when (and (not selection-mode) on-complete (not= status :completed))
                                  (m/IconButton
                                   .icon (m/Icon m/Icons.check_circle_outline)
                                   .iconSize 20
                                   .color m/Colors.green.shade600
                                   .onPressed (fn [] (on-complete))
-                                  .tooltip "Mark as completed"))])))])))
+                                  .tooltip "Mark as completed"))])))]))))
 
 ;; ============================================
 ;; 3.3 MongolNoteBlock

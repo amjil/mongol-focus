@@ -10,6 +10,7 @@
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.services.task :as task-svc]
    [minii-focus.services.item-tree :as tree-svc]
+   [minii-focus.services.tag :as tag-svc]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.toast :as toast]))
 
@@ -189,8 +190,8 @@
                 (.catchError
                  (fn [error]
                    (m/Navigator.pop ctx)
-                   (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
-            nil)
+                   (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа")))
+            nil))
          (m/ListTile
           .leading (m/Icon m/Icons.arrow_upward)
           .title (m/Text "Move up")
@@ -302,7 +303,9 @@
                          (refresh-projects-with-blocked!)
                          (task-svc/refresh-projects!)))
                 (.catchError (fn [error]
-                               (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))))]))))
+                               (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))
+            nil))])))
+                          )
 
 (defn- item-swipe-left-fn [ctx item-id item]
   (-> (task-svc/enter-focus item-id)
@@ -332,12 +335,15 @@
 
 (defn- expansion-tile [ctx pid tasks-with-info
                        refresh-projects-with-blocked!
-                       controller adding-to-project proj]
+                       controller adding-to-project proj
+                       selection-mode selected-task-ids]
   (let [is-open (atom false)
         child-items (atom [])]
     (f/widget
      :watch [_is-open is-open
-             _child-items child-items]
+             _child-items child-items
+             _selection-mode selection-mode
+             _selected-ids selected-task-ids]
      (expansion/MongolExpansionTile
       .key (m/ValueKey pid)
       .title (m/GestureDetector
@@ -367,40 +373,53 @@
                       item-id (.-id item)
                       task-info (get @tasks-with-info item-id)
                       blocked? (:blocked task-info false)
-                      task-status (keyword (.-status item))]
+                      task-status (keyword (.-status item))
+                      is-selected (contains? @selected-task-ids item-id)]
                   (comp/mongol-task-item
                    {:key item-id
                     :content (.-content item)
                     :status task-status
                     :blocked? blocked?
+                    :selection-mode _selection-mode
+                    :selected is-selected
+                    :on-selection-changed (when _selection-mode
+                                           (fn [selected]
+                                             (if selected
+                                               (swap! selected-task-ids conj item-id)
+                                               (swap! selected-task-ids disj item-id))))
                     :on-tap (fn []
-                              ;; Navigate to task detail page
-                              (task-svc/refresh-task-detail! item-id)
-                              (m/Navigator.push
-                               ctx
-                               (m/MaterialPageRoute
-                                .builder (fn [_]
-                                           (task-detail/task-detail-screen item-id))))
+                              ;; Navigate to task detail page (only when not in selection mode)
+                              (when (not _selection-mode)
+                                (task-svc/refresh-task-detail! item-id)
+                                (m/Navigator.push
+                                 ctx
+                                 (m/MaterialPageRoute
+                                  .builder (fn [_]
+                                             (task-detail/task-detail-screen item-id)))))
                               nil)
                     :on-long-press
                     (fn []
-                      ;; Structure adjustment menu
-                      (item-long-press-fn ctx item-id refresh-projects-with-blocked!)
+                      ;; Structure adjustment menu (only when not in selection mode)
+                      (when (not _selection-mode)
+                        (item-long-press-fn ctx item-id refresh-projects-with-blocked!))
                       nil)
                     :on-swipe-up
                     (fn []
-                      ;; Swipe up to enter Focus (vertical gesture)
-                      (item-swipe-left-fn ctx item-id item)
+                      ;; Swipe up to enter Focus (vertical gesture) - only when not in selection mode
+                      (when (not _selection-mode)
+                        (item-swipe-left-fn ctx item-id item))
                       nil)
                     :on-swipe-left
                     (fn []
-                      ;; Swipe left to enter Focus (horizontal gesture, for compatibility)
-                      (item-swipe-left-fn ctx item-id item)
+                      ;; Swipe left to enter Focus (horizontal gesture, for compatibility) - only when not in selection mode
+                      (when (not _selection-mode)
+                        (item-swipe-left-fn ctx item-id item))
                       nil)
                     :on-swipe-right
                     (fn []
-                      ;; Swipe right: Return/move (navigate back)
-                      (m/Navigator.pop ctx)
+                      ;; Swipe right: Return/move (navigate back) - only when not in selection mode
+                      (when (not _selection-mode)
+                        (m/Navigator.pop ctx))
                       nil)})))
               _child-items))
         [(mgl/MongolListTile
@@ -432,18 +451,133 @@
         (.catchError (fn [error]
                        (toast/handle-error-with-toast ctx error "Төслийг үүсгэхэд алдаа гарлаа"))))))
 
+(defn- batch-mark-completed-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
+  (m/IconButton
+   .icon (m/Icon m/Icons.check_circle)
+   .tooltip "Mark as completed"
+   .onPressed (fn []
+               (let [task-ids (vec @selected-task-ids)]
+                 (-> (task-svc/batch-update-status task-ids "completed")
+                     (.then (fn [successful-ids]
+                             (reset! selected-task-ids #{})
+                             (reset! selection-mode false)
+                             (refresh-projects-with-blocked!)
+                             (toast/show-success-toast ctx (str "Marked " (count successful-ids) " tasks as completed"))))
+                     (.catchError (fn [error]
+                                   (toast/handle-error-with-toast ctx error "Төлөвийг шинэчлэхэд алдаа гарлаа"))))))))
+
+(defn- batch-add-tag-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
+  (m/IconButton
+   .icon (m/Icon m/Icons.label)
+   .tooltip "Add tag"
+   .onPressed (fn []
+               (-> (tag-svc/get-all-tags)
+                   (.then (fn [tags]
+                           (if (seq tags)
+                             (m/showDialog
+                              .context ctx
+                              .builder
+                              (fn [_]
+                                (m/AlertDialog
+                                 .title (mgl/MongolText "Select tag")
+                                 .content (m/Container
+                                          .height 300
+                                          .width 200
+                                          .child (m/ListView.builder
+                                                 .itemCount (count tags)
+                                                 .itemBuilder (fn [_ idx]
+                                                               (let [tag (nth tags idx)]
+                                                                 (mgl/MongolListTile
+                                                                  .title (mgl/MongolText (.-name tag))
+                                                                  .onTap (fn []
+                                                                          (let [tag-id (.-id tag)
+                                                                                task-ids (vec @selected-task-ids)]
+                                                                            (m/Navigator.pop ctx)
+                                                                            (-> (tag-svc/batch-add-tag-to-items task-ids tag-id)
+                                                                                (.then (fn [count]
+                                                                                        (reset! selected-task-ids #{})
+                                                                                        (reset! selection-mode false)
+                                                                                        (refresh-projects-with-blocked!)
+                                                                                        (toast/show-success-toast ctx (str "Added tag to " count " tasks"))))
+                                                                                (.catchError (fn [error]
+                                                                                              (toast/handle-error-with-toast ctx error "Таг нэмэхэд алдаа гарлаа")))))))))))
+                                 .actions
+                                 [(mgl/MongolTextButton
+                                   .child (mgl/MongolText "Cancel")
+                                   .onPressed (fn [] (m/Navigator.pop ctx)))])))
+                             (toast/show-toast ctx "No tags available. Create a tag first." :info))))
+                   (.catchError (fn [error]
+                                 (toast/handle-error-with-toast ctx error "Тагийг авахад алдаа гарлаа")))))))
+
+(defn- batch-delete-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
+  (m/IconButton
+   .icon (m/Icon m/Icons.delete)
+   .tooltip "Delete"
+   .onPressed (fn []
+                (m/showDialog
+                 .context ctx
+                 .builder
+                 (fn [_]
+                   (m/AlertDialog
+                    .content (mgl/MongolText (str "Delete " (count @selected-task-ids) " tasks?"))
+                    .actions
+                    [(mgl/MongolTextButton
+                      .child (mgl/MongolText "Cancel")
+                      .onPressed (fn [] (m/Navigator.pop ctx)))
+                     (mgl/MongolTextButton
+                      .child (mgl/MongolText "Delete")
+                      .onPressed (fn []
+                                   (let [task-ids (vec @selected-task-ids)]
+                                     (m/Navigator.pop ctx)
+                                     (-> (task-svc/batch-delete-tasks task-ids)
+                                         (.then (fn [count]
+                                                  (reset! selected-task-ids #{})
+                                                  (reset! selection-mode false)
+                                                  (refresh-projects-with-blocked!)
+                                                  (toast/show-success-toast ctx (str "Deleted " count " tasks"))))
+                                         (.catchError (fn [error]
+                                                        (toast/handle-error-with-toast ctx error "Устгахад алдаа гарлаа")))))
+                                   nil))])))
+                nil)))
+
+(defn- batch-operations-toolbar [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
+  (if (and @selection-mode (seq @selected-task-ids))
+    (m/Container
+     .padding (m/EdgeInsets.all (comp/space :m))
+     .color m/Colors.blue.shade50
+     .child (m/Row
+             .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+             .children
+             [(comp/mongol-text-block
+               {:text (str "Selected: " (count @selected-task-ids))
+                :style (m/TextStyle .fontSize (comp/font-size :m))})
+              (batch-mark-completed-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
+              (batch-add-tag-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
+              (batch-delete-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
+              (m/IconButton
+               .icon (m/Icon m/Icons.close)
+               .tooltip "Cancel selection"
+               .onPressed (fn []
+                           (reset! selected-task-ids #{})
+                           (reset! selection-mode false)))]))
+    (m/SizedBox)))
+
 (defn project-list-screen []
   (let [expanded (atom #{})
         children-map (atom {})
         tasks-with-info (atom {})
         controller (m/TextEditingController.)
-        adding-to-project (atom nil)]
+        adding-to-project (atom nil)
+        selection-mode (atom false)
+        selected-task-ids (atom #{})]
     (f/widget
      :context ctx
      :watch [{projects :projects loading :projects-loading} state/app-state
              _exp expanded
              _cm children-map
-             _twi tasks-with-info]
+             _twi tasks-with-info
+             _selection-mode selection-mode
+             _selected-ids selected-task-ids]
      :let [refresh-projects-with-blocked!
            (fn []
              (reset! tasks-with-info {})
@@ -484,7 +618,8 @@
                                  ctx pid
                                  tasks-with-info
                                  refresh-projects-with-blocked! controller
-                                 adding-to-project proj)))
+                                 adding-to-project proj
+                                 selection-mode selected-task-ids)))
                             projects)))]
      (do
        ;; Load blocked info when children are loaded
@@ -504,23 +639,43 @@
                                 (dart-core/print (str "Error loading blocked info: " error))))))))
        (m/Scaffold
         .appBar (m/AppBar
-                 .actions [(m/IconButton
-                            .tooltip "Add project"
-                            .icon (m/Icon m/Icons.add)
-                            .onPressed (fn []
-                                         (set! (.-text controller) "")
-                                         (comp/show-project-input-dialog
-                                          ctx
-                                          {:controller controller
-                                           :title "New project"
-                                           :on-submit (fn [project-content]
-                                                        (create-project-fn ctx refresh-projects-with-blocked! project-content))})))
-                           (m/IconButton
-                            .tooltip "Refresh"
-                            .icon (m/Icon m/Icons.refresh)
-                            .onPressed (fn []
-                                         (refresh-projects-with-blocked!)))])
-        .body (comp/mongol-row-layout
-               {:main-row (comp/vertical-reveal-motion
-                           {:child main-view})
-                :side-row (side-panel projects (vals @tasks-with-info))}))))))
+                 .actions [(if _selection-mode
+                             (m/IconButton
+                              .tooltip "Cancel selection"
+                              .icon (m/Icon m/Icons.close)
+                              .onPressed (fn []
+                                           (reset! selected-task-ids #{})
+                                           (reset! selection-mode false)))
+                             (m/IconButton
+                              .tooltip "Select tasks"
+                              .icon (m/Icon m/Icons.check_box)
+                              .onPressed (fn []
+                                           (reset! selection-mode true))))
+                           (if (not _selection-mode)
+                             (m/IconButton
+                              .tooltip "Add project"
+                              .icon (m/Icon m/Icons.add)
+                              .onPressed (fn []
+                                           (set! (.-text controller) "")
+                                           (comp/show-project-input-dialog
+                                            ctx
+                                            {:controller controller
+                                             :title "New project"
+                                             :on-submit (fn [project-content]
+                                                          (create-project-fn ctx refresh-projects-with-blocked! project-content))})))
+                             (m/SizedBox))
+                           (if (not _selection-mode)
+                             (m/IconButton
+                              .tooltip "Refresh"
+                              .icon (m/Icon m/Icons.refresh)
+                              .onPressed (fn []
+                                           (refresh-projects-with-blocked!)))
+                             (m/SizedBox))])
+        .body (m/Column
+               .children
+               [(batch-operations-toolbar ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
+                (m/Expanded
+                 .child (comp/mongol-row-layout
+                        {:main-row (comp/vertical-reveal-motion
+                                    {:child main-view})
+                         :side-row (side-panel projects (vals @tasks-with-info))}))]))))))
