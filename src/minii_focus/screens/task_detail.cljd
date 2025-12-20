@@ -167,32 +167,36 @@
 
 (defn- tags-section [task-detail tag-ids all-tags]
   (m/Column
-   .crossAxisAlignment m/CrossAxisAlignment.center
+   .crossAxisAlignment m/CrossAxisAlignment.start
    .mainAxisAlignment m/MainAxisAlignment.start
    .children
    [(comp/mongol-text-block
-     {:text "Tags"
+     {:text "Tags:"
       :style (m/TextStyle .fontSize (comp/font-size :m))})
-    (m/Wrap
-     .spacing (comp/space :s)
-     .runSpacing (comp/space :s)
-     .children
-     (map (fn [tag-row]
-            (let [tid (.-id tag-row)
-                  name (.-name tag-row)
-                  selected? (contains? tag-ids tid)]
-              (m/RotatedBox
-               .quarterTurns 1
-               .child (m/FilterChip
-                       .label (m/Text name)
-                       .selected selected?
-                       .onSelected (fn [v]
-                                     (if v
-                                       (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
-                                           (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))
-                                       (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
-                                           (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))))))))
-          all-tags))]))
+    (m/SizedBox .height (comp/space :xs))
+    (m/Expanded
+     .child
+     (m/Wrap
+      .direction m/Axis.vertical
+      .spacing (comp/space :s)
+      .runSpacing (comp/space :s)
+      .children
+      (map (fn [tag-row]
+             (let [tid (.-id tag-row)
+                   name (.-name tag-row)
+                   selected? (contains? tag-ids tid)]
+               (m/RotatedBox
+                .quarterTurns 1
+                .child (m/FilterChip
+                        .label (m/Text name)
+                        .selected selected?
+                        .onSelected (fn [v]
+                                      (if v
+                                        (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
+                                            (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))
+                                        (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
+                                            (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))))))))
+           all-tags)))]))
 
 
 (defn- recurrence-section [ctx task-detail]
@@ -217,9 +221,10 @@
                                              .width 300
                                              .height 200
                                              .child (m/ListView
+                                                     .scrollDirection m/Axis.horizontal
                                                      .children
                                                      (map (fn [option]
-                                                            (m/ListTile
+                                                            (mgl/MongolListTile
                                                              .title (mgl/MongolText option)
                                                              .selected (= option current-rule)
                                                              .onTap (fn []
@@ -262,61 +267,79 @@
                                                (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
 (defn- project-type-section [ctx _task-detail display-project-type editing-state project-type-state]
-  (m/Row
-   .crossAxisAlignment m/CrossAxisAlignment.center
-   .children
-   [(comp/mongol-text-block
-     {:text "Project Type"
-      :style (m/TextStyle .fontSize (comp/font-size :m))})
-    (if @editing-state
-      (mgl/MongolTextButton
-       .onPressed (fn []
-                    (m/showDialog
-                     .context ctx
-                     .builder (fn [dialog-ctx]
-                                (let [project-type-options ["None" "Sequential" "Parallel" "Single Action List"]
-                                      current-type (or (display-project-type) "None")
-                                      type-map {"None" nil
-                                                "Sequential" "sequential"
-                                                "Parallel" "parallel"
-                                                "Single Action List" "single_action_list"}]
-                                  (m/AlertDialog
-                                   .title (mgl/MongolText "Set Project Type")
-                                   .content (m/Container
-                                             .width 300
-                                             .height 200
-                                             .child (m/ListView
-                                                     .children
-                                                     (map (fn [option]
-                                                            (m/ListTile
-                                                             .title (mgl/MongolText option)
-                                                             .selected (= option current-type)
-                                                             .onTap (fn []
-                                                                      (let [selected-type (get type-map option)]
-                                                                        (reset! project-type-state selected-type)
-                                                                        (m/Navigator.pop dialog-ctx)))))
-                                                          project-type-options)))
-                                   .actions [(m/TextButton
-                                              .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                              .child (m/Text "Cancel"))]))))
-                     nil)
+  (m/SingleChildScrollView
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(comp/mongol-text-block
+      {:text "Project Type"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (mgl/MongolTextButton
+      .onPressed (fn []
+                   (m/showDialog
+                    .context ctx
+                    .builder (fn [dialog-ctx]
+                               (let [project-type-options ["None" "Sequential" "Parallel" "Single Action List"]
+                                     current-type (or (display-project-type) "None")
+                                     type-map {"None" nil
+                                               "Sequential" "sequential"
+                                               "Parallel" "parallel"
+                                               "Single Action List" "single_action_list"}]
+                                 (m/Dialog
+                                  .child
+                                  (m/Container
+                                   .padding (m/EdgeInsets.only .top (comp/space :m) .left (comp/space :m) .right (comp/space :m))
+                                   .child
+                                   (m/Column
+                                    .mainAxisSize m/MainAxisSize.max
+                                    .children
+                                    [(m/Row
+                                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                      .children
+                                      [(m/SizedBox)
+                                       (m/IconButton
+                                        .icon (m/Icon m/Icons.close)
+                                        .onPressed (fn []
+                                                     (-> (m/Navigator.of ctx) (.pop))
+                                                     nil))])
+                                     (m/Expanded
+                                      .child
+                                      (m/Row
+                                       .children
+                                       [(comp/mongol-text-block
+                                         {:text "Set Project Type"
+                                          :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                        (m/SizedBox .width (comp/space :s))
+                                        (m/Expanded
+                                         .child
+                                         (m/ListView.builder
+                                          .scrollDirection m/Axis.horizontal
+                                          .itemCount (count project-type-options)
+                                          .itemBuilder
+                                          (fn [_content index]
+                                            (let [option (nth project-type-options index)]
+                                              (mgl/MongolListTile
+                                               .title (mgl/MongolText option)
+                                               .selected (= option current-type)
+                                               .onTap (fn []
+                                                        (let [selected-type (get type-map option)]
+                                                          (reset! project-type-state selected-type)
+                                                          (m/Navigator.pop dialog-ctx))))))))
+                                        (m/SizedBox .width (comp/space :s))
+                                        (mgl/MongolTextButton
+                                         .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                         .child (mgl/MongolText "Cancel"))]))]))
 
-                    .child (mgl/MongolText (let [current (display-project-type)]
-                                             (cond
-                                               (= current "sequential") "Sequential"
-                                               (= current "parallel") "Parallel"
-                                               (= current "single_action_list") "Single Action List"
-                                               :else "None"))))
-       (mgl/MongolTextButton
-        .onPressed (fn []
-                     (reset! editing-state true)
-                     nil)
-        .child (mgl/MongolText (let [current (display-project-type)]
-                                 (cond
-                                   (= current "sequential") "Sequential"
-                                   (= current "parallel") "Parallel"
-                                   (= current "single_action_list") "Single Action List"
-                                   :else "Not set")))))]))
+                                  ))))
+                   nil)
+
+      .child (mgl/MongolText (let [current (display-project-type)]
+                               (cond
+                                 (= current "sequential") "Sequential"
+                                 (= current "parallel") "Parallel"
+                                 (= current "single_action_list") "Single Action List"
+                                 :else "None"))))])))
 
 (defn- estimated-duration-section [ctx task-detail display-estimated editing-state estimated-state]
   (m/Column
@@ -517,11 +540,11 @@
                                                 :style (m/TextStyle .fontSize (comp/font-size :m))})
                                               (m/SizedBox .width (comp/space :s))
                                               (mgl/MongolTextField
-                                              ;;  .controller (m/TextEditingController .text "")
-                                              ;;  .onChanged (fn [value] (reset! parent-state value))
-                                              ;;  .decoration (m/InputDecoration
-                                              ;;               .labelText "Search"
-                                              ;;               .border (m/OutlineInputBorder))
+                                               ;;  .controller (m/TextEditingController .text "")
+                                               ;;  .onChanged (fn [value] (reset! parent-state value))
+                                               ;;  .decoration (m/InputDecoration
+                                               ;;               .labelText "Search"
+                                               ;;               .border (m/OutlineInputBorder))
                                                )
                                               (m/SizedBox .width (comp/space :s))
                                               (m/Expanded
@@ -556,173 +579,175 @@
       .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))])))
 
 (defn- dependencies-section [ctx task-detail dependencies dependents]
-  (m/Column
-   .crossAxisAlignment m/CrossAxisAlignment.center
-   .children
-   [(comp/mongol-text-block
-     {:text "Dependencies"
-      :style (m/TextStyle .fontSize (comp/font-size :m))})
-    (m/SizedBox .height (comp/space :s))
-    ;; Show tasks this task depends on
-    (if (not (empty? dependencies))
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [(comp/mongol-text-block
-         {:text "Depends on:"
-          :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
-        (m/SizedBox .height (comp/space :xs))
-        (m/Column
-         .crossAxisAlignment m/CrossAxisAlignment.center
-         .children
-         (map (fn [dep-task]
-                (let [dep-id (.-id dep-task)
-                      dep-content (.-content dep-task)
-                      dep-status (keyword (.-status dep-task))]
-                  (m/Column
-                   .crossAxisAlignment m/CrossAxisAlignment.center
-                   .children
-                   [(m/RotatedBox
-                     .quarterTurns 1
-                     .child (m/InkWell
-                             .onTap (fn []
-                                      (task/refresh-task-detail! dep-id)
-                                      (m/Navigator.push
-                                       ctx
-                                       (m/MaterialPageRoute
-                                        .builder (fn [_]
-                                                   (task-detail-screen dep-id))))
-                                      nil)
-                             .child (m/Container
-                                     .padding (m/EdgeInsets.all (comp/space :xs))
-                                     .child (m/Row
-                                             .mainAxisSize m/MainAxisSize.min
-                                             .children
-                                             [(m/Icon
-                                               (m/Icon m/Icons.arrow_back)
-                                               .size 16
-                                               .color (comp/color :text-weak))
-                                              (m/SizedBox .width (comp/space :xs))
-                                              (comp/mongol-text-block
-                                               {:text (str dep-content " (" (name dep-status) ")")
-                                                :style (m/TextStyle
-                                                        .fontSize (comp/font-size :s)
-                                                        .color (if (= dep-status :completed)
-                                                                 (comp/color :text-weak)
-                                                                 (comp/color :text-main)))})
-                                              (m/SizedBox .width (comp/space :xs))
-                                              (m/IconButton
-                                               .icon (m/Icon m/Icons.close)
-                                               .iconSize 16
-                                               .onPressed (fn []
-                                                            (-> (dep-svc/delete-dependency (.-id task-detail) dep-id)
-                                                                (.then (fn [_]
-                                                                         (task/refresh-task-detail! (.-id task-detail))
-                                                                         (toast/show-success-toast ctx "Dependency removed")))
-                                                                (.catchError (fn [error]
-                                                                               (toast/handle-error-with-toast ctx error "Dependency устгахад алдаа гарлаа"))))))]))))
-                    (m/SizedBox .height (comp/space :xs))])))
-              dependencies))])
-      (comp/mongol-text-block
-       {:text "No dependencies"
-        :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
-    (m/SizedBox .height (comp/space :s))
-    ;; Show tasks that depend on this task
-    (if (not (empty? dependents))
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [(comp/mongol-text-block
-         {:text "Dependent tasks:"
-          :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
-        (m/SizedBox .height (comp/space :xs))
-        (m/Column
-         .crossAxisAlignment m/CrossAxisAlignment.center
-         .children
-         (map (fn [dep-task]
-                (let [dep-id (.-id dep-task)
-                      dep-content (.-content dep-task)
-                      dep-status (keyword (.-status dep-task))]
-                  (m/RotatedBox
-                   .quarterTurns 1
-                   .child (m/InkWell
-                           .onTap (fn []
-                                    (task/refresh-task-detail! dep-id)
-                                    (m/Navigator.push
-                                     ctx
-                                     (m/MaterialPageRoute
-                                      .builder (fn [_]
-                                                 (task-detail-screen dep-id))))
-                                    nil)
-                           .child (m/Container
-                                   .padding (m/EdgeInsets.all (comp/space :xs))
-                                   .child (m/Row
-                                           .mainAxisSize m/MainAxisSize.min
-                                           .children
-                                           [(comp/mongol-text-block
-                                             {:text (str dep-content " (" (name dep-status) ")")
-                                              :style (m/TextStyle
-                                                      .fontSize (comp/font-size :s)
-                                                      .color (if (= dep-status :completed)
-                                                               (comp/color :text-weak)
-                                                               (comp/color :text-main)))})
-                                            (m/SizedBox .width (comp/space :xs))
-                                            (m/Icon
-                                             (m/Icon m/Icons.arrow_forward)
-                                             .size 16
-                                             .color (comp/color :text-weak))]))))))
-              dependents))])
-      (comp/mongol-text-block
-       {:text "No dependent tasks"
-        :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
-    (m/SizedBox .height (comp/space :s))
-    ;; Add dependency button
-    (mgl/MongolTextButton
-     .onPressed (fn []
-                  (let [all-tasks-promise (task/get-all-tasks)]
-                    (-> all-tasks-promise
-                        (.then (fn [all-tasks]
-                                 ;; Filter out current task and tasks that would create circular dependencies
-                                 (let [current-id (.-id task-detail)
-                                       dependency-ids (set (map (fn [t] (.-id t)) dependencies))
-                                       available-tasks (filter (fn [t]
-                                                                 (let [tid (.-id t)]
-                                                                   (and (not= tid current-id)
-                                                                        (not (contains? dependency-ids tid)))))
-                                                               all-tasks)]
-                                   (m/showDialog
-                                    .context ctx
-                                    .builder (fn [dialog-ctx]
-                                               (m/AlertDialog
-                                                .title (mgl/MongolText "Add Dependency")
-                                                .content (m/Container
-                                                          .width 300
-                                                          .height 400
-                                                          .child (m/ListView
-                                                                  .children
-                                                                  (if (empty? available-tasks)
-                                                                    [(m/ListTile
-                                                                      .title (mgl/MongolText "No available tasks"))]
-                                                                    (map (fn [t]
-                                                                           (let [tid (.-id t)
-                                                                                 tcontent (.-content t)]
-                                                                             (m/ListTile
-                                                                              .title (mgl/MongolText tcontent)
-                                                                              .onTap (fn []
-                                                                                       (m/Navigator.pop dialog-ctx)
-                                                                                       (-> (dep-svc/create-dependency current-id tid)
-                                                                                           (.then (fn [_]
-                                                                                                    (task/refresh-task-detail! current-id)
-                                                                                                    (toast/show-success-toast dialog-ctx "Dependency added")))
-                                                                                           (.catchError (fn [error]
-                                                                                                          (toast/handle-error-with-toast dialog-ctx error "Dependency нэмэхэд алдаа гарлаа")))))))
-                                                                           available-tasks)))))
-                                                .actions [(m/TextButton
-                                                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                           .child (m/Text "Cancel"))])))))))
-                    (.catchError (fn [error]
-                                   (toast/handle-error-with-toast ctx error "Ажлуудыг авахад алдаа гарлаа")))))
-     .child (mgl/MongolText "Add dependency"))]))
+  (m/SingleChildScrollView
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(comp/mongol-text-block
+      {:text "Dependencies"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (m/SizedBox .height (comp/space :s))
+     ;; Show tasks this task depends on
+     (if (not (empty? dependencies))
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(comp/mongol-text-block
+          {:text "Depends on:"
+           :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
+         (m/SizedBox .height (comp/space :xs))
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          (map (fn [dep-task]
+                 (let [dep-id (.-id dep-task)
+                       dep-content (.-content dep-task)
+                       dep-status (keyword (.-status dep-task))]
+                   (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [(m/RotatedBox
+                      .quarterTurns 1
+                      .child (m/InkWell
+                              .onTap (fn []
+                                       (task/refresh-task-detail! dep-id)
+                                       (m/Navigator.push
+                                        ctx
+                                        (m/MaterialPageRoute
+                                         .builder (fn [_]
+                                                    (task-detail-screen dep-id))))
+                                       nil)
+                              .child (m/Container
+                                      .padding (m/EdgeInsets.all (comp/space :xs))
+                                      .child (m/Row
+                                              .mainAxisSize m/MainAxisSize.min
+                                              .children
+                                              [(m/Icon
+                                                (m/Icon m/Icons.arrow_back)
+                                                .size 16
+                                                .color (comp/color :text-weak))
+                                               (m/SizedBox .width (comp/space :xs))
+                                               (comp/mongol-text-block
+                                                {:text (str dep-content " (" (name dep-status) ")")
+                                                 :style (m/TextStyle
+                                                         .fontSize (comp/font-size :s)
+                                                         .color (if (= dep-status :completed)
+                                                                  (comp/color :text-weak)
+                                                                  (comp/color :text-main)))})
+                                               (m/SizedBox .width (comp/space :xs))
+                                               (m/IconButton
+                                                .icon (m/Icon m/Icons.close)
+                                                .iconSize 16
+                                                .onPressed (fn []
+                                                             (-> (dep-svc/delete-dependency (.-id task-detail) dep-id)
+                                                                 (.then (fn [_]
+                                                                          (task/refresh-task-detail! (.-id task-detail))
+                                                                          (toast/show-success-toast ctx "Dependency removed")))
+                                                                 (.catchError (fn [error]
+                                                                                (toast/handle-error-with-toast ctx error "Dependency устгахад алдаа гарлаа"))))))]))))
+                     (m/SizedBox .height (comp/space :xs))])))
+               dependencies))])
+       (comp/mongol-text-block
+        {:text "No dependencies"
+         :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
+     (m/SizedBox .height (comp/space :s))
+     ;; Show tasks that depend on this task
+     (if (not (empty? dependents))
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(comp/mongol-text-block
+          {:text "Dependent tasks:"
+           :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))})
+         (m/SizedBox .height (comp/space :xs))
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          (map (fn [dep-task]
+                 (let [dep-id (.-id dep-task)
+                       dep-content (.-content dep-task)
+                       dep-status (keyword (.-status dep-task))]
+                   (m/RotatedBox
+                    .quarterTurns 1
+                    .child (m/InkWell
+                            .onTap (fn []
+                                     (task/refresh-task-detail! dep-id)
+                                     (m/Navigator.push
+                                      ctx
+                                      (m/MaterialPageRoute
+                                       .builder (fn [_]
+                                                  (task-detail-screen dep-id))))
+                                     nil)
+                            .child (m/Container
+                                    .padding (m/EdgeInsets.all (comp/space :xs))
+                                    .child (m/Row
+                                            .mainAxisSize m/MainAxisSize.min
+                                            .children
+                                            [(comp/mongol-text-block
+                                              {:text (str dep-content " (" (name dep-status) ")")
+                                               :style (m/TextStyle
+                                                       .fontSize (comp/font-size :s)
+                                                       .color (if (= dep-status :completed)
+                                                                (comp/color :text-weak)
+                                                                (comp/color :text-main)))})
+                                             (m/SizedBox .width (comp/space :xs))
+                                             (m/Icon
+                                              (m/Icon m/Icons.arrow_forward)
+                                              .size 16
+                                              .color (comp/color :text-weak))]))))))
+               dependents))])
+       (comp/mongol-text-block
+        {:text "No dependent tasks"
+         :style (m/TextStyle .fontSize (comp/font-size :s) .color (comp/color :text-weak))}))
+     (m/SizedBox .height (comp/space :s))
+     ;; Add dependency button
+     (mgl/MongolTextButton
+      .onPressed (fn []
+                   (let [all-tasks-promise (task/get-all-tasks)]
+                     (-> all-tasks-promise
+                         (.then (fn [all-tasks]
+                                  ;; Filter out current task and tasks that would create circular dependencies
+                                  (let [current-id (.-id task-detail)
+                                        dependency-ids (set (map (fn [t] (.-id t)) dependencies))
+                                        available-tasks (filter (fn [t]
+                                                                  (let [tid (.-id t)]
+                                                                    (and (not= tid current-id)
+                                                                         (not (contains? dependency-ids tid)))))
+                                                                all-tasks)]
+                                    (m/showDialog
+                                     .context ctx
+                                     .builder (fn [dialog-ctx]
+                                                (m/AlertDialog
+                                                 .title (mgl/MongolText "Add Dependency")
+                                                 .content (m/Container
+                                                           .width 300
+                                                           .height 400
+                                                           .child (m/ListView
+                                                                   .children
+                                                                   (if (empty? available-tasks)
+                                                                     [(m/ListTile
+                                                                       .title (mgl/MongolText "No available tasks"))]
+                                                                     (map (fn [t]
+                                                                            (let [tid (.-id t)
+                                                                                  tcontent (.-content t)]
+                                                                              (m/ListTile
+                                                                               .title (mgl/MongolText tcontent)
+                                                                               .onTap (fn []
+                                                                                        (m/Navigator.pop dialog-ctx)
+                                                                                        (-> (dep-svc/create-dependency current-id tid)
+                                                                                            (.then (fn [_]
+                                                                                                     (task/refresh-task-detail! current-id)
+                                                                                                     (toast/show-success-toast dialog-ctx "Dependency added")))
+                                                                                            (.catchError (fn [error]
+                                                                                                           (toast/handle-error-with-toast dialog-ctx error "Dependency нэмэхэд алдаа гарлаа")))))))
+                                                                            available-tasks)))))
+                                                 .actions [(m/TextButton
+                                                            .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                            .child (m/Text "Cancel"))])))))))
+                     (.catchError (fn [error]
+                                    (toast/handle-error-with-toast ctx error "Ажлуудыг авахад алдаа гарлаа")))))
+      .child (mgl/MongolText "Add dependency"))])))
 
 
 (defn task-detail-screen
