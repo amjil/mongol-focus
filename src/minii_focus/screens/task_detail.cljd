@@ -157,7 +157,7 @@
      (mgl/MongolElevatedButton
       .onPressed (fn []
                    (-> (task/delete-task (.-id task-detail))
-                       (.then (fn []
+                       (.then (fn [_]
                                 (dart-core/print "Task deleted")
                                 (m/Navigator.pop ctx))))
                    nil)
@@ -189,9 +189,9 @@
                        .onSelected (fn [v]
                                      (if v
                                        (-> (tag-svc/add-tag-to-item (.-id task-detail) tid)
-                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))
+                                           (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))
                                        (-> (tag-svc/remove-tag-from-item (.-id task-detail) tid)
-                                           (.then (fn [] (task/refresh-task-detail! (.-id task-detail)))))))))))
+                                           (.then (fn [_] (task/refresh-task-detail! (.-id task-detail)))))))))))
           all-tags))]))
 
 
@@ -225,7 +225,7 @@
                                                              .onTap (fn []
                                                                       (let [rule (if (= option "None") nil (str/lower-case option))]
                                                                         (-> (recurring/set-task-recurrence (.-id task-detail) rule nil)
-                                                                            (.then (fn []
+                                                                            (.then (fn [_]
                                                                                      (task/refresh-task-detail! (.-id task-detail))
                                                                                      (m/Navigator.pop dialog-ctx)))
                                                                             (.catchError (fn [error]
@@ -257,7 +257,7 @@
              .onPressed (fn []
                           (when task-detail
                             (-> (task/toggle-task-flag (.-id task-detail))
-                                (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                (.then (fn [_] (task/refresh-task-detail! (.-id task-detail))))
                                 (.catchError (fn [error]
                                                (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
@@ -374,7 +374,7 @@
                                   (if @editing-state
                                     (reset! defer-state picked)
                                     (-> (task/update-task (.-id task-detail) nil nil picked nil nil nil)
-                                        (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                        (.then (fn [_] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Хойшлуулах огноог шинэчлэхэд алдаа гарлаа")))))))))
                    nil)
@@ -395,7 +395,7 @@
                                   (if @editing-state
                                     (reset! due-state picked)
                                     (-> (task/update-task (.-id task-detail) nil nil nil picked nil nil)
-                                        (.then (fn [] (task/refresh-task-detail! (.-id task-detail))))
+                                        (.then (fn [_] (task/refresh-task-detail! (.-id task-detail))))
                                         (.catchError (fn [error]
                                                        (toast/handle-error-with-toast ctx error "Дуусах огноог шинэчлэхэд алдаа гарлаа")))))))))
                    nil)
@@ -445,88 +445,116 @@
                                                   current-status " to " new-status)))))))))])))
 
 (defn- parent-section [ctx task-detail parent-rel]
-  (m/Column
-   .crossAxisAlignment m/CrossAxisAlignment.center
-   .children
-   [(comp/mongol-text-block
-     {:text "Parent task"
-      :style (m/TextStyle .fontSize (comp/font-size :m))})
-    (m/SizedBox .height (comp/space :s))
-    (if parent-rel
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [(comp/mongol-text-block
-         {:text (str "Parent: " (.-parentId parent-rel))
-          :style (m/TextStyle .color (comp/color :text-weak))})
-        (m/SizedBox .height (comp/space :s))
-        (mgl/MongolTextButton
-         .onPressed (fn []
-                      (-> (tree-svc/remove-parent-task (.-id task-detail))
-                          (.then (fn []
-                                   (task/refresh-task-detail! (.-id task-detail))
-                                   (dart-core/print "Parent removed")))
-                          (.catchError (fn [error]
-                                         (toast/handle-error-with-toast ctx error "Эцэг ажлыг устгахад алдаа гарлаа")))))
-         .child (mgl/MongolText "Remove parent"))])
-      (comp/mongol-text-block
-       {:text "None"
-        :style (m/TextStyle .color (comp/color :text-weak))}))
-    (m/SizedBox .height (comp/space :s))
-    (mgl/MongolTextButton
-     .onPressed (fn []
-                  (let [all-tasks-promise (task/get-all-tasks)]
-                    (-> all-tasks-promise
-                        (.then (fn [all-tasks]
-                                 ;; Filter out current task and its descendants
-                                 (let [current-id (.-id task-detail)
-                                       available-tasks (filter (fn [t]
-                                                                 (not= (.-id t) current-id))
-                                                               all-tasks)]
-                                   (m/showDialog
-                                    .context ctx
-                                    .builder (fn [dialog-ctx]
-                                               (m/AlertDialog
-                                                .title (mgl/MongolText "Select Parent Task")
-                                                .content (m/Container
-                                                          .width 300
-                                                          .height 400
-                                                          .child (m/ListView
-                                                                  .children
-                                                                  (concat
-                                                                   [(m/ListTile
-                                                                     .title (mgl/MongolText "None (Remove parent)")
-                                                                     .onTap (fn []
-                                                                              (m/Navigator.pop dialog-ctx)
-                                                                              (-> (tree-svc/remove-parent-task current-id)
-                                                                                  (.then (fn []
-                                                                                           (task/refresh-task-detail! current-id)
-                                                                                           (dart-core/print "Parent removed")))
-                                                                                  (.catchError (fn [error]
-                                                                                                 (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг устгахад алдаа гарлаа"))))))]
-                                                                   (map (fn [t]
-                                                                          (let [tid (.-id t)
-                                                                                tcontent (.-content t)]
-                                                                            (m/ListTile
-                                                                             .title (mgl/MongolText tcontent)
-                                                                             .subtitle (mgl/MongolText (str "ID: " tid))
-                                                                             .onTap (fn []
-                                                                                      (m/Navigator.pop dialog-ctx)
-                                                                                      (-> (tree-svc/set-parent-task current-id tid)
-                                                                                          (.then (fn []
-                                                                                                   (task/refresh-task-detail! current-id)
-                                                                                                   (dart-core/print (str "Parent set to: " tid))))
-                                                                                          (.catchError (fn [error]
-                                                                                                         (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))))))
-                                                                        available-tasks))))
-                                                .actions [(m/TextButton
-                                                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                           .child (m/Text "Cancel"))])))
-                                   nil)))
-                        (.catchError (fn [error]
-                                       (toast/handle-error-with-toast ctx error "Ажлуудыг ачаалахад алдаа гарлаа")))))
-                  nil)
-     .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))]))
+  (m/SingleChildScrollView
+   .child
+   (m/Column
+    .crossAxisAlignment m/CrossAxisAlignment.center
+    .children
+    [(comp/mongol-text-block
+      {:text "Parent task"
+       :style (m/TextStyle .fontSize (comp/font-size :m))})
+     (m/SizedBox .height (comp/space :s))
+     (if parent-rel
+       (m/Column
+        .crossAxisAlignment m/CrossAxisAlignment.center
+        .children
+        [(comp/mongol-text-block
+          {:text (str "Parent: " (.-parentId parent-rel))
+           :style (m/TextStyle .color (comp/color :text-weak))})
+         (m/SizedBox .height (comp/space :s))
+         (mgl/MongolTextButton
+          .onPressed (fn []
+                       (-> (tree-svc/remove-parent-task (.-id task-detail))
+                           (.then (fn [_]
+                                    (task/refresh-task-detail! (.-id task-detail))
+                                    (dart-core/print "Parent removed")))
+                           (.catchError (fn [error]
+                                          (toast/handle-error-with-toast ctx error "Эцэг ажлыг устгахад алдаа гарлаа")))))
+          .child (mgl/MongolText "Remove parent"))])
+       (comp/mongol-text-block
+        {:text "None"
+         :style (m/TextStyle .color (comp/color :text-weak))}))
+     (m/SizedBox .height (comp/space :s))
+     (mgl/MongolTextButton
+      .onPressed (fn []
+                   (let [all-tasks-promise (task/get-all-tasks)]
+                     (-> all-tasks-promise
+                         (.then (fn [all-tasks]
+                                  ;; Filter out current task and its descendants
+                                  (let [current-id (.-id task-detail)
+                                        available-tasks (filter (fn [t]
+                                                                  (not= (.-id t) current-id))
+                                                                all-tasks)]
+                                    (m/showDialog
+                                     .context ctx
+                                     .builder
+                                     (fn [dialog-ctx]
+                                       (m/Dialog
+                                        .child
+                                        (m/Container
+                                         .padding (m/EdgeInsets.only .top (comp/space :m) .left (comp/space :m) .right (comp/space :m))
+                                         .child
+                                         (m/Column
+                                          .mainAxisSize m/MainAxisSize.max
+                                          .children
+                                          [(m/Row
+                                            .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                            .children
+                                            [(m/SizedBox)
+                                             (m/IconButton
+                                              .icon (m/Icon m/Icons.close)
+                                              .onPressed (fn []
+                                                           (-> (m/Navigator.of ctx) (.pop))
+                                                           nil))])
+                                           (m/Expanded
+                                            .child
+                                            (m/Row
+                                             .crossAxisAlignment m/CrossAxisAlignment.start
+                                             .children
+                                             [(comp/mongol-text-block
+                                               {:text "Select Parent task"
+                                                :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                              (m/SizedBox .width (comp/space :s))
+                                              (m/Expanded
+                                               .child
+                                               (m/ListView
+                                                .scrollDirection m/Axis.horizontal
+                                                .children
+                                                (concat
+                                                 [(mgl/MongolListTile
+                                                   .title (mgl/MongolText "None (Remove parent)")
+                                                   .onTap (fn []
+                                                            (m/Navigator.pop dialog-ctx)
+                                                            (-> (tree-svc/remove-parent-task current-id)
+                                                                (.then (fn [_]
+                                                                         (task/refresh-task-detail! current-id)
+                                                                         (dart-core/print "Parent removed")))
+                                                                (.catchError (fn [error]
+                                                                               (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг устгахад алдаа гарлаа"))))))]
+                                                 (map (fn [t]
+                                                        (let [tid (.-id t)
+                                                              tcontent (.-content t)]
+                                                          (mgl/MongolListTile
+                                                           .title (mgl/MongolText tcontent)
+                                                           .subtitle (mgl/MongolText (str "ID: " tid))
+                                                           .onTap (fn []
+                                                                    (m/Navigator.pop dialog-ctx)
+                                                                    (-> (tree-svc/set-parent-task current-id tid)
+                                                                        (.then (fn [_]
+                                                                                 (task/refresh-task-detail! current-id)
+                                                                                 (dart-core/print (str "Parent set to: " tid))))
+                                                                        (.catchError (fn [error]
+                                                                                       (toast/handle-error-with-toast dialog-ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))))))
+                                                      available-tasks))))
+                                              (mgl/MongolTextButton
+                                               .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                               .child (mgl/MongolText "Cancel"))]))])
+                                         ))))
+                                    nil)))
+                         (.catchError (fn [error]
+                                        (toast/handle-error-with-toast ctx error "Ажлуудыг ачаалахад алдаа гарлаа")))))
+                   nil)
+      .child (mgl/MongolText (if parent-rel "Change parent" "Set parent")))])))
 
 (defn- dependencies-section [ctx task-detail dependencies dependents]
   (m/Column
@@ -589,7 +617,7 @@
                                                .iconSize 16
                                                .onPressed (fn []
                                                             (-> (dep-svc/delete-dependency (.-id task-detail) dep-id)
-                                                                (.then (fn []
+                                                                (.then (fn [_]
                                                                          (task/refresh-task-detail! (.-id task-detail))
                                                                          (toast/show-success-toast ctx "Dependency removed")))
                                                                 (.catchError (fn [error]
@@ -684,7 +712,7 @@
                                                                               .onTap (fn []
                                                                                        (m/Navigator.pop dialog-ctx)
                                                                                        (-> (dep-svc/create-dependency current-id tid)
-                                                                                           (.then (fn []
+                                                                                           (.then (fn [_]
                                                                                                     (task/refresh-task-detail! current-id)
                                                                                                     (toast/show-success-toast dialog-ctx "Dependency added")))
                                                                                            (.catchError (fn [error]

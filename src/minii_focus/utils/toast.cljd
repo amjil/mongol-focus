@@ -17,37 +17,33 @@
    .child
    (mgl/MongolText msg)))
 
+(defn- safe-show-toast
+  "Safely show toast with error handling to prevent overlay null errors"
+  [ctx toast-widget]
+  (try
+    (when ctx
+      (styled-toast/showToastWidget
+       toast-widget
+       .context ctx
+       .reverseAnimation styled-toast/StyledToastAnimation.fade
+       .animation styled-toast/StyledToastAnimation.fade
+       .position styled-toast/StyledToastPosition.center))
+    (catch Exception e
+      ;; Silently handle overlay errors - context may have been disposed
+      (dart-core/print (str "Toast error (context may be disposed): " e))
+      nil)))
+
 (defn show-error-toast [ctx msg]
-  (styled-toast/showToastWidget
-   (build-toast m/Colors.redAccent msg)
-   .context ctx
-   .reverseAnimation styled-toast/StyledToastAnimation.fade
-   .animation styled-toast/StyledToastAnimation.fade
-   .position styled-toast/StyledToastPosition.center))
+  (safe-show-toast ctx (build-toast m/Colors.redAccent msg)))
 
 (defn show-success-toast [ctx msg]
-  (styled-toast/showToastWidget
-   (build-toast m/Colors.greenAccent msg)
-   .context ctx
-   .reverseAnimation styled-toast/StyledToastAnimation.fade
-   .animation styled-toast/StyledToastAnimation.fade
-   .position styled-toast/StyledToastPosition.center))
+  (safe-show-toast ctx (build-toast m/Colors.greenAccent msg)))
 
 (defn show-info-toast [ctx msg]
-  (styled-toast/showToastWidget
-   (build-toast m/Colors.blueAccent msg)
-   .context ctx
-   .reverseAnimation styled-toast/StyledToastAnimation.fade
-   .animation styled-toast/StyledToastAnimation.fade
-   .position styled-toast/StyledToastPosition.center))
+  (safe-show-toast ctx (build-toast m/Colors.blueAccent msg)))
 
 (defn show-warning-toast [ctx msg]
-  (styled-toast/showToastWidget
-   (build-toast m/Colors.orangeAccent msg)
-   .context ctx
-   .reverseAnimation styled-toast/StyledToastAnimation.fade
-   .animation styled-toast/StyledToastAnimation.fade
-   .position styled-toast/StyledToastPosition.center))
+  (safe-show-toast ctx (build-toast m/Colors.orangeAccent msg)))
 
 (defn show-toast [ctx msg & [type]]
   (let [toast-fn (case type
