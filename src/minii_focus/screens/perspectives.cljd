@@ -263,7 +263,7 @@
                      .trailing (m/Column
                                 .mainAxisSize m/MainAxisSize.min
                                 .children
-                                [                                 (m/IconButton
+                                [(m/IconButton
                                   .icon (m/Icon m/Icons.edit)
                                   .onPressed (fn []
                                                (reset! editing-id (.-id p))
@@ -302,8 +302,10 @@
                                                                   (dart-core/print (str "Error deleting perspective: " error)))))))]))))
           perspectives))))
 
-(defn- create-perspective-section [name-state tags]
+(defn- create-perspective-section []
   (let [;; Local state for filter conditions
+        {tags :tags} state/app-state
+        name-state (atom "")
         selected-statuses (atom #{"active"})
         only-flagged? (atom false)
         selected-tags (atom #{})
@@ -315,8 +317,8 @@
                         ["completed" "Completed"]
                         ["on_hold" "On hold"]
                         ["dropped" "Dropped"]]]
-    (m/Column
-     .crossAxisAlignment m/CrossAxisAlignment.center
+    (m/Row
+     .crossAxisAlignment m/CrossAxisAlignment.start
      .children
      [(m/Container
        .padding (m/EdgeInsets.all (comp/space :s))
@@ -325,101 +327,122 @@
                              .color m/Colors.grey.shade300
                              .width 1)
                     .borderRadius (m/BorderRadius.circular 4))
-       .child (m/SizedBox
-               .height (+ (* (comp/font-size :m) 2) (* (comp/space :s) 2))
-               .child (mgl/MongolTextField
-                       .decoration nil
-                       .maxLines 1
-                       ;; .hintText "Perspective name"
-                       .onChanged (fn [v] (reset! name-state v)))))
-      (m/SizedBox .height (comp/space :s))
+       .child (mgl/MongolTextField
+               .decoration nil
+               .maxLines 1
+               .onChanged (fn [v] (reset! name-state v))))
+      (m/SizedBox .width (comp/space :s))
       ;; Status filter
       (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.start
+       .crossAxisAlignment m/CrossAxisAlignment.center
        .children
        [(mgl/MongolText "Status")
         (m/SizedBox .height (comp/space :xs))
         (m/Wrap
+         .direction m/Axis.vertical
          .spacing (comp/space :xs)
          .runSpacing (comp/space :xs)
          .children
          (map (fn [[status-key label]]
                 (let [selected? (contains? @selected-statuses status-key)]
-                  (m/FilterChip
-                   .label (m/Text label)
-                   .selected selected?
-                   .onSelected (fn [v]
-                                 (if v
-                                   (swap! selected-statuses conj status-key)
-                                   (swap! selected-statuses disj status-key))))))
+                  (m/RotatedBox
+                   .quarterTurns 1
+                   .child
+                   (m/FilterChip
+                    .label (m/Text label)
+                    .selected selected?
+                    .onSelected (fn [v]
+                                  (if v
+                                    (swap! selected-statuses conj status-key)
+                                    (swap! selected-statuses disj status-key)))))))
               status-options))])
-      (m/SizedBox .height (comp/space :s))
+      (m/SizedBox .width (comp/space :s))
       ;; Flagged only
-      (m/FilterChip
-       .label (m/Text "Flagged only")
-       .selected @only-flagged?
-       .onSelected (fn [v] (reset! only-flagged? v)))
-      (m/SizedBox .height (comp/space :s))
+      (m/RotatedBox
+       .quarterTurns 1
+       .child
+       (m/FilterChip
+        .label (m/Text "Flagged only")
+        .selected @only-flagged?
+        .onSelected (fn [v] (reset! only-flagged? v))))
+      (m/SizedBox .width (comp/space :s))
       ;; Tag filter
       (m/Column
        .crossAxisAlignment m/CrossAxisAlignment.start
        .children
        [(mgl/MongolText "Tags")
-        (m/SizedBox .height (comp/space :xs))
-        (if (empty? tags)
-          (mgl/MongolText "No tags")
-          (m/Wrap
-           .spacing (comp/space :xs)
-           .runSpacing (comp/space :xs)
-           .children
-           (map (fn [t]
-                  (let [tid (.-id t)
-                        selected? (contains? @selected-tags tid)]
-                    (m/FilterChip
-                     .label (m/Text (.-name t))
-                     .selected selected?
-                     .onSelected (fn [v]
-                                   (if v
-                                     (swap! selected-tags conj tid)
-                                     (swap! selected-tags disj tid))))))
-                tags)))
-        (m/SizedBox .height (comp/space :xs))
+        (m/SizedBox .height (comp/space :s))
         (m/Row
-         .mainAxisSize m/MainAxisSize.min
          .children
-         [(m/Text "Mode:")
-          (m/SizedBox .width (comp/space :xs))
-          (m/FilterChip
-           .label (m/Text "OR")
-           .selected (= @tags-mode :or)
-           .onSelected (fn [v]
-                         (when v (reset! tags-mode :or))))
-          (m/SizedBox .width (comp/space :xs))
-          (m/FilterChip
-           .label (m/Text "AND")
-           .selected (= @tags-mode :and)
-           .onSelected (fn [v]
-                         (when v (reset! tags-mode :and))))])])
-      (m/SizedBox .height (comp/space :s))
+         [(if (empty? tags)
+            (mgl/MongolText "No tags")
+            (m/Wrap
+             .spacing (comp/space :xs)
+             .runSpacing (comp/space :xs)
+             .children
+             (map (fn [t]
+                    (let [tid (.-id t)
+                          selected? (contains? @selected-tags tid)]
+                      (m/RotatedBox
+                       .quarterTurns 1
+                       .child
+                       (m/FilterChip
+                        .label (m/Text (.-name t))
+                        .selected selected?
+                        .onSelected (fn [v]
+                                      (if v
+                                        (swap! selected-tags conj tid)
+                                        (swap! selected-tags disj tid)))))))
+                  tags)))
+          (m/SizedBox .width (comp/space :s))
+          (m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .children
+           [(mgl/MongolText "Mode:")
+            (m/SizedBox .height (comp/space :xs))
+            (m/RotatedBox
+             .quarterTurns 1
+             .child
+             (m/FilterChip
+              .label (m/Text "OR")
+              .selected (= @tags-mode :or)
+              .onSelected (fn [v]
+                            (when v (reset! tags-mode :or)))))
+            (m/SizedBox .height (comp/space :xs))
+            (m/RotatedBox
+             .quarterTurns 1
+             .child
+             (m/FilterChip
+              .label (m/Text "AND")
+              .selected (= @tags-mode :and)
+              .onSelected (fn [v]
+                            (when v (reset! tags-mode :and)))))])])])
+      (m/SizedBox .width (comp/space :s))
       ;; Date range filter
       (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.start
+       .crossAxisAlignment m/CrossAxisAlignment.center
        .children
        [(mgl/MongolText "Date range")
         (m/SizedBox .height (comp/space :xs))
-        (m/Row
+        (m/Column
          .mainAxisSize m/MainAxisSize.min
          .children
-         [(m/FilterChip
-           .label (m/Text "Due soon (3d)")
-           .selected @due-soon?
-           .onSelected (fn [v] (reset! due-soon? v)))
-          (m/SizedBox .width (comp/space :xs))
-          (m/FilterChip
-           .label (m/Text "Overdue")
-           .selected @overdue?
-           .onSelected (fn [v] (reset! overdue? v)))] )])
-      (m/SizedBox .height (comp/space :s))
+         [(m/RotatedBox
+           .quarterTurns 1
+           .child
+           (m/FilterChip
+            .label (m/Text "Due soon (3d)")
+            .selected @due-soon?
+            .onSelected (fn [v] (reset! due-soon? v))))
+          (m/SizedBox .height (comp/space :xs))
+          (m/RotatedBox
+           .quarterTurns 1
+           .child
+           (m/FilterChip
+            .label (m/Text "Overdue")
+            .selected @overdue?
+            .onSelected (fn [v] (reset! overdue? v))))])])
+      (m/SizedBox .width (comp/space :s))
       (mgl/MongolElevatedButton
        .onPressed (fn []
                     (when (not (empty? @name-state))
@@ -543,133 +566,136 @@
       (m/SizedBox.shrink))))           
 
 (defn perspectives-screen []
-  (let [name-state (atom "")
-        editing-id (atom nil)
+  (let [editing-id (atom nil)
         selected-perspective (atom nil)
         perspective-tasks (atom [])
         tasks-with-info (atom [])
         loading-info (atom false)]
     (f/widget
      :context ctx
-     :watch [_nm name-state
-             _ed editing-id
+     :watch [_ed editing-id
              _sp selected-perspective
              _pt perspective-tasks
              _twi tasks-with-info
              _li loading-info
              {perspectives :perspectives
               tags :tags} state/app-state]
-     (do
-       (when (and (seq @perspective-tasks) (empty? @tasks-with-info) (not @loading-info))
-         (reset! loading-info true)
-         (m/WidgetsBinding.instance.addPostFrameCallback
-          (fn [_]
-            (-> (task/get-tasks-with-blocked-info @perspective-tasks)
-                (.then (fn [info-list]
-                         (reset! tasks-with-info info-list)
-                         (reset! loading-info false)))
-                (.catchError (fn [e]
-                               (dart-core/print (str "Error loading blocked info: " e))
-                               (reset! loading-info false)))))))
-       (m/DefaultTabController
-      .length 2
-      .child (m/Scaffold
-              .appBar (m/AppBar
-                       .actions [(m/IconButton
-                                  .tooltip "Refresh"
-                                  .icon (m/Icon m/Icons.refresh)
-                                  .onPressed (fn []
-                                               (perspective-svc/refresh-perspectives!)))]
-                       .bottom (m/TabBar
-                                .tabs [(m/Tab .text "Manage")
-                                       (m/Tab .text "Apply")]))
-              .body (m/TabBarView
-             .children
-             [( 
-               ;; Tab 1: Manage Perspectives
-               comp/mongol-row-layout
-               {:main-row
-                (m/Padding
-                 .padding (m/EdgeInsets.all (comp/space :m))
-                 .child
-                 (m/SingleChildScrollView
-                  .scrollDirection m/Axis.horizontal
-                  .child
-                  (m/Row
-                   .crossAxisAlignment m/CrossAxisAlignment.start
-                   .children
-                   [(comp/mongol-text-block
-                     {:text "Create Perspective"
-                      :style (m/TextStyle .fontSize (comp/font-size :l))})
-                    (m/SizedBox .width (comp/space :s))
-                    (create-perspective-section name-state tags)
-                    (m/SizedBox .width (comp/space :l))
-                    (comp/mongol-text-block
-                     {:text "Perspectives"
-                      :style (m/TextStyle .fontSize (comp/font-size :l))})
-                    (m/SizedBox .width (comp/space :s))
-                    (perspectives-section ctx perspectives editing-id tags)])))
-                :side-row
-                (m/Container
-                 .padding (m/EdgeInsets.all (comp/space :m))
-                 .child
-                 (m/Column
-                  .crossAxisAlignment m/CrossAxisAlignment.center
-                  .children
-                  [(comp/mongol-text-block
-                    {:text "Perspectives"
-                     :style (m/TextStyle .fontSize (comp/font-size :m))})
-                   (m/SizedBox .height (comp/space :s))
+      ;;  (when (and (seq @perspective-tasks) (empty? @tasks-with-info) (not @loading-info))
+      ;;    (reset! loading-info true)
+      ;;    (m/WidgetsBinding.instance.addPostFrameCallback
+      ;;     (fn [_]
+      ;;       (-> (task/get-tasks-with-blocked-info @perspective-tasks)
+      ;;           (.then (fn [info-list]
+      ;;                    (reset! tasks-with-info info-list)
+      ;;                    (reset! loading-info false)))
+      ;;           (.catchError (fn [e]
+      ;;                          (dart-core/print (str "Error loading blocked info: " e))
+      ;;                          (reset! loading-info false)))))))
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .actions [(m/IconButton
+                            .tooltip "Refresh"
+                            .icon (m/Icon m/Icons.refresh)
+                            .onPressed (fn []
+                                         (perspective-svc/refresh-perspectives!)))]))
+       .body
+       (m/SafeArea)
+       (m/DefaultTabController .length 2)
+       (comp/mongol-row-layout
+        {:main-row
+         (m/TabBarView
+          .children
+          [(;; Tab 1: Manage Perspectives
+            comp/mongol-row-layout
+            {:main-row
+             (m/Padding
+              .padding (m/EdgeInsets.all (comp/space :m))
+              .child
+              (m/SingleChildScrollView
+               .scrollDirection m/Axis.horizontal
+               .child
+               (m/Row
+                .crossAxisAlignment m/CrossAxisAlignment.start
+                .children
+                [(comp/mongol-text-block
+                  {:text "Create Perspective"
+                   :style (m/TextStyle .fontSize (comp/font-size :l))})
+                 (m/SizedBox .width (comp/space :s))
+                 (create-perspective-section)
+                 (m/SizedBox .width (comp/space :l))
+                 (comp/mongol-text-block
+                  {:text "Perspectives"
+                   :style (m/TextStyle .fontSize (comp/font-size :l))})
+                 (m/SizedBox .width (comp/space :s))
+                 (perspectives-section ctx perspectives editing-id tags)])))
+             :side-row
+             (m/Container
+              .padding (m/EdgeInsets.all (comp/space :m))
+              .child
+              (m/Column
+               .crossAxisAlignment m/CrossAxisAlignment.center
+               .children
+               [(comp/mongol-text-block
+                 {:text "Perspectives"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/SizedBox .height (comp/space :s))
+                (comp/mongol-text-block
+                 {:text (str "Total: " (count perspectives))
+                  :style (m/TextStyle .color (comp/color :text-weak))})]))})
+           ;; Tab 2: Apply Perspectives
+           (comp/mongol-row-layout
+            {:main-row
+             (m/Padding
+              .padding (m/EdgeInsets.all (comp/space :m))
+              .child
+              (m/SingleChildScrollView
+               .scrollDirection m/Axis.horizontal
+               .child
+               (m/Row
+                .crossAxisAlignment m/CrossAxisAlignment.start
+                .children
+                [(comp/mongol-text-block
+                  {:text "Select Perspective"
+                   :style (m/TextStyle .fontSize (comp/font-size :l))})
+                 (m/SizedBox .width (comp/space :s))
+                 (select-perspective-section perspectives selected-perspective perspective-tasks tasks-with-info)
+                 (m/SizedBox .width (comp/space :l))
+                 (if @selected-perspective
                    (comp/mongol-text-block
-                    {:text (str "Total: " (count perspectives))
-                     :style (m/TextStyle .color (comp/color :text-weak))})]))})
-              ;; Tab 2: Apply Perspectives
-              (comp/mongol-row-layout
-               {:main-row
-                (m/Padding
-                 .padding (m/EdgeInsets.all (comp/space :m))
-                 .child
-                 (m/SingleChildScrollView
-                  .scrollDirection m/Axis.horizontal
-                  .child
-                  (m/Row
-                   .crossAxisAlignment m/CrossAxisAlignment.start
-                   .children
-                   [(comp/mongol-text-block
-                     {:text "Select Perspective"
-                      :style (m/TextStyle .fontSize (comp/font-size :l))})
-                    (m/SizedBox .width (comp/space :s))
-                    (select-perspective-section perspectives selected-perspective perspective-tasks tasks-with-info)
-                    (m/SizedBox .width (comp/space :l))
-                    (if @selected-perspective
-                      (comp/mongol-text-block
-                       {:text (str "Tasks (" (count @perspective-tasks) ")")
-                        :style (m/TextStyle .fontSize (comp/font-size :l))})
-                      (m/SizedBox.shrink))
-                    (m/SizedBox .width (comp/space :s))
-                    (perspective-tasks-section ctx selected-perspective perspective-tasks tasks-with-info)])))
-                :side-row
-                (m/Container
-                 .padding (m/EdgeInsets.all (comp/space :m))
-                 .child
-                 (m/Column
-                  .crossAxisAlignment m/CrossAxisAlignment.center
-                  .children
-                  [(comp/mongol-text-block
-                    {:text "Selected"
-                     :style (m/TextStyle .fontSize (comp/font-size :m))})
-                   (m/SizedBox .height (comp/space :s))
-                   (comp/mongol-text-block
-                    {:text (if @selected-perspective
-                             (cond
-                               (= @selected-perspective "flagged") "Flagged"
-                               (= @selected-perspective "due-soon") "Due Soon"
-                               (= @selected-perspective "stalled") "Stalled"
-                               :else "Custom")
-                             "None")
-                     :style (m/TextStyle .color (comp/color :text-weak))})
-                   (m/SizedBox .height (comp/space :s))
-                   (comp/mongol-text-block
-                    {:text (str "Tasks: " (count @perspective-tasks))
-                     :style (m/TextStyle .color (comp/color :text-weak))})]))})])))))))
+                    {:text (str "Tasks (" (count @perspective-tasks) ")")
+                     :style (m/TextStyle .fontSize (comp/font-size :l))})
+                   (m/SizedBox.shrink))
+                 (m/SizedBox .width (comp/space :s))
+                 (perspective-tasks-section ctx selected-perspective perspective-tasks tasks-with-info)])))
+             :side-row
+             (m/Container
+              .padding (m/EdgeInsets.all (comp/space :m))
+              .child
+              (m/Column
+               .crossAxisAlignment m/CrossAxisAlignment.center
+               .children
+               [(comp/mongol-text-block
+                 {:text "Selected"
+                  :style (m/TextStyle .fontSize (comp/font-size :m))})
+                (m/SizedBox .height (comp/space :s))
+                (comp/mongol-text-block
+                 {:text (if @selected-perspective
+                          (cond
+                            (= @selected-perspective "flagged") "Flagged"
+                            (= @selected-perspective "due-soon") "Due Soon"
+                            (= @selected-perspective "stalled") "Stalled"
+                            :else "Custom")
+                          "None")
+                  :style (m/TextStyle .color (comp/color :text-weak))})
+                (m/SizedBox .height (comp/space :s))
+                (comp/mongol-text-block
+                 {:text (str "Tasks: " (count @perspective-tasks))
+                  :style (m/TextStyle .color (comp/color :text-weak))})]))})])
+         :side-row
+         (m/RotatedBox
+          .quarterTurns 1
+          .child
+          (m/TabBar
+           .tabs [(m/Tab .text "Manage")
+                  (m/Tab .text "Apply")]))}))))
 
