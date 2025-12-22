@@ -7,6 +7,7 @@
    ["dart:core" :as dart-core]
    ["dart:convert" :as convert]
    [cljd.flutter :as f]
+   [virtual-keyboard.keyboard :as keyboard]
    [minii-focus.components.core :as comp]
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.states.app-state :as state]
@@ -317,152 +318,163 @@
                         ["completed" "Completed"]
                         ["on_hold" "On hold"]
                         ["dropped" "Dropped"]]]
-    (m/Row
-     .crossAxisAlignment m/CrossAxisAlignment.start
+    (m/Column
+     .mainAxisSize m/MainAxisSize.max
      .children
-     [(m/Container
-       .padding (m/EdgeInsets.all (comp/space :s))
-       .decoration (m/BoxDecoration
-                    .border (m/Border.all
-                             .color m/Colors.grey.shade300
-                             .width 1)
-                    .borderRadius (m/BorderRadius.circular 4))
-       .child (mgl/MongolTextField
-               .decoration nil
-               .maxLines 1
-               .onChanged (fn [v] (reset! name-state v))))
-      (m/SizedBox .width (comp/space :s))
-      ;; Status filter
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [(mgl/MongolText "Status")
-        (m/SizedBox .height (comp/space :xs))
-        (m/Wrap
-         .direction m/Axis.vertical
-         .spacing (comp/space :xs)
-         .runSpacing (comp/space :xs)
-         .children
-         (map (fn [[status-key label]]
-                (let [selected? (contains? @selected-statuses status-key)]
-                  (m/RotatedBox
-                   .quarterTurns 1
-                   .child
-                   (m/FilterChip
-                    .label (m/Text label)
-                    .selected selected?
-                    .onSelected (fn [v]
-                                  (if v
-                                    (swap! selected-statuses conj status-key)
-                                    (swap! selected-statuses disj status-key)))))))
-              status-options))])
-      (m/SizedBox .width (comp/space :s))
-      ;; Flagged only
-      (m/RotatedBox
-       .quarterTurns 1
+     [(m/Expanded
        .child
-       (m/FilterChip
-        .label (m/Text "Flagged only")
-        .selected @only-flagged?
-        .onSelected (fn [v] (reset! only-flagged? v))))
-      (m/SizedBox .width (comp/space :s))
-      ;; Tag filter
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.start
-       .children
-       [(mgl/MongolText "Tags")
-        (m/SizedBox .height (comp/space :s))
-        (m/Row
-         .children
-         [(if (empty? tags)
-            (mgl/MongolText "No tags")
+       (m/Row
+        .mainAxisSize m/MainAxisSize.max
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [(m/Container
+          .padding (m/EdgeInsets.all (comp/space :s))
+          .decoration (m/BoxDecoration
+                       .border (m/Border.all
+                                .color m/Colors.grey.shade300
+                                .width 1)
+                       .borderRadius (m/BorderRadius.circular 4))
+          .child (mgl/MongolTextField
+                  .autofocus true
+                  .decoration nil
+                  .maxLines 1
+                  .onChanged (fn [v] (reset! name-state v))))
+         (m/SizedBox .width (comp/space :s))
+         ;; Status filter
+         (m/SingleChildScrollView
+          .child
+          (m/Column
+           .mainAxisSize m/MainAxisSize.min
+           .crossAxisAlignment m/CrossAxisAlignment.center
+           .children
+           [(mgl/MongolText "Status")
+            (m/SizedBox .height (comp/space :xs))
             (m/Wrap
+             .direction m/Axis.vertical
              .spacing (comp/space :xs)
              .runSpacing (comp/space :xs)
              .children
-             (map (fn [t]
-                    (let [tid (.-id t)
-                          selected? (contains? @selected-tags tid)]
+             (map (fn [[status-key label]]
+                    (let [selected? (contains? @selected-statuses status-key)]
                       (m/RotatedBox
                        .quarterTurns 1
                        .child
                        (m/FilterChip
-                        .label (m/Text (.-name t))
+                        .label (m/Text label)
                         .selected selected?
                         .onSelected (fn [v]
                                       (if v
-                                        (swap! selected-tags conj tid)
-                                        (swap! selected-tags disj tid)))))))
-                  tags)))
-          (m/SizedBox .width (comp/space :s))
-          (m/Column
-           .mainAxisSize m/MainAxisSize.min
-           .children
-           [(mgl/MongolText "Mode:")
-            (m/SizedBox .height (comp/space :xs))
-            (m/RotatedBox
-             .quarterTurns 1
-             .child
-             (m/FilterChip
-              .label (m/Text "OR")
-              .selected (= @tags-mode :or)
-              .onSelected (fn [v]
-                            (when v (reset! tags-mode :or)))))
-            (m/SizedBox .height (comp/space :xs))
-            (m/RotatedBox
-             .quarterTurns 1
-             .child
-             (m/FilterChip
-              .label (m/Text "AND")
-              .selected (= @tags-mode :and)
-              .onSelected (fn [v]
-                            (when v (reset! tags-mode :and)))))])])])
-      (m/SizedBox .width (comp/space :s))
-      ;; Date range filter
-      (m/Column
-       .crossAxisAlignment m/CrossAxisAlignment.center
-       .children
-       [(mgl/MongolText "Date range")
-        (m/SizedBox .height (comp/space :xs))
-        (m/Column
-         .mainAxisSize m/MainAxisSize.min
-         .children
-         [(m/RotatedBox
-           .quarterTurns 1
-           .child
-           (m/FilterChip
-            .label (m/Text "Due soon (3d)")
-            .selected @due-soon?
-            .onSelected (fn [v] (reset! due-soon? v))))
-          (m/SizedBox .height (comp/space :xs))
-          (m/RotatedBox
-           .quarterTurns 1
-           .child
-           (m/FilterChip
-            .label (m/Text "Overdue")
-            .selected @overdue?
-            .onSelected (fn [v] (reset! overdue? v))))])])
-      (m/SizedBox .width (comp/space :s))
-      (mgl/MongolElevatedButton
-       .onPressed (fn []
-                    (when (not (empty? @name-state))
-                      (let [filter-conditions (build-filter-conditions
-                                               {:selected-statuses @selected-statuses
-                                                :only-flagged? @only-flagged?
-                                                :selected-tags @selected-tags
-                                                :tags-mode @tags-mode
-                                                :due-soon? @due-soon?
-                                                :overdue? @overdue?})]
-                        (-> (perspective-svc/create-perspective
-                             @name-state
-                             filter-conditions
-                             "dueDate"
-                             "asc"
-                             "none")
-                            (.then (fn [_]
-                                     (reset! name-state "")
-                                     (perspective-svc/refresh-perspectives!)))))))
-       .child (mgl/MongolText "Create"))])))
+                                        (swap! selected-statuses conj status-key)
+                                        (swap! selected-statuses disj status-key)))))))
+                  status-options))]))
+         (m/SizedBox .width (comp/space :s))
+         ;; Flagged only
+         (m/RotatedBox
+          .quarterTurns 1
+          .child
+          (m/FilterChip
+           .label (m/Text "Flagged only")
+           .selected @only-flagged?
+           .onSelected (fn [v] (reset! only-flagged? v))))
+         (m/SizedBox .width (comp/space :s))
+         ;; Tag filter
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .children
+          [(mgl/MongolText "Tags")
+           (m/SizedBox .height (comp/space :s))
+           (m/Row
+            .children
+            [(if (empty? tags)
+               (mgl/MongolText "No tags")
+               (m/Wrap
+                .spacing (comp/space :xs)
+                .runSpacing (comp/space :xs)
+                .children
+                (map (fn [t]
+                       (let [tid (.-id t)
+                             selected? (contains? @selected-tags tid)]
+                         (m/RotatedBox
+                          .quarterTurns 1
+                          .child
+                          (m/FilterChip
+                           .label (m/Text (.-name t))
+                           .selected selected?
+                           .onSelected (fn [v]
+                                         (if v
+                                           (swap! selected-tags conj tid)
+                                           (swap! selected-tags disj tid)))))))
+                     tags)))
+             (m/SizedBox .width (comp/space :s))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(mgl/MongolText "Mode:")
+               (m/SizedBox .height (comp/space :xs))
+               (m/RotatedBox
+                .quarterTurns 1
+                .child
+                (m/FilterChip
+                 .label (m/Text "OR")
+                 .selected (= @tags-mode :or)
+                 .onSelected (fn [v]
+                               (when v (reset! tags-mode :or)))))
+               (m/SizedBox .height (comp/space :xs))
+               (m/RotatedBox
+                .quarterTurns 1
+                .child
+                (m/FilterChip
+                 .label (m/Text "AND")
+                 .selected (= @tags-mode :and)
+                 .onSelected (fn [v]
+                               (when v (reset! tags-mode :and)))))])])])
+         (m/SizedBox .width (comp/space :s))
+         ;; Date range filter
+         (m/Column
+          .crossAxisAlignment m/CrossAxisAlignment.center
+          .children
+          [(mgl/MongolText "Date range")
+           (m/SizedBox .height (comp/space :xs))
+           (m/Column
+            .mainAxisSize m/MainAxisSize.min
+            .children
+            [(m/RotatedBox
+              .quarterTurns 1
+              .child
+              (m/FilterChip
+               .label (m/Text "Due soon (3d)")
+               .selected @due-soon?
+               .onSelected (fn [v] (reset! due-soon? v))))
+             (m/SizedBox .height (comp/space :xs))
+             (m/RotatedBox
+              .quarterTurns 1
+              .child
+              (m/FilterChip
+               .label (m/Text "Overdue")
+               .selected @overdue?
+               .onSelected (fn [v] (reset! overdue? v))))])])
+         (m/SizedBox .width (comp/space :s))
+         (mgl/MongolElevatedButton
+          .onPressed (fn []
+                       (when (not (empty? @name-state))
+                         (let [filter-conditions (build-filter-conditions
+                                                  {:selected-statuses @selected-statuses
+                                                   :only-flagged? @only-flagged?
+                                                   :selected-tags @selected-tags
+                                                   :tags-mode @tags-mode
+                                                   :due-soon? @due-soon?
+                                                   :overdue? @overdue?})]
+                           (-> (perspective-svc/create-perspective
+                                @name-state
+                                filter-conditions
+                                "dueDate"
+                                "asc"
+                                "none")
+                               (.then (fn [_]
+                                        (reset! name-state "")
+                                        (perspective-svc/refresh-perspectives!)))))))
+          .child (mgl/MongolText "Create"))]))
+      (keyboard/keyboard {:custom-fns {}})])))
 
 (defn- select-perspective-section [perspectives selected-perspective perspective-tasks tasks-with-info]
   (if (empty? perspectives)
@@ -564,6 +576,29 @@
        {:text "No tasks found"
         :style (m/TextStyle .color (comp/color :text-weak))})
       (m/SizedBox.shrink))))           
+      
+
+(defn- create-button [on-tap]
+  (m/InkWell
+   .onTap on-tap
+   .child (m/Container
+           .padding (m/EdgeInsets.all (comp/space :s))
+           .decoration (m/BoxDecoration
+                        .border (m/Border.all
+                                 .color m/Colors.grey.shade300
+                                 .width 1)
+                        .borderRadius (m/BorderRadius.circular 4))
+           .child (m/Column
+                   .mainAxisSize m/MainAxisSize.max
+                   .mainAxisAlignment m/MainAxisAlignment.center
+                   .children
+                   [(m/Icon m/Icons.add .size (comp/font-size :m) .color m/Colors.grey.shade600)
+                    (m/SizedBox .height (comp/space :xs))
+                    (comp/mongol-text-block
+                     {:text "Create Perspective"
+                      :style (m/TextStyle
+                              .fontSize (comp/font-size :m)
+                              .color m/Colors.blue.shade300)})]))))
 
 (defn perspectives-screen []
   (let [editing-id (atom nil)
@@ -611,23 +646,37 @@
              (m/Padding
               .padding (m/EdgeInsets.all (comp/space :m))
               .child
-              (m/SingleChildScrollView
-               .scrollDirection m/Axis.horizontal
-               .child
                (m/Row
                 .crossAxisAlignment m/CrossAxisAlignment.start
                 .children
-                [(comp/mongol-text-block
-                  {:text "Create Perspective"
-                   :style (m/TextStyle .fontSize (comp/font-size :l))})
-                 (m/SizedBox .width (comp/space :s))
-                 (create-perspective-section)
+                [(create-button (fn []
+                                  (m/showDialog
+                                   .context ctx
+                                   .builder (fn [dialog-ctx]
+                                              (m/Dialog
+                                               .insetPadding (m/EdgeInsets.zero)
+                                               .child
+                                                (m/Column
+                                                 .mainAxisSize m/MainAxisSize.max
+                                                 .children
+                                                 [(m/Row
+                                                   .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                                   .children
+                                                   [(m/SizedBox)
+                                                    (m/IconButton
+                                                     .icon (m/Icon m/Icons.close)
+                                                     .onPressed (fn []
+                                                                  (-> (m/Navigator.of ctx) (.pop))
+                                                                  nil))])
+                                                  (m/Expanded
+                                                   .child 
+                                                   (create-perspective-section))]))))))
                  (m/SizedBox .width (comp/space :l))
                  (comp/mongol-text-block
                   {:text "Perspectives"
                    :style (m/TextStyle .fontSize (comp/font-size :l))})
                  (m/SizedBox .width (comp/space :s))
-                 (perspectives-section ctx perspectives editing-id tags)])))
+                 (perspectives-section ctx perspectives editing-id tags)]))
              :side-row
              (m/Container
               .padding (m/EdgeInsets.all (comp/space :m))
