@@ -23,13 +23,13 @@
         companion (drift/ReviewsCompanion.insert
                    .id review-id
                    .type type
-                   .targetId (when target-id (d/Value target-id))
+                   .targetId (if target-id (d/Value target-id) (d/Value nil))
                    .content content
-                   .createdAt now)]
-    (.insert
-     (.into database (.-reviews database))
-     companion)
-    review-id))
+                   .createdAt (d/Value now))]
+    (-> (.insert
+         (.into database (.-reviews database))
+         companion)
+        (.then (fn [_] review-id)))))
 
 (defn get-review-by-id
   "Get review record by ID"
