@@ -174,7 +174,8 @@
      {:text "Tags:"
       :style (m/TextStyle .fontSize (comp/font-size :m))})
     (m/SizedBox .height (comp/space :xs))
-    (m/Expanded
+    (m/Flexible 
+     .fit m/FlexFit.loose
      .child
      (m/Wrap
       .direction m/Axis.vertical
@@ -266,80 +267,82 @@
                                 (.catchError (fn [error]
                                                (toast/handle-error-with-toast ctx error "Туглуулахад алдаа гарлаа"))))))))]))
 
-(defn- project-type-section [ctx _task-detail display-project-type editing-state project-type-state]
-  (m/SingleChildScrollView
-   .child
-   (m/Column
-    .crossAxisAlignment m/CrossAxisAlignment.center
-    .children
-    [(comp/mongol-text-block
-      {:text "Project Type"
-       :style (m/TextStyle .fontSize (comp/font-size :m))})
-     (mgl/MongolTextButton
-      .onPressed (fn []
-                   (m/showDialog
-                    .context ctx
-                    .builder (fn [dialog-ctx]
-                               (let [project-type-options ["None" "Sequential" "Parallel" "Single Action List"]
-                                     current-type (or (display-project-type) "None")
-                                     type-map {"None" nil
-                                               "Sequential" "sequential"
-                                               "Parallel" "parallel"
-                                               "Single Action List" "single_action_list"}]
-                                 (m/Dialog
-                                  .child
-                                  (m/Container
-                                   .padding (m/EdgeInsets.only .top (comp/space :m) .left (comp/space :m) .right (comp/space :m))
-                                   .child
-                                   (m/Column
-                                    .mainAxisSize m/MainAxisSize.max
-                                    .children
-                                    [(m/Row
-                                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+(defn- project-type-section [ctx task-detail display-project-type project-type-state]
+  (if (= (some-> task-detail .-type) "project")
+    (m/SingleChildScrollView
+     .child
+     (m/Column
+      .crossAxisAlignment m/CrossAxisAlignment.center
+      .children
+      [(comp/mongol-text-block
+        {:text "Project Type"
+         :style (m/TextStyle .fontSize (comp/font-size :m))})
+       (mgl/MongolTextButton
+        .onPressed (fn []
+                     (m/showDialog
+                      .context ctx
+                      .builder (fn [dialog-ctx]
+                                 (let [project-type-options ["None" "Sequential" "Parallel" "Single Action List"]
+                                       current-type (or (display-project-type) "None")
+                                       type-map {"None" nil
+                                                 "Sequential" "sequential"
+                                                 "Parallel" "parallel"
+                                                 "Single Action List" "single_action_list"}]
+                                   (m/Dialog
+                                    .child
+                                    (m/Container
+                                     .padding (m/EdgeInsets.only .top (comp/space :m) .left (comp/space :m) .right (comp/space :m))
+                                     .child
+                                     (m/Column
+                                      .mainAxisSize m/MainAxisSize.max
                                       .children
-                                      [(m/SizedBox)
-                                       (m/IconButton
-                                        .icon (m/Icon m/Icons.close)
-                                        .onPressed (fn []
-                                                     (-> (m/Navigator.of ctx) (.pop))
-                                                     nil))])
-                                     (m/Expanded
-                                      .child
-                                      (m/Row
-                                       .children
-                                       [(comp/mongol-text-block
-                                         {:text "Set Project Type"
-                                          :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                        (m/SizedBox .width (comp/space :s))
-                                        (m/Expanded
-                                         .child
-                                         (m/ListView.builder
-                                          .scrollDirection m/Axis.horizontal
-                                          .itemCount (count project-type-options)
-                                          .itemBuilder
-                                          (fn [_content index]
-                                            (let [option (nth project-type-options index)]
-                                              (mgl/MongolListTile
-                                               .title (mgl/MongolText option)
-                                               .selected (= option current-type)
-                                               .onTap (fn []
-                                                        (let [selected-type (get type-map option)]
-                                                          (reset! project-type-state selected-type)
-                                                          (m/Navigator.pop dialog-ctx))))))))
-                                        (m/SizedBox .width (comp/space :s))
-                                        (mgl/MongolTextButton
-                                         .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                         .child (mgl/MongolText "Cancel"))]))]))
+                                      [(m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children
+                                        [(m/SizedBox)
+                                         (m/IconButton
+                                          .icon (m/Icon m/Icons.close)
+                                          .onPressed (fn []
+                                                       (-> (m/Navigator.of ctx) (.pop))
+                                                       nil))])
+                                       (m/Expanded
+                                        .child
+                                        (m/Row
+                                         .children
+                                         [(comp/mongol-text-block
+                                           {:text "Set Project Type"
+                                            :style (m/TextStyle .fontSize (comp/font-size :m))})
+                                          (m/SizedBox .width (comp/space :s))
+                                          (m/Expanded
+                                           .child
+                                           (m/ListView.builder
+                                            .scrollDirection m/Axis.horizontal
+                                            .itemCount (count project-type-options)
+                                            .itemBuilder
+                                            (fn [_content index]
+                                              (let [option (nth project-type-options index)]
+                                                (mgl/MongolListTile
+                                                 .title (mgl/MongolText option)
+                                                 .selected (= option current-type)
+                                                 .onTap (fn []
+                                                          (let [selected-type (get type-map option)]
+                                                            (reset! project-type-state selected-type)
+                                                            (m/Navigator.pop dialog-ctx))))))))
+                                          (m/SizedBox .width (comp/space :s))
+                                          (mgl/MongolTextButton
+                                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                           .child (mgl/MongolText "Cancel"))]))]))
 
-                                  ))))
-                   nil)
+                                    ))))
+                     nil)
 
-      .child (mgl/MongolText (let [current (display-project-type)]
-                               (cond
-                                 (= current "sequential") "Sequential"
-                                 (= current "parallel") "Parallel"
-                                 (= current "single_action_list") "Single Action List"
-                                 :else "None"))))])))
+        .child (mgl/MongolText (let [current (display-project-type)]
+                                 (cond
+                                   (= current "sequential") "Sequential"
+                                   (= current "parallel") "Parallel"
+                                   (= current "single_action_list") "Single Action List"
+                                   :else "None"))))]))
+    (m/SizedBox)))
 
 (defn- estimated-duration-section [ctx task-detail display-estimated editing-state estimated-state]
   (m/Column
@@ -835,6 +838,6 @@
                             (dependencies-section ctx task-detail dependencies dependents)]
                             (when (is-project?)
                               [(m/SizedBox .width (comp/space :l))
-                               (project-type-section ctx task-detail display-project-type editing-state project-type-state)])
+                               (project-type-section ctx task-detail display-project-type project-type-state)])
                             [(elavated-buttons ctx task-detail display-status)])))
                   (keyboard/keyboard {:custom-fns {}})]))))))

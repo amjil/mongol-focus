@@ -347,20 +347,7 @@
                                   (dart-core/print (str "Entered focus: " task-id))))
                          (.catchError (fn [error]
                                         (toast/handle-error-with-toast ctx error "Focus-д ороход алдаа гарлаа"))))))
-                 :on-swipe-left
-                 (fn []
-                   ;; Swipe left to enter Focus (horizontal gesture, for compatibility) - only when not in selection mode
-                   (when (not _selection-mode)
-                     (-> (task/enter-focus task-id)
-                         (.then (fn [session-id]
-                                  (state/set-focused-task! task-row)
-                                  (state/set-focus-session-id! session-id)
-                                  (task/refresh-today-tasks!)
-                                  (task/refresh-focus-tasks!)
-                                  (dart-core/print (str "Entered focus: " task-id))))
-                         (.catchError (fn [error]
-                                        (toast/handle-error-with-toast ctx error "Focus-д ороход алдаа гарлаа"))))))
-                 :on-swipe-right
+                 :on-swipe-down
                  (fn []
                    ;; Swipe right: Return/move (navigate back) - only when not in selection mode
                    (when (not _selection-mode)
