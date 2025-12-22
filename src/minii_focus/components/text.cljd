@@ -125,8 +125,9 @@
                             {:text content
                              :is-focused (= status :active)}))
                           (m/Column
+                           .mainAxisAlignment m/MainAxisAlignment.end
                            .children
-                           [(if parent-content
+                           [(if (some? parent-content)
                               (m/Column
                                .children
                                [(m/Icon m/Icons.subdirectory_arrow_right
@@ -134,7 +135,7 @@
                                         .color m/Colors.grey.shade600)
                                 (m/SizedBox .height 4)
                                 (mongol-text-block
-                                 {:text parent-content
+                                 {:text (str "Project: " parent-content)
                                   :style (m/TextStyle
                                           .fontSize 12
                                           .color m/Colors.grey.shade600)})])

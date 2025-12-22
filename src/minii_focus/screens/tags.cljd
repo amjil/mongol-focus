@@ -49,6 +49,7 @@
           .scrollDirection m/Axis.horizontal
           .child
           (m/Row
+           .mainAxisSize m/MainAxisSize.min
            .crossAxisAlignment m/CrossAxisAlignment.start
            .children
            [(comp/mongol-text-block
@@ -141,40 +142,40 @@
                       "Select tags to filter tasks")
               :style (m/TextStyle .fontSize (comp/font-size :m))})
             (m/SizedBox .width (comp/space :s))
-            (if (seq @selected-tags)
+            (if (seq _st)
               (if (empty? tagged-items)
                 (comp/mongol-text-block
                  {:text "No tasks found"
                   :style (m/TextStyle .color (comp/color :text-weak))})
-                (do
-                  ;; Load blocked info when tagged items change
-                  (when (and (seq tagged-items) (empty? @tasks-with-info))
-                    (-> (task/get-tasks-with-blocked-info tagged-items)
-                        (.then (fn [info-list]
-                                 (reset! tasks-with-info info-list)))
-                        (.catchError (fn [e]
-                                       (dart-core/print (str "Error loading blocked info: " e))))))
-                  (m/Expanded
-                   .child (m/ListView
-                           .shrinkWrap true
-                           .scrollDirection m/Axis.horizontal
-                           .children
-                           (map (fn [item]
-                                  (let [item-id (.-id item)
-                                        task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
-                                        blocked? (:blocked task-info false)]
-                                    (comp/mongol-task-item
-                                     {:content (.-content item)
-                                      :status (keyword (.-status item))
-                                      :blocked? blocked?
-                                      :on-tap (fn []
-                                                (task/refresh-task-detail! item-id)
-                                                (m/Navigator.push
-                                                 ctx
-                                                 (m/MaterialPageRoute
-                                                  .builder (fn [_]
-                                                             (task-detail/task-detail-screen item-id)))))})))
-                                tagged-items)))))
+                ;; Load blocked info when tagged items change
+                ;; (when (and (seq tagged-items) (empty? @tasks-with-info))
+                ;;   (-> (task/get-tasks-with-blocked-info tagged-items)
+                ;;       (.then (fn [info-list]
+                ;;                (reset! tasks-with-info info-list)))
+                ;;       (.catchError (fn [e]
+                ;;                      (dart-core/print (str "Error loading blocked info: " e))))))
+                (m/Flexible
+                 .fit m/FlexFit.loose
+                 .child (m/ListView
+                         .scrollDirection m/Axis.horizontal
+                         .shrinkWrap true
+                         .children
+                         (map (fn [item]
+                                (let [item-id (.-id item)
+                                      task-info (first (filter #(= (.-id (:task %)) item-id) @tasks-with-info))
+                                      blocked? (:blocked task-info false)]
+                                  (comp/mongol-task-item
+                                   {:content (.-content item)
+                                    :status (keyword (.-status item))
+                                    :blocked? blocked?
+                                    :on-tap (fn []
+                                              (task/refresh-task-detail! item-id)
+                                              (m/Navigator.push
+                                               ctx
+                                               (m/MaterialPageRoute
+                                                .builder (fn [_]
+                                                           (task-detail/task-detail-screen item-id)))))})))
+                              tagged-items))))
               (comp/mongol-text-block
                {:text "Select tags above to see filtered tasks"
                 :style (m/TextStyle .color (comp/color :text-weak))}))])))
