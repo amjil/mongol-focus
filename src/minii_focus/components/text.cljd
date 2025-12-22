@@ -115,7 +115,14 @@
                        .crossAxisAlignment m/CrossAxisAlignment.start
                        .mainAxisSize m/MainAxisSize.min
                        .children
-                       [(m/Row
+                       [(condp = status
+                          :idle (m/Icon m/Icons.radio_button_unchecked)
+                          :active (m/Icon m/Icons.radio_button_checked)
+                          :completed (m/Icon m/Icons.check_circle)
+                          :blocked (m/Icon m/Icons.block)
+                          :else (m/Icon m/Icons.radio_button_unchecked))
+                        (m/SizedBox .height 8)
+                        (m/Row
                          .mainAxisSize m/MainAxisSize.min
                          .children
                          [(m/Flexible
