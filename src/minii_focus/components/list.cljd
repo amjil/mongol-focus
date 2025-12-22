@@ -3,8 +3,7 @@
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    [minii-focus.components.text :as text]
-   [minii-focus.components.tokens :as tokens]
-   ))
+   [minii-focus.components.tokens :as tokens]))
 
 (defn mongol-list-tile [title subtitle trailing on-tap]
   (mgl/MongolListTile

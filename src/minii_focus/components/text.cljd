@@ -84,82 +84,85 @@
                                  ;; Swipe right: Return/move
                                  (and velocity (> velocity 500) on-swipe-right)
                                  (on-swipe-right)))))
-    .child (m/Row
-            .crossAxisAlignment m/CrossAxisAlignment.stretch
+    .child (m/Column
             .mainAxisSize m/MainAxisSize.min
             .children
-            [(if (> indent-width 0)
+            [(if (true? selection-mode)
+               (m/Checkbox
+                .value selected
+                .onChanged (when on-selection-changed
+                             (fn [value]
+                               (on-selection-changed value))))
+               (m/SizedBox))
+             (if (> indent-width 0)
                (m/Container
                 .width indent-width)
                (m/SizedBox))
-             (m/Flexible
-              .fit m/FlexFit.loose
-              .child (m/Container
-                      .padding (m/EdgeInsets.all 12)
-                      .decoration (m/BoxDecoration
-                                   .border (m/Border
-                                            .left (m/BorderSide
-                                                   .color effective-color
-                                                   .width 3))
-                                   .color (cond
-                                            (and selection-mode selected) m/Colors.blue.shade50
-                                            blocked? m/Colors.grey.shade100
-                                            :else nil))
-                      .child (m/Row
-                              .crossAxisAlignment m/CrossAxisAlignment.start
-                              .mainAxisSize m/MainAxisSize.min
-                              .children
-                              (vec (filter some?
-                                           [(if selection-mode
-                                              (m/Checkbox
-                                               .value selected
-                                               .onChanged (when on-selection-changed
-                                                            (fn [value]
-                                                              (on-selection-changed value))))
-                                              nil)
-                                            (m/Column
-                                             .crossAxisAlignment m/CrossAxisAlignment.start
-                                             .mainAxisSize m/MainAxisSize.min
-                                             .children
-                                             [(if parent-content
-                                                (m/Row
-                                                 .children
-                                                 [(m/Icon m/Icons.subdirectory_arrow_right
-                                                          .size 12
-                                                          .color m/Colors.grey.shade600)
-                                                  (m/SizedBox .width 4)
-                                                  (mongol-text-block
-                                                   {:text parent-content
-                                                    :style (m/TextStyle
-                                                            .fontSize 12
-                                                            .color m/Colors.grey.shade600)})])
-                                                (m/SizedBox))
-                                              (mongol-text-block
-                                               {:text content
-                                                :is-focused (= status :active)})
-                                              (if blocked?
-                                                (m/Row
-                                                 .children
-                                                 [(m/Icon m/Icons.block
-                                                          .size 12
-                                                          .color m/Colors.red.shade600)
-                                                  (m/SizedBox .width 4)
-                                                  (mongol-text-block
-                                                   {:text "Blocked by parent"
-                                                    :style (m/TextStyle
-                                                            .fontSize 10
-                                                            .color m/Colors.red.shade600)})])
-                                                (m/SizedBox))])
-                                            (m/SizedBox .width 8)
-                                            ;; Completion checkbox/button
-                                            (if (and (not selection-mode) on-complete (not= status :completed))
-                                              (m/IconButton
-                                               .icon (m/Icon m/Icons.check_circle_outline)
-                                               .iconSize 20
-                                               .color m/Colors.green.shade600
-                                               .onPressed (fn [] (on-complete))
-                                               .tooltip "Mark as completed")
-                                              nil)])))))]))))
+             (m/Expanded
+              .child
+              (m/Container
+               .padding (m/EdgeInsets.all 12)
+               .decoration (m/BoxDecoration
+                            .border (m/Border
+                                     .top (m/BorderSide
+                                           .color effective-color
+                                           .width 3))
+                            .color (cond
+                                     (and selection-mode selected) m/Colors.blue.shade50
+                                     blocked? m/Colors.grey.shade100
+                                     :else nil))
+               .child (m/Column
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .mainAxisSize m/MainAxisSize.min
+                       .children
+                       [(m/Row
+                         .mainAxisSize m/MainAxisSize.min
+                         .children
+                         [(m/Flexible
+                           .fit m/FlexFit.loose
+                           .child
+                           (mongol-text-block
+                            {:text content
+                             :is-focused (= status :active)}))
+                          (m/Column
+                           .children
+                           [(if parent-content
+                              (m/Column
+                               .children
+                               [(m/Icon m/Icons.subdirectory_arrow_right
+                                        .size 12
+                                        .color m/Colors.grey.shade600)
+                                (m/SizedBox .height 4)
+                                (mongol-text-block
+                                 {:text parent-content
+                                  :style (m/TextStyle
+                                          .fontSize 12
+                                          .color m/Colors.grey.shade600)})])
+                              (m/SizedBox))
+                            (m/SizedBox .height 8)
+                            (if blocked?
+                              (m/Column
+                               .children
+                               [(m/Icon m/Icons.block
+                                        .size 12
+                                        .color m/Colors.red.shade600)
+                                (m/SizedBox .width 4)
+                                (mongol-text-block
+                                 {:text "Blocked by parent"
+                                  :style (m/TextStyle
+                                          .fontSize 10
+                                          .color m/Colors.red.shade600)})])
+                              (m/SizedBox))])])])))
+             (m/SizedBox .height 8)
+             ;; Completion checkbox/button
+             (if (and (not selection-mode) on-complete (not= status :completed))
+               (m/IconButton
+                .icon (m/Icon m/Icons.check_circle_outline)
+                .iconSize 20
+                .color m/Colors.green.shade600
+                .onPressed (fn [] (on-complete))
+                .tooltip "Mark as completed")
+               (m/SizedBox))]))))
 
 ;; ============================================
 ;; 3.3 MongolNoteBlock
