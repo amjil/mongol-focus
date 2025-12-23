@@ -45,17 +45,22 @@
     m))
 
 
-(defn- edit-perspective-dialog [dialog-ctx perspective tags on-save on-cancel]
-  (let [name-state (atom (.-name perspective))
-        sort-by-state (atom (.-sortBy perspective))
-        sort-order-state (atom (.-sortOrder perspective))
-        group-by-state (atom (.-groupBy perspective))
-        filter-conditions-str (.-filterConditions perspective)
-        filter-conditions (try
-                            (when (and filter-conditions-str (not (empty? filter-conditions-str)))
-                              (convert/jsonDecode filter-conditions-str))
-                            (catch Exception _ex
-                              {"status" ["active"]}))
+(defn- perspective-dialog [dialog-ctx perspective tags on-save on-cancel]
+  "Unified dialog for creating and editing perspectives.
+   If perspective is nil, it's create mode; otherwise it's edit mode."
+  (let [is-edit? (some? perspective)
+        name-state (atom (if is-edit? (.-name perspective) ""))
+        sort-by-state (atom (if is-edit? (.-sortBy perspective) "dueDate"))
+        sort-order-state (atom (if is-edit? (.-sortOrder perspective) "asc"))
+        group-by-state (atom (if is-edit? (.-groupBy perspective) "none"))
+        filter-conditions-str (when is-edit? (.-filterConditions perspective))
+        filter-conditions (if is-edit?
+                           (try
+                             (when (and filter-conditions-str (not (empty? filter-conditions-str)))
+                               (convert/jsonDecode filter-conditions-str))
+                             (catch Exception _ex
+                               {"status" ["active"]}))
+                           {"status" ["active"]})
         ;; Restore UI state from existing filter-conditions
         existing-statuses (let [v (get filter-conditions "status")]
                             (if (and v (seq v))
@@ -73,7 +78,7 @@
                           :or))
         due-soon? (atom (boolean (get filter-conditions "dueSoon")))
         overdue? (atom (boolean (get filter-conditions "overdue")))
-        name-controller (m/TextEditingController .text (.-name perspective))
+        name-controller (m/TextEditingController .text (if is-edit? (.-name perspective) ""))
         ;; Available status list (consistent with Items.status convention)
         status-options [["active" "Active"]
                         ["blocked" "Blocked"]
@@ -126,7 +131,7 @@
                                      @sort-order-state
                                      @group-by-state)
                             (m/Navigator.pop dialog-ctx))))
-           .child (m/Text "Save"))])
+           .child (m/Text (if is-edit? "Save" "Create")))])
         (m/Expanded
          .child
          (m/SingleChildScrollView
@@ -144,6 +149,7 @@
                                  .borderRadius (m/BorderRadius.circular 4))
                     .child (mgl/MongolTextField
                             .controller name-controller
+                            .autofocus (not is-edit?)
                             .decoration nil
                             .maxLines 1
                             .onChanged (fn [v] (reset! name-state v))))
@@ -317,7 +323,7 @@
                                                 (m/showDialog
                                                  .context ctx
                                                  .builder (fn [dialog-ctx]
-                                                            (edit-perspective-dialog
+                                                            (perspective-dialog
                                                              dialog-ctx
                                                              p
                                                              tags
@@ -348,176 +354,6 @@
                                                     (.catchError (fn [error]
                                                                    (dart-core/print (str "Error deleting perspective: " error)))))))]))))
            perspectives)))))
-
-(defn- create-perspective-section []
-  (let [;; Local state for filter conditions
-        {tags :tags} state/app-state
-        name-state (atom "")
-        selected-statuses (atom #{"active"})
-        only-flagged? (atom false)
-        selected-tags (atom #{})
-        tags-mode (atom :or)
-        due-soon? (atom false)
-        overdue? (atom false)
-        status-options [["active" "Active"]
-                        ["blocked" "Blocked"]
-                        ["completed" "Completed"]
-                        ["on_hold" "On hold"]
-                        ["dropped" "Dropped"]]]
-    (m/Padding
-     .padding (m/EdgeInsets.all (comp/space :s))
-     .child
-     (m/Row
-      .mainAxisSize m/MainAxisSize.max
-      .crossAxisAlignment m/CrossAxisAlignment.start
-      .children
-      [(m/Container
-        .padding (m/EdgeInsets.all (comp/space :s))
-        .decoration (m/BoxDecoration
-                     .border (m/Border.all
-                              .color m/Colors.grey.shade300
-                              .width 1)
-                     .borderRadius (m/BorderRadius.circular 4))
-        .child (mgl/MongolTextField
-                .autofocus true
-                .decoration nil
-                .maxLines 1
-                .onChanged (fn [v] (reset! name-state v))))
-       (m/SizedBox .width (comp/space :s))
-       ;; Status filter
-       (m/SingleChildScrollView
-        .child
-        (m/Column
-         .mainAxisSize m/MainAxisSize.min
-         .crossAxisAlignment m/CrossAxisAlignment.center
-         .children
-         [(mgl/MongolText "Status")
-          (m/SizedBox .height (comp/space :xs))
-          (m/Wrap
-           .direction m/Axis.vertical
-           .spacing (comp/space :xs)
-           .runSpacing (comp/space :xs)
-           .children
-           (map (fn [[status-key label]]
-                  (let [selected? (contains? @selected-statuses status-key)]
-                    (m/RotatedBox
-                     .quarterTurns 1
-                     .child
-                     (m/FilterChip
-                      .label (m/Text label)
-                      .selected selected?
-                      .onSelected (fn [v]
-                                    (if v
-                                      (swap! selected-statuses conj status-key)
-                                      (swap! selected-statuses disj status-key)))))))
-                status-options))]))
-       (m/SizedBox .width (comp/space :s))
-       ;; Flagged only
-       (m/RotatedBox
-        .quarterTurns 1
-        .child
-        (m/FilterChip
-         .label (m/Text "Flagged only")
-         .selected @only-flagged?
-         .onSelected (fn [v] (reset! only-flagged? v))))
-       (m/SizedBox .width (comp/space :s))
-       ;; Tag filter
-       (m/Column
-        .crossAxisAlignment m/CrossAxisAlignment.start
-        .children
-        [(mgl/MongolText "Tags")
-         (m/SizedBox .height (comp/space :s))
-         (m/Row
-          .children
-          [(if (empty? tags)
-             (mgl/MongolText "No tags")
-             (m/Wrap
-              .spacing (comp/space :xs)
-              .runSpacing (comp/space :xs)
-              .children
-              (map (fn [t]
-                     (let [tid (.-id t)
-                           selected? (contains? @selected-tags tid)]
-                       (m/RotatedBox
-                        .quarterTurns 1
-                        .child
-                        (m/FilterChip
-                         .label (m/Text (.-name t))
-                         .selected selected?
-                         .onSelected (fn [v]
-                                       (if v
-                                         (swap! selected-tags conj tid)
-                                         (swap! selected-tags disj tid)))))))
-                   tags)))
-           (m/SizedBox .width (comp/space :s))
-           (m/Column
-            .mainAxisSize m/MainAxisSize.min
-            .children
-            [(mgl/MongolText "Mode:")
-             (m/SizedBox .height (comp/space :xs))
-             (m/RotatedBox
-              .quarterTurns 1
-              .child
-              (m/FilterChip
-               .label (m/Text "OR")
-               .selected (= @tags-mode :or)
-               .onSelected (fn [v]
-                             (when v (reset! tags-mode :or)))))
-             (m/SizedBox .height (comp/space :xs))
-             (m/RotatedBox
-              .quarterTurns 1
-              .child
-              (m/FilterChip
-               .label (m/Text "AND")
-               .selected (= @tags-mode :and)
-               .onSelected (fn [v]
-                             (when v (reset! tags-mode :and)))))])])])
-       (m/SizedBox .width (comp/space :s))
-       ;; Date range filter
-       (m/Column
-        .crossAxisAlignment m/CrossAxisAlignment.center
-        .children
-        [(mgl/MongolText "Date range")
-         (m/SizedBox .height (comp/space :xs))
-         (m/Column
-          .mainAxisSize m/MainAxisSize.min
-          .children
-          [(m/RotatedBox
-            .quarterTurns 1
-            .child
-            (m/FilterChip
-             .label (m/Text "Due soon (3d)")
-             .selected @due-soon?
-             .onSelected (fn [v] (reset! due-soon? v))))
-           (m/SizedBox .height (comp/space :xs))
-           (m/RotatedBox
-            .quarterTurns 1
-            .child
-            (m/FilterChip
-             .label (m/Text "Overdue")
-             .selected @overdue?
-             .onSelected (fn [v] (reset! overdue? v))))])])
-       (m/SizedBox .width (comp/space :s))
-       (mgl/MongolElevatedButton
-        .onPressed (fn []
-                     (when (not (empty? @name-state))
-                       (let [filter-conditions (build-filter-conditions
-                                                {:selected-statuses @selected-statuses
-                                                 :only-flagged? @only-flagged?
-                                                 :selected-tags @selected-tags
-                                                 :tags-mode @tags-mode
-                                                 :due-soon? @due-soon?
-                                                 :overdue? @overdue?})]
-                         (-> (perspective-svc/create-perspective
-                              @name-state
-                              filter-conditions
-                              "dueDate"
-                              "asc"
-                              "none")
-                             (.then (fn [_]
-                                      (reset! name-state "")
-                                      (perspective-svc/refresh-perspectives!)))))))
-        .child (mgl/MongolText "Create"))]))))
 
 (defn- select-perspective-section [perspectives selected-perspective perspective-tasks tasks-with-info]
   (if (empty? perspectives)
@@ -696,26 +532,22 @@
                                   (m/showDialog
                                    .context ctx
                                    .builder (fn [dialog-ctx]
-                                               (m/Dialog
-                                                 .insetPadding (m/EdgeInsets.zero)
-                                                 .child
-                                                 (m/Column
-                                                  .mainAxisSize m/MainAxisSize.max
-                                                  .children
-                                                  [(m/Row
-                                                    .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                                    .children
-                                                    [(m/SizedBox)
-                                                     (m/IconButton
-                                                      .icon (m/Icon m/Icons.close)
-                                                      .onPressed (fn []
-                                                                   (-> (m/Navigator.of ctx) (.pop))
-                                                                   nil))])
-                                                   (m/Expanded
-                                                    .child
-                                                    (create-perspective-section))
-                                                   (keyboard/keyboard {:custom-fns {}})]))
-                                                ))))
+                                              (perspective-dialog
+                                               dialog-ctx
+                                               nil
+                                               tags
+                                               (fn [name filter-conditions sort-by sort-order group-by]
+                                                 (-> (perspective-svc/create-perspective
+                                                      name
+                                                      filter-conditions
+                                                      sort-by
+                                                      sort-order
+                                                      group-by)
+                                                     (.then (fn [_]
+                                                              (perspective-svc/refresh-perspectives!)))
+                                                     (.catchError (fn [error]
+                                                                    (dart-core/print (str "Error creating perspective: " error))))))
+                                               (fn [] nil))))))
                  (m/SizedBox .width (comp/space :l))
                  (comp/mongol-text-block
                   {:text "Perspectives"
