@@ -1,9 +1,0 @@
-(ns minii-focus.utils.ids
-  "ID generation utility functions"
-  (:require
-   ["dart:core" :as dart-core]))
-
-;; Simple ID generator (uses timestamp + random number)
-(defn generate-id []
-  (str (.millisecondsSinceEpoch (dart-core/DateTime.now)) "-" (rand-int 1000000)))
-

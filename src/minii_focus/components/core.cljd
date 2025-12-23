@@ -22,8 +22,6 @@
 (def vertical-page-view layout/vertical-page-view)
 
 (def mongol-text-block text/mongol-text-block)
-(def mongol-task-item text/mongol-task-item)
-(def mongol-note-block text/mongol-note-block)
 
 (def focus-container focus/focus-container)
 (def focus-depth-bar focus/focus-depth-bar)

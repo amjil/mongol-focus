@@ -9,29 +9,7 @@
    [virtual-keyboard.keyboard-candidates :as kc]
    [virtual-keyboard.zip-utils :as zip-utils]
    [virtual-keyboard.fst-reader :as fst-reader]
-   [minii-focus.services.database :as db]
-   [minii-focus.services.task :as task]
-   [minii-focus.services.tag :as tag-svc]
-   [minii-focus.services.review :as review-svc]
-   [minii-focus.services.settings :as settings-svc]
-   [minii-focus.services.perspectives :as perspective-svc]
-   [minii-focus.services.search :as search-svc]
-   [minii-focus.services.notifications :as notif]
-   [minii-focus.states.app-state :as state]
-   [minii-focus.components.core :as comp]
-   [minii-focus.screens.home :as home]
-   [minii-focus.screens.today :as today]
-   [minii-focus.screens.focus :as focus]
-   [minii-focus.screens.inbox :as inbox]
-   [minii-focus.screens.forecast :as forecast]
-   [minii-focus.screens.project-list :as project-list]
-   [minii-focus.screens.tags :as tags]
-   [minii-focus.screens.review :as review]
-   [minii-focus.screens.focus-stats :as focus-stats]
-   [minii-focus.screens.settings :as settings]
-   [minii-focus.screens.perspectives :as perspectives]
-   [minii-focus.screens.search :as search]
-   [minii-focus.screens.task-detail :as task-detail]))
+   [minii-focus.components.core :as comp]))
 
 ;; Initialize application
 (defn init-app! []
@@ -42,29 +20,7 @@
   (zip-utils/read-json-from-asset-zip kc/next "assets/next.zip")
   (fst-reader/ensure-loaded)
   
-  ;; Initialize database (call only once), and trigger initial data load after initialization
-  (-> (db/initialize-database!)
-      (.then (fn [database]
-               (state/set-database! database)
-               (dart-core/print "Database initialized successfully")
-               ;; Initialize notifications service
-               (let [on-notif-tap (fn [task-id]
-                                    ;; Navigate to task detail when user taps notification
-                                    (when task-id
-                                      (task/refresh-task-detail! task-id)
-                                      (when-let [navigator (.-currentState state/navigator-key)]
-                                        (.push navigator
-                                               (m/MaterialPageRoute
-                                                .builder (fn [_]
-                                                           (task-detail/task-detail-screen task-id)))))))]
-                 (-> (notif/initialize-notifications on-notif-tap)
-                     (.then (fn [_]
-                              (dart-core/print "Notifications initialized, requesting permission...")
-                              (notif/request-notification-permission)))
-                     (.catchError (fn [error]
-                                    (dart-core/print (str "Notification initialization error: " error))))))))
-      (.catchError (fn [error]
-                     (dart-core/print (str "Database initialization error: " error))))))
+  )
 
 (defn main []
   ;; Ensure Flutter binding is initialized
@@ -81,80 +37,10 @@
                        :keyboard/font-size 18
                        :keyboard/key-container-color m/Colors.grey.shade500
                        :keyboard/mongol-font-family "OnonSoninSans"})
-          current-index (atom 0)
-          pages [(home/home-screen {:on-navigate (fn [idx] (reset! current-index idx))})
-                 (today/today-screen)
-                 (inbox/inbox-screen)
-                 (focus/focus-screen)
-                 (forecast/forecast-screen)
-                 (project-list/project-list-screen)
-                 (tags/tags-screen)
-                 (review/review-screen)
-                 (focus-stats/focus-stats-screen)
-                 (settings/settings-screen)
-                 (perspectives/perspectives-screen)
-                 (search/search-screen)]
-          ;; Bottom navigation only shows the 4 most important entries
-          bottom-items [{:title "Home" :icon m/Icons.home :idx 0}
-                        {:title "Today" :icon m/Icons.calendar_today :idx 1}
-                        {:title "Inbox" :icon m/Icons.inbox :idx 2}
-                        {:title "Focus" :icon m/Icons.timer :idx 3}]
-          drawer-items [{:title "Home" :idx 0}
-                        {:title "Today" :idx 1}
-                        {:title "Inbox" :idx 2}
-                        {:title "Focus" :idx 3}
-                        {:title "Forecast" :idx 4}
-                        {:title "Projects" :idx 5}
-                        {:title "Tags" :idx 6}
-                        {:title "Review" :idx 7}
-                        {:title "Stats" :idx 8}
-                        {:title "Settings" :idx 9}
-                        {:title "Perspectives" :idx 10}
-                        {:title "Search" :idx 11}]
-          set-page! (fn [idx]
-                      (reset! current-index idx)
-                      ;; Auto-refresh data when switching pages
-                      (condp = idx
-                        0 (do
-                            ;; Home page - refresh all overview data
-                            (task/refresh-today-tasks!)
-                            (task/refresh-inbox-tasks!)
-                            (task/refresh-forecast-items!)
-                            (task/refresh-focus-sessions!)
-                            nil)
-                        1 (task/refresh-today-tasks!)
-                        2 (task/refresh-inbox-tasks!)
-                        3 (task/refresh-focus-tasks!)
-                        4 (task/refresh-forecast-items!)
-                        5 (task/refresh-projects!)
-                        6 (do
-                            ;; Tags page - refresh tags
-                            (tag-svc/refresh-tags!)
-                            nil)
-                        7 (do
-                            ;; Review page - refresh reviews and due projects
-                            (review-svc/refresh-reviews! "daily")
-                            (review-svc/refresh-due-review-projects!)
-                            nil)
-                        8 (task/refresh-focus-sessions!)
-                        9 (do
-                            ;; Settings page - refresh settings
-                            (settings-svc/refresh-settings!)
-                            nil)
-                        10 (do
-                             ;; Perspectives page - refresh perspectives
-                             (perspective-svc/refresh-perspectives!)
-                             nil)
-                        11 (do
-                             ;; Search page - refresh search history
-                             (search-svc/refresh-search-history!)
-                             nil)
-                        nil))]
+          ]
     :bind {:info info}
-    :watch [_tab current-index]
 
     (m/MaterialApp
-     .navigatorKey state/navigator-key
      .theme (m/ThemeData
              .primarySwatch m/Colors.blue
              .useMaterial3 true)
@@ -162,84 +48,9 @@
                  .primarySwatch m/Colors.blue
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
-     .routes {"/home" (home/home-screen {:on-navigate (fn [_] nil)})
-              "/today" today/today-screen
-              "/inbox" inbox/inbox-screen
-              "/focus" focus/focus-screen
-              "/forecast" forecast/forecast-screen
-              "/projects" project-list/project-list-screen
-              "/tags" tags/tags-screen
-              "/review" review/review-screen
-              "/stats" focus-stats/focus-stats-screen
-              "/settings" settings/settings-screen
-              "/perspectives" perspectives/perspectives-screen
-              "/search" search/search-screen}
      .home (m/Scaffold
-            .drawer (m/Drawer
-                     .child (m/SafeArea
-                             .child
-                             (m/ListView
-                              .scrollDirection m/Axis.horizontal
-                              .padding (m/EdgeInsets.zero)
-                              .children
-                              (into [(m/DrawerHeader
-                                      .decoration (m/BoxDecoration .color m/Colors.blue)
-                                      .child (comp/mongol-text-block
-                                              {:text "Navigation"
-                                               :style (m/TextStyle .fontSize (comp/font-size :l)
-                                                                   .color m/Colors.white)}))]
-                                    (for [{:keys [title idx]} drawer-items]
-                                      (mgl/MongolListTile
-                                       .title (comp/mongol-text-block
-                                               {:text title
-                                                :style (m/TextStyle .fontSize (comp/font-size :m))})
-                                       .onTap (fn []
-                                                (set-page! idx)
-                                                nil)))))))
-            .body (m/IndexedStack
-                   .index @current-index
-                   .children pages)
-            .bottomNavigationBar (m/BottomNavigationBar
-                                  .type m/BottomNavigationBarType.fixed
-                                  .currentIndex (min @current-index (dec (count bottom-items)))
-                                  .onTap (fn [idx] (set-page! idx)
-                                           (condp = idx
-                                             0 (do
-                                                 ;; Refresh home page data
-                                                 (task/refresh-today-tasks!)
-                                                 (task/refresh-inbox-tasks!)
-                                                 (task/refresh-forecast-items!)
-                                                 (task/refresh-focus-sessions!)
-                                                 nil)
-                                             1 (-> (task/refresh-today-tasks!)
-                                                   (.then (fn [x]
-                                                            (dart-core/print (str "today tasks: " x))
-                                                            (swap! state/app-state assoc :today-tasks x)
-                                                            (swap! state/app-state assoc :today-loading false)))
-                                                   (.catchError (fn [e]
-                                                                  (dart-core/print e)
-                                                                  (swap! state/app-state assoc :today-loading false))))
-                                             2 (-> (task/get-inbox-tasks)
-                                                   (.then (fn [x]
-                                                            (dart-core/print (str "inbox tasks: " x))
-                                                            (swap! state/app-state assoc :inbox-tasks x)
-                                                            (swap! state/app-state assoc :inbox-loading false)))
-                                                   (.catchError (fn [e]
-                                                                  (dart-core/print e)
-                                                                  (swap! state/app-state assoc :inbox-loading false))))
-
-                                             3 (-> (task/refresh-focus-tasks!)
-                                                   (.then (fn [x]
-                                                            (dart-core/print (str "focus tasks: " x))
-                                                            (swap! state/app-state assoc :focus-tasks x)
-                                                            (swap! state/app-state assoc :focus-loading false)))
-                                                   (.catchError (fn [e]
-                                                                  (dart-core/print e)
-                                                                  (swap! state/app-state assoc :focus-loading false))))
-                                             nil)
-                                           nil)
-                                  .items (into []
-                                               (for [{:keys [title icon]} bottom-items]
-                                                 (m/BottomNavigationBarItem
-                                                  .icon (m/Icon icon)
-                                                  .label title)))))))))
+            
+            .body (m/Center
+                   .child (comp/mongol-text-block
+                           {:text "Hello, World!"}))
+            )))))
