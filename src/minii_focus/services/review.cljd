@@ -8,7 +8,8 @@
    [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]
-   [minii-focus.utils.toast :as toast]))
+   [minii-focus.utils.toast :as toast]
+   [minii-focus.utils.refresh :as refresh]))
 
 ;; =============================================================================
 ;; Review record CRUD operations
@@ -114,15 +115,11 @@
 (defn refresh-reviews!
   "Refresh review list by type and write to app-state"
   [type]
-  (state/set-reviews-loading! true)
-  (-> (get-reviews-by-type type)
-      (.then (fn [rows]
-               (state/set-reviews! rows)
-               (state/set-reviews-loading! false)
-               rows))
-      (.catchError (fn [e]
-                     (toast/handle-error-global e "Хяналтыг шинэчлэхэд алдаа гарлаа")
-                     (state/set-reviews-loading! false)))))
+  (refresh/with-loading-state
+   #(get-reviews-by-type type)
+   state/set-reviews-loading!
+   state/set-reviews!
+   "Хяналтыг шинэчлэхэд алдаа гарлаа"))
 
 (defn- next-review-date
   "Compute next review date for a project item given interval days.

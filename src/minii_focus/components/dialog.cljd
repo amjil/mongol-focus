@@ -8,6 +8,8 @@
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.keyboard :as keyboard]
    [minii-focus.utils.datetime :as dt]
+   [minii-focus.utils.validation :as validation]
+   [minii-focus.utils.dialog :as dialog-utils]
    [minii-focus.components.tokens :as tokens]
    [minii-focus.components.text :as text]
    [minii-focus.services.task :as task]
@@ -34,7 +36,7 @@
   
   Note: The virtual keyboard section needs to be integrated according to the actual API of the virtual-keyboard package.
   Currently using a placeholder, please replace with the actual keyboard widget."
-  [{:keys [controller title _on-submit on-cancel keyboard-options defer-date due-date content parsed-tag-names parsed-is-flagged]}]
+  [{:keys [controller _title _on-submit on-cancel keyboard-options defer-date due-date content parsed-tag-names parsed-is-flagged]}]
   (f/widget
    :context ctx
    :let [_keyboard-info (merge keyboard-options/keyboard-option
@@ -62,9 +64,7 @@
                        (m/IconButton
                         .icon (m/Icon m/Icons.close)
                         .onPressed (fn []
-                                     (when on-cancel (on-cancel))
-                                     (-> (m/Navigator.of ctx) (.pop))
-                                     nil))])]
+                                     (dialog-utils/close-dialog ctx on-cancel)))])]
                     [(m/Expanded
                       .child
                       (m/Row
@@ -127,19 +127,10 @@
                                       (let [content-value (if content @content (.-text controller))
                                             ^dart-core/DateTime? defer-value (when defer-date @defer-date)
                                             ^dart-core/DateTime? due-value (when due-date @due-date)
-                                            error-msg (cond
-                                                        (empty? content-value)
-                                                        "Please enter content"
-
-                                                        (> (count content-value) 1000)
-                                                        "Content is too long (max 1000 characters)"
-
-                                                        (and defer-value
-                                                             due-value
-                                                             (.isAfter defer-value due-value))
-                                                        "Start date must be before or equal to due date"
-
-                                                        :else nil)]
+                                            error-msg (validation/validate-task-input
+                                                       content-value
+                                                       :defer-date defer-value
+                                                       :due-date due-value)]
                                         (if error-msg
                                           (task/show-toast ctx error-msg :warning)
                                           (-> (task/create-task content-value "task" "active" defer-value due-value)

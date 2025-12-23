@@ -6,7 +6,8 @@
    [minii-focus.services.database :as db]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]
-   [minii-focus.utils.toast :as toast]))
+   [minii-focus.utils.toast :as toast]
+   [minii-focus.utils.refresh :as refresh]))
 
 ;; =============================================================================
 ;; Tag CRUD operations
@@ -116,15 +117,11 @@
 (defn refresh-tags!
   "Refresh tag list and write to app-state"
   []
-  (state/set-tags-loading! true)
-  (-> (get-all-tags)
-      (.then (fn [rows]
-               (state/set-tags! rows)
-               (state/set-tags-loading! false)
-               rows))
-      (.catchError (fn [e]
-                     (toast/handle-error-global e "Тагийг шинэчлэхэд алдаа гарлаа")
-                     (state/set-tags-loading! false)))))
+  (refresh/with-loading-state
+   get-all-tags
+   state/set-tags-loading!
+   state/set-tags!
+   "Тагийг шинэчлэхэд алдаа гарлаа"))
 
 (defn get-tags-by-parent
   "Get all child tags of specified parent tag"

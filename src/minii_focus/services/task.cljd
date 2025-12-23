@@ -12,7 +12,8 @@
    [minii-focus.services.notifications :as notif]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.ids :as ids]
-   [minii-focus.utils.toast :as toast]))
+   [minii-focus.utils.toast :as toast]
+   [minii-focus.utils.refresh :as refresh]))
 
 ;; =============================================================================
 ;; Task status state machine
@@ -340,17 +341,14 @@
 (defn refresh-inbox-tasks!
   "Refresh Inbox page task list and write to app-state"
   []
-  (state/set-inbox-loading! true)
-  (-> (get-inbox-tasks)
-      (.then (fn [tasks]
-               (state/set-inbox-tasks! tasks)
-               ;; Compatible with old field (if there are still places reading :tasks)
-               (state/set-tasks! tasks)
-               (state/set-inbox-loading! false)
-               tasks))
-      (.catchError (fn [error]
-                     (toast/handle-error-global error "Inbox-ийг шинэчлэхэд алдаа гарлаа")
-                     (state/set-inbox-loading! false)))))
+  (refresh/with-loading-state
+   get-inbox-tasks
+   state/set-inbox-loading!
+   (fn [tasks]
+     (state/set-inbox-tasks! tasks)
+     ;; Compatible with old field (if there are still places reading :tasks)
+     (state/set-tasks! tasks))
+   "Inbox-ийг шинэчлэхэд алдаа гарлаа"))
 
 (defn show-toast
   "Unified toast entry, defaults to info, can pass :success/:error/:warning"
@@ -367,56 +365,41 @@
 (defn refresh-today-tasks!
   "Refresh Today page task list and write to app-state"
   []
-  (state/set-today-loading! true)
-  (-> (get-today-tasks)
-      (.then (fn [tasks]
-               (state/set-today-tasks! tasks)
-               ;; Compatible with old field (if there are still places reading :tasks)
-               (state/set-tasks! tasks)
-               (state/set-today-loading! false)
-               tasks))
-      (.catchError (fn [error]
-                     (toast/handle-error-global error "Өнөөдрийн ажлыг шинэчлэхэд алдаа гарлаа")
-                     (state/set-today-loading! false)))))
+  (refresh/with-loading-state
+   get-today-tasks
+   state/set-today-loading!
+   (fn [tasks]
+     (state/set-today-tasks! tasks)
+     ;; Compatible with old field (if there are still places reading :tasks)
+     (state/set-tasks! tasks))
+   "Өнөөдрийн ажлыг шинэчлэхэд алдаа гарлаа"))
 
 (defn refresh-focus-tasks!
   "Refresh Focus page task list and write to app-state"
   []
-  (state/set-focus-loading! true)
-  (-> (get-focused-tasks)
-      (.then (fn [tasks]
-               (state/set-focus-tasks! tasks)
-               (state/set-focus-loading! false)
-               tasks))
-      (.catchError (fn [error]
-                     (toast/handle-error-global error "Focus ажлыг шинэчлэхэд алдаа гарлаа")
-                     (state/set-focus-loading! false)))))
+  (refresh/with-loading-state
+   get-focused-tasks
+   state/set-focus-loading!
+   state/set-focus-tasks!
+   "Focus ажлыг шинэчлэхэд алдаа гарлаа"))
 
 (defn refresh-forecast-items!
   "Refresh Forecast page task list and write to app-state"
   []
-  (state/set-forecast-loading! true)
-  (-> (get-forecast-items)
-      (.then (fn [items]
-               (state/set-forecast-items! items)
-               (state/set-forecast-loading! false)
-               items))
-      (.catchError (fn [error]
-                     (toast/handle-error-global error "Forecast-ийг шинэчлэхэд алдаа гарлаа")
-                     (state/set-forecast-loading! false)))))
+  (refresh/with-loading-state
+   get-forecast-items
+   state/set-forecast-loading!
+   state/set-forecast-items!
+   "Forecast-ийг шинэчлэхэд алдаа гарлаа"))
 
 (defn refresh-projects!
   "Refresh Projects page data and write to app-state"
   []
-  (state/set-projects-loading! true)
-  (-> (get-projects)
-      (.then (fn [rows]
-               (state/set-projects! rows)
-               (state/set-projects-loading! false)
-               rows))
-      (.catchError (fn [error]
-                     (toast/handle-error-global error "Төслүүдийг шинэчлэхэд алдаа гарлаа")
-                     (state/set-projects-loading! false)))))
+  (refresh/with-loading-state
+   get-projects
+   state/set-projects-loading!
+   state/set-projects!
+   "Төслүүдийг шинэчлэхэд алдаа гарлаа"))
 
 (defn refresh-focus-sessions!
   "Refresh Focus stats page data and write to app-state"
