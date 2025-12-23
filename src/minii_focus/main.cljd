@@ -11,7 +11,6 @@
    [virtual-keyboard.fst-reader :as fst-reader]
    [minii-focus.services.database :as db]
    [minii-focus.services.task :as task]
-   [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.tag :as tag-svc]
    [minii-focus.services.review :as review-svc]
    [minii-focus.services.settings :as settings-svc]
@@ -77,7 +76,6 @@
   ;; Start Flutter application
   (f/run
    (f/widget
-    :context ctx
     :let [info (merge keyboard-options/keyboard-option
                       {:keyboard/key-cap-border-radius 6
                        :keyboard/font-size 18
@@ -131,26 +129,26 @@
                         5 (task/refresh-projects!)
                         6 (do
                             ;; Tags page - refresh tags
-                            true
-                            (tag-svc/refresh-tags!))
+                            (tag-svc/refresh-tags!)
+                            nil)
                         7 (do
                             ;; Review page - refresh reviews and due projects
-                            true
                             (review-svc/refresh-reviews! "daily")
-                            (review-svc/refresh-due-review-projects!))
+                            (review-svc/refresh-due-review-projects!)
+                            nil)
                         8 (task/refresh-focus-sessions!)
                         9 (do
                             ;; Settings page - refresh settings
-                            true
-                            (settings-svc/refresh-settings!))
+                            (settings-svc/refresh-settings!)
+                            nil)
                         10 (do
                              ;; Perspectives page - refresh perspectives
-                             true
-                             (perspective-svc/refresh-perspectives!))
+                             (perspective-svc/refresh-perspectives!)
+                             nil)
                         11 (do
                              ;; Search page - refresh search history
-                             true
-                             (search-svc/refresh-search-history!))
+                             (search-svc/refresh-search-history!)
+                             nil)
                         nil))]
     :bind {:info info}
     :watch [_tab current-index]

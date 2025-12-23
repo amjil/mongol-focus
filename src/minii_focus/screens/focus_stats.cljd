@@ -18,7 +18,6 @@
   (let [estimated-loading (atom false)
         total-estimated (atom 0)]
     (f/widget
-     :context ctx
      :watch [{sessions :focus-sessions loading :focus-sessions-loading} state/app-state]
     ;;  :init (fn []
     ;;         (reset! estimated-loading true)

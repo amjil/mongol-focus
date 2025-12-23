@@ -9,8 +9,7 @@
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.states.app-state :as state]
    [minii-focus.services.search :as search-svc]
-   [minii-focus.services.task :as task]
-   [minii-focus.services.tag :as tag-svc]))
+   [minii-focus.services.task :as task]))
 
 (defn search-screen []
   (let [query-state (atom "")

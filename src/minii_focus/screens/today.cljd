@@ -51,9 +51,9 @@
                  blocked (:blocked info)
                  ;; Use previous visible task as default parent for "Set as child"
                  parent-task-id (when (pos? index)
-                                  (.-id task-row))]
-             (let [is-selected (contains? @selected-task-ids task-id)
-                   handlers (comp/make-task-handlers
+                                  (.-id task-row))
+                 is-selected (contains? @selected-task-ids task-id)
+                 handlers (comp/make-task-handlers
                             ctx task-id task-row task-status
                             selected-task-ids selection-mode
                             {:on-navigate-to-task (fn [tid]
@@ -89,7 +89,7 @@
                   :blocked? blocked
                   :selection-mode _selection-mode
                   :selected is-selected}
-                 handlers)))))
+                 handlers))))
          visible-tasks))))))
 
 (defn today-screen []
@@ -101,7 +101,7 @@
      :context ctx
      ;; Pages only subscribe to state, don't do loading side effects in render
      :watch [_app state/app-state
-             {loading :today-loading tasks :today-tasks} state/app-state
+             {tasks :today-tasks} state/app-state
              _twi tasks-with-info
              _sb show-blocked
              _selection-mode selection-mode

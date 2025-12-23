@@ -344,7 +344,7 @@
                                    :else "None"))))]))
     (m/SizedBox)))
 
-(defn- estimated-duration-section [ctx task-detail display-estimated editing-state estimated-state]
+(defn- estimated-duration-section [display-estimated editing-state estimated-state]
   (m/Column
    .crossAxisAlignment m/CrossAxisAlignment.center
    .children
@@ -827,7 +827,7 @@
                             (m/SizedBox .width (comp/space :l))
                             (defer-due-section ctx task-detail display-defer display-due editing-state defer-state due-state)
                             (m/SizedBox .width (comp/space :l))
-                            (estimated-duration-section ctx task-detail display-estimated editing-state estimated-minutes-state)
+                            (estimated-duration-section display-estimated editing-state estimated-minutes-state)
                             (m/SizedBox .width (comp/space :l))
                             (flagged-section ctx task-detail)
                             (m/SizedBox .width (comp/space :l))

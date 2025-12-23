@@ -156,7 +156,9 @@
                                                                            (not (every? (fn [item] (= (.-status item) "completed")) prev-items)))))))))))
                                             ;; For parallel projects or no project type, only check parent status
                                             true)))
+                                      ;; Parent relation exists but parent item not found - not blocked
                                       false))))
+                     ;; No parent relation - not blocked
                      false))))))))
 
 (defn check-tasks-blocked-status

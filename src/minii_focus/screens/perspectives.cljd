@@ -44,10 +44,10 @@
             m)]
     m))
 
-
-(defn- perspective-dialog [dialog-ctx perspective tags on-save on-cancel]
+(defn- perspective-dialog
   "Unified dialog for creating and editing perspectives.
    If perspective is nil, it's create mode; otherwise it's edit mode."
+  [dialog-ctx perspective tags on-save on-cancel]
   (let [is-edit? (some? perspective)
         name-state (atom (if is-edit? (.-name perspective) ""))
         sort-by-state (atom (if is-edit? (.-sortBy perspective) "dueDate"))

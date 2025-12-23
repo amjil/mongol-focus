@@ -2,7 +2,6 @@
   "Task dependencies management service - task dependency relationship management"
   (:require
    ["dart:core" :as dart-core]
-   ["package:drift/drift.dart" :as d]
    ;; Corresponds to package name `cljd_mongol_focus` in pubspec.yaml
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
    [minii-focus.services.database :as db]))

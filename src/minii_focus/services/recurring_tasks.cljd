@@ -6,9 +6,7 @@
    ["package:cljd_mongol_focus/database/database.dart" :as drift]
    [minii-focus.services.database :as db]
    [minii-focus.services.task :as task]
-   [minii-focus.services.item-tree :as tree-svc]
    [minii-focus.services.tag :as tag-svc]
-   [minii-focus.utils.ids :as ids]
    [minii-focus.utils.toast :as toast]))
 
 ;; =============================================================================
@@ -19,7 +17,7 @@
   "Parse recurrence rule string into map"
   [rule-str]
   (when rule-str
-    (let [rule (clojure.string/lower-case rule-str)]
+    (let [rule (.toLowerCase rule-str)]
       (cond
         (or (= rule "daily") (= rule "day")) {:type "daily" :interval 1}
         (or (= rule "weekly") (= rule "week")) {:type "weekly" :interval 1}
@@ -94,8 +92,7 @@
   (let [rule-str (.-recurrenceRule task)
         end-date (.-recurrenceEndDate task)
         due-at (.-dueAt task)
-        defer-at (.-deferAt task)
-        base-date (or due-at defer-at (.-createdAt task))]
+        defer-at (.-deferAt task)]
     (and
      rule-str
      (or (nil? end-date) (.isAfter now end-date))
@@ -132,8 +129,7 @@
 (defn process-completed-recurring-tasks
   "Process completed recurring tasks and create next occurrences"
   []
-  (let [^drift/AppDatabase database (db/get-database)
-        now (dart-core/DateTime.now)]
+  (let [now (dart-core/DateTime.now)]
     (-> (get-recurring-tasks)
         (.then (fn [recurring-tasks]
                  (let [completed-tasks (filter (fn [t]
