@@ -7,13 +7,17 @@
 (defn now []
   (dart-core/DateTime.now))
 
+;; Zero-padding helper for formatting numbers
+(defn- pad-zero [n]
+  (if (< n 10) "0" ""))
+
 ;; Format date (simple version)
 (defn format-date [date]
   (when date
     (let [year (.-year date)
           month (.-month date)
           day (.-day date)]
-      (str year "-" (when (< month 10) "0") month "-" (when (< day 10) "0") day))))
+      (str year "-" (pad-zero month) month "-" (pad-zero day) day))))
 
 ;; Check if date is today or before
 (defn is-today-or-before? [date]
@@ -28,7 +32,7 @@
   (when date
     (let [hour (.-hour date)
           minute (.-minute date)]
-      (str (when (< hour 10) "0") hour ":" (when (< minute 10) "0") minute))))
+      (str (pad-zero hour) hour ":" (pad-zero minute) minute))))
 
 ;; Calculate duration in minutes between two dates
 (defn duration-minutes [start-date end-date]
@@ -36,14 +40,13 @@
     (let [diff (.difference end-date start-date)]
       (.inMinutes diff))))
 
-;; Format duration as "Xh Ym" or "Ym" or "Xs"
+;; Format duration as "Xh Ym" or "Ym" or "Xm"
 (defn format-duration [minutes]
   (when minutes
     (let [hours (quot minutes 60)
-          mins (mod minutes 60)
-          secs (mod minutes 60)]
+          mins (mod minutes 60)]
       (cond
         (> hours 0) (str hours "h " mins "m")
         (> mins 0) (str mins "m")
-        :else (str secs "s")))))
+        :else (str minutes "m")))))
 

@@ -77,33 +77,32 @@
   (when-let [navigator-state (.-currentState state/navigator-key)]
     (.-context navigator-state)))
 
+(defn- show-toast-global-impl
+  "Generic implementation for showing toast with global context"
+  [toast-fn log-prefix msg]
+  (if-let [ctx (get-global-context)]
+    (toast-fn ctx msg)
+    (dart-core/print (str log-prefix ": " msg))))
+
 (defn show-error-toast-global
   "Show error toast using global context if available, otherwise just log"
   [msg]
-  (if-let [ctx (get-global-context)]
-    (show-error-toast ctx msg)
-    (dart-core/print (str "Error: " msg))))
+  (show-toast-global-impl show-error-toast "Error" msg))
 
 (defn show-success-toast-global
   "Show success toast using global context if available, otherwise just log"
   [msg]
-  (if-let [ctx (get-global-context)]
-    (show-success-toast ctx msg)
-    (dart-core/print (str "Success: " msg))))
+  (show-toast-global-impl show-success-toast "Success" msg))
 
 (defn show-info-toast-global
   "Show info toast using global context if available, otherwise just log"
   [msg]
-  (if-let [ctx (get-global-context)]
-    (show-info-toast ctx msg)
-    (dart-core/print (str "Info: " msg))))
+  (show-toast-global-impl show-info-toast "Info" msg))
 
 (defn show-warning-toast-global
   "Show warning toast using global context if available, otherwise just log"
   [msg]
-  (if-let [ctx (get-global-context)]
-    (show-warning-toast ctx msg)
-    (dart-core/print (str "Warning: " msg))))
+  (show-toast-global-impl show-warning-toast "Warning" msg))
 
 (defn handle-error-global
   "Handle error with toast using global context if available, otherwise just log.
