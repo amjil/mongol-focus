@@ -10,7 +10,11 @@
    [minii-focus.components.tokens :as tokens]
    [minii-focus.components.list :as list]
    [minii-focus.components.dialog :as dialog]
-   [minii-focus.components.project-dialog :as project-dialog]))
+   [minii-focus.components.project-dialog :as project-dialog]
+   [minii-focus.components.batch-operations :as batch-ops]
+   [minii-focus.components.side-panel :as side-panel]
+   [minii-focus.components.task-menu :as task-menu]
+   [minii-focus.components.task-handlers :as task-handlers]))
 
 ;; Export all components for easy use
 (def mongol-column-layout layout/mongol-column-layout)
@@ -38,6 +42,26 @@
 (def show-mongol-input-dialog dialog/show-mongol-input-dialog)
 
 (def show-project-input-dialog project-dialog/show-project-input-dialog)
+
+;; Batch operations
+(def batch-operations-toolbar batch-ops/batch-operations-toolbar)
+(def batch-mark-completed-btn batch-ops/batch-mark-completed-btn)
+(def batch-add-tag-btn batch-ops/batch-add-tag-btn)
+(def batch-delete-btn batch-ops/batch-delete-btn)
+
+;; Side panels
+(def overview-panel side-panel/overview-panel)
+(def today-overview-panel side-panel/today-overview-panel)
+(def inbox-overview-panel side-panel/inbox-overview-panel)
+(def projects-overview-panel side-panel/projects-overview-panel)
+(def forecast-overview-panel side-panel/forecast-overview-panel)
+
+;; Task menu
+(def show-structure-menu task-menu/show-structure-menu)
+(def show-item-menu task-menu/show-item-menu)
+
+;; Task handlers
+(def make-task-handlers task-handlers/make-task-handlers)
 
 (def spacing tokens/spacing)
 (def font-sizes tokens/font-sizes)

@@ -1,0 +1,136 @@
+(ns minii-focus.components.batch-operations
+  "Batch operations toolbar and button components"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.components.text :as text]
+   [minii-focus.components.tokens :as tokens]
+   [minii-focus.services.task :as task]
+   [minii-focus.services.tag :as tag-svc]
+   [minii-focus.utils.toast :as toast]))
+
+(defn batch-mark-completed-btn
+  "Batch mark as completed button"
+  [ctx selected-task-ids selection-mode on-success]
+  (m/IconButton
+   .icon (m/Icon m/Icons.check_circle)
+   .tooltip "Mark as completed"
+   .onPressed (fn []
+               (let [task-ids (vec @selected-task-ids)]
+                 (-> (task/batch-update-status task-ids "completed")
+                     (.then (fn [successful-ids]
+                             (reset! selected-task-ids #{})
+                             (reset! selection-mode false)
+                             (when on-success (on-success))
+                             (toast/show-success-toast ctx (str "Marked " (count successful-ids) " tasks as completed"))))
+                     (.catchError (fn [error]
+                                   (toast/handle-error-with-toast ctx error "Төлөвийг шинэчлэхэд алдаа гарлаа"))))))))
+
+(defn batch-add-tag-btn
+  "Batch add tag button"
+  [ctx selected-task-ids selection-mode on-success]
+  (m/IconButton
+   .icon (m/Icon m/Icons.label)
+   .tooltip "Add tag"
+   .onPressed (fn []
+               (-> (tag-svc/get-all-tags)
+                   (.then (fn [tags]
+                           (if (seq tags)
+                             (m/showDialog
+                              .context ctx
+                              .builder
+                              (fn [_]
+                                (m/AlertDialog
+                                 .title (mgl/MongolText "Select tag")
+                                 .content (m/Container
+                                          .height 300
+                                          .width 200
+                                          .child (m/ListView.builder
+                                                 .itemCount (count tags)
+                                                 .itemBuilder (fn [_ idx]
+                                                               (let [tag (nth tags idx)]
+                                                                 (mgl/MongolListTile
+                                                                  .title (mgl/MongolText (.-name tag))
+                                                                  .onTap (fn []
+                                                                          (let [tag-id (.-id tag)
+                                                                                task-ids (vec @selected-task-ids)]
+                                                                            (m/Navigator.pop ctx)
+                                                                            (-> (tag-svc/batch-add-tag-to-items task-ids tag-id)
+                                                                                (.then (fn [count]
+                                                                                        (reset! selected-task-ids #{})
+                                                                                        (reset! selection-mode false)
+                                                                                        (when on-success (on-success))
+                                                                                        (toast/show-success-toast ctx (str "Added tag to " count " tasks"))))
+                                                                                (.catchError (fn [error]
+                                                                                              (toast/handle-error-with-toast ctx error "Таг нэмэхэд алдаа гарлаа")))))))))))
+                                 .actions
+                                 [(mgl/MongolTextButton
+                                   .child (mgl/MongolText "Cancel")
+                                   .onPressed (fn [] (m/Navigator.pop ctx)))])))
+                             (toast/show-toast ctx "No tags available. Create a tag first." :info))))
+                   (.catchError (fn [error]
+                                 (toast/handle-error-with-toast ctx error "Тагийг авахад алдаа гарлаа")))))))
+
+(defn batch-delete-btn
+  "Batch delete button"
+  [ctx selected-task-ids selection-mode on-success]
+  (m/IconButton
+   .icon (m/Icon m/Icons.delete)
+   .tooltip "Delete"
+   .onPressed (fn []
+               (m/showDialog
+                .context ctx
+                .builder
+                (fn [_]
+                  (m/AlertDialog
+                   .content (mgl/MongolText (str "Delete " (count @selected-task-ids) " tasks?"))
+                   .actions
+                   [(mgl/MongolTextButton
+                     .child (mgl/MongolText "Cancel")
+                     .onPressed (fn [] (m/Navigator.pop ctx)))
+                    (mgl/MongolTextButton
+                     .child (mgl/MongolText "Delete")
+                     .onPressed (fn []
+                                 (let [task-ids (vec @selected-task-ids)]
+                                   (m/Navigator.pop ctx)
+                                   (-> (task/batch-delete-tasks task-ids)
+                                       (.then (fn [count]
+                                               (reset! selected-task-ids #{})
+                                               (reset! selection-mode false)
+                                               (when on-success (on-success))
+                                               (toast/show-success-toast ctx (str "Deleted " count " tasks"))))
+                                       (.catchError (fn [error]
+                                                     (toast/handle-error-with-toast ctx error "Устгахад алдаа гарлаа"))))
+                                   nil)))])))
+                nil)))
+
+(defn batch-operations-toolbar
+  "Batch operations toolbar
+   selected-task-ids: atom of set of selected task IDs
+   selection-mode: atom of boolean
+   on-success: callback function called after successful batch operation"
+  [ctx selected-task-ids selection-mode on-success]
+  (f/widget
+   :watch [_selection-mode selection-mode
+           _selected-ids selected-task-ids]
+   (if (and _selection-mode (seq _selected-ids))
+     (m/Container
+      .padding (m/EdgeInsets.all (tokens/space :m))
+      .child (m/Row
+              .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+              .children
+              [(text/mongol-text-block
+                {:text (str "Selected: " (count _selected-ids))
+                 :style (m/TextStyle .fontSize (tokens/font-size :m))})
+               (batch-mark-completed-btn ctx selected-task-ids selection-mode on-success)
+               (batch-add-tag-btn ctx selected-task-ids selection-mode on-success)
+               (batch-delete-btn ctx selected-task-ids selection-mode on-success)
+               (m/IconButton
+                .icon (m/Icon m/Icons.close)
+                .tooltip "Cancel selection"
+                .onPressed (fn []
+                            (reset! selected-task-ids #{})
+                            (reset! selection-mode false)))]))
+     (m/SizedBox))))
+

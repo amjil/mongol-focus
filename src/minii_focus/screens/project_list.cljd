@@ -10,34 +10,8 @@
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.services.task :as task-svc]
    [minii-focus.services.item-tree :as tree-svc]
-   [minii-focus.services.tag :as tag-svc]
    [minii-focus.states.app-state :as state]
    [minii-focus.utils.toast :as toast]))
-
-(defn- load-children [parent-id]
-  (tree-svc/get-children-with-items parent-id))
-
-(defn- side-panel [projects tasks-with-info]
-  (m/Container
-   .padding (m/EdgeInsets.all (comp/space :m))
-   .child (m/Column
-           .crossAxisAlignment m/CrossAxisAlignment.start
-           .children
-           [(comp/mongol-text-block
-             {:text "Projects overview"
-              :style (m/TextStyle .fontSize (comp/font-size :m))})
-            (m/SizedBox .height (comp/space :s))
-            (comp/mongol-text-block
-             {:text (str "Total " (count projects))
-              :style (m/TextStyle .color (comp/color :text-weak))})
-            (m/SizedBox .height (comp/space :s))
-            (comp/mongol-text-block
-             {:text (str "Active " (count (filter #(= "active" (.-status %)) projects)))
-              :style (m/TextStyle .color (comp/color :text-weak))})
-            (m/SizedBox .height (comp/space :s))
-            (comp/mongol-text-block
-             {:text (str "Blocked " (count (filter :blocked tasks-with-info)))
-              :style (m/TextStyle .color (comp/color :text-weak))})])))
 
 (defn- long-press-fn [ctx pid controller adding-to-project refresh-projects-with-blocked!]
   (m/showModalBottomSheet
@@ -123,204 +97,6 @@
                                              (toast/handle-error-with-toast ctx error "Төслийг устгахад алдаа гарлаа"))))))])))
                   nil))])))))
 
-(defn- load-children-fn [pid child-items children-map tasks-with-info]
-  (when (nil? child-items)
-    (-> (load-children pid)
-        (.then (fn [res]
-                 (swap! children-map assoc pid res)
-                 ;; Load blocked info for newly loaded children
-                 (when (seq res)
-                   (let [child-tasks (map :item res)]
-                     (-> (task-svc/get-tasks-with-blocked-info child-tasks)
-                         (.then (fn [info-list]
-                                  (swap! tasks-with-info
-                                         (fn [current]
-                                           (reduce (fn [acc info]
-                                                     (assoc acc (.-id (:task info)) info))
-                                                   current info-list)))))
-                         (.catchError (fn [e]
-                                        (dart-core/print (str "Error loading blocked info: " e)))))))))
-        (.catchError (fn [e]
-                       (dart-core/print (str "Load children error: " e))))))
-  nil)
-
-(defn- item-long-press-fn [ctx item-id refresh-projects-with-blocked!]
-  (m/showModalBottomSheet
-   .context ctx
-   .builder
-   (fn [_]
-     (m/Container
-      .padding (m/EdgeInsets.only .top (comp/space :s))
-      .child (m/Row
-              .mainAxisSize m/MainAxisSize.min
-              .children
-              [;; Structure adjustment options
-               (m/ListTile
-                .leading (m/Icon m/Icons.subdirectory_arrow_right)
-                .title (m/Text "Set as subtask")
-                .onTap
-                (fn []
-                  ;; Get previous sibling as parent (if exists)
-                  (-> (tree-svc/get-parent item-id)
-                      (.then
-                       (fn [parent-rel]
-                         (if parent-rel
-                           (let [parent-id (.-parentId parent-rel)]
-                             (-> (tree-svc/get-children parent-id)
-                                 (.then
-                                  (fn [relations]
-                                    (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
-                                          idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))
-                                          prev-task-id (when (and idx (pos? idx)) (nth child-ids (dec idx)))]
-                                      (if prev-task-id
-                                        (-> (tree-svc/set-parent-task item-id prev-task-id)
-                                            (.then (fn [_]
-                                                     (dart-core/print (str "Set task " item-id " as child of " prev-task-id))
-                                                     (refresh-projects-with-blocked!)
-                                                     (task-svc/refresh-projects!)))
-                                            (.catchError
-                                             (fn [error]
-                                               (toast/handle-error-with-toast ctx error "Эцэг ажлыг тохируулахад алдаа гарлаа"))))
-                                        (do
-                                          (dart-core/print "No previous task to set as parent")
-                                          (toast/show-toast ctx "No previous task to set as parent" :info)))
-                                      (m/Navigator.pop ctx)))))
-                             (.catchError
-                              (fn [error]
-                                (m/Navigator.pop ctx)
-                                (toast/handle-error-with-toast ctx error "Дэд ажлыг тохируулахад алдаа гарлаа"))))
-                           (do
-                             (m/Navigator.pop ctx)
-                             (toast/show-toast ctx "No parent task found" :info))))))
-                  (.catchError
-                   (fn [error]
-                     (m/Navigator.pop ctx)
-                     (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа")))
-                  nil))
-               (m/ListTile
-                .leading (m/Icon m/Icons.arrow_upward)
-                .title (m/Text "Move up")
-                .onTap
-                (fn []
-                  ;; Move task up among siblings
-                  (-> (tree-svc/get-parent item-id)
-                      (.then
-                       (fn [parent-rel]
-                         (if parent-rel
-                           (let [parent-id (.-parentId parent-rel)]
-                             (-> (tree-svc/get-children parent-id)
-                                 (.then
-                                  (fn [relations]
-                                    (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
-                                          idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))]
-                                      (if (and idx (pos? idx))
-                                        (let [new-child-ids (-> child-ids
-                                                                (assoc idx (nth child-ids (dec idx)))
-                                                                (assoc (dec idx) item-id))]
-                                          (-> (tree-svc/reorder-siblings parent-id new-child-ids)
-                                              (.then
-                                               (fn [_]
-                                                 (dart-core/print (str "Moved task up: " item-id))
-                                                 (refresh-projects-with-blocked!)
-                                                 (task-svc/refresh-projects!)))
-                                              (.catchError
-                                               (fn [error]
-                                                 (toast/handle-error-with-toast ctx error "Ажлыг дээш шилжүүлэхэд алдаа гарлаа")))))
-                                        (dart-core/print "Task is already at the top or not found among siblings"))
-                                      (m/Navigator.pop ctx))))
-                                 (.catchError
-                                  (fn [error]
-                                    (m/Navigator.pop ctx)
-                                    (toast/handle-error-with-toast ctx error "Дээш шилжүүлэхэд алдаа гарлаа")))))
-                           (do
-                             (m/Navigator.pop ctx)
-                             (toast/show-toast ctx "Task has no parent; cannot move up" :info)))))
-                      (.catchError
-                       (fn [error]
-                         (m/Navigator.pop ctx)
-                         (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
-                  nil))
-               (m/ListTile
-                .leading (m/Icon m/Icons.arrow_downward)
-                .title (m/Text "Move down")
-                .onTap
-                (fn []
-                  ;; Move task down among siblings
-                  (-> (tree-svc/get-parent item-id)
-                      (.then
-                       (fn [parent-rel]
-                         (if parent-rel
-                           (let [parent-id (.-parentId parent-rel)]
-                             (-> (tree-svc/get-children parent-id)
-                                 (.then
-                                  (fn [relations]
-                                    (let [child-ids (vec (map (fn [rel] (.-childId rel)) relations))
-                                          idx (first (keep-indexed (fn [i cid] (when (= cid item-id) i)) child-ids))
-                                          last-idx (dec (count child-ids))]
-                                      (if (and idx (< idx last-idx))
-                                        (let [new-child-ids (-> child-ids
-                                                                (assoc idx (nth child-ids (inc idx)))
-                                                                (assoc (inc idx) item-id))]
-                                          (-> (tree-svc/reorder-siblings parent-id new-child-ids)
-                                              (.then
-                                               (fn [_]
-                                                 (dart-core/print (str "Moved task down: " item-id))
-                                                 (refresh-projects-with-blocked!)
-                                                 (task-svc/refresh-projects!)))
-                                              (.catchError
-                                               (fn [error]
-                                                 (toast/handle-error-with-toast ctx error "Ажлыг доош шилжүүлэхэд алдаа гарлаа")))))
-                                        (dart-core/print "Task is already at the bottom or not found among siblings"))
-                                      (m/Navigator.pop ctx))))
-                                 (.catchError
-                                  (fn [error]
-                                    (m/Navigator.pop ctx)
-                                    (toast/handle-error-with-toast ctx error "Доош шилжүүлэхэд алдаа гарлаа")))))
-                           (do
-                             (m/Navigator.pop ctx)
-                             (toast/show-toast ctx "Task has no parent; cannot move down" :info)))))
-                      (.catchError
-                       (fn [error]
-                         (m/Navigator.pop ctx)
-                         (toast/handle-error-with-toast ctx error "Эцэг ажлыг авахад алдаа гарлаа"))))
-                  nil))
-               ;; Basic operations
-               (mgl/MongolListTile
-                .leading (m/Icon m/Icons.check)
-                .title (mgl/MongolText "Mark as completed")
-                .onTap
-                (fn []
-                  (-> (task-svc/mark-task-completed item-id)
-                      (.then (fn [_]
-                               (refresh-projects-with-blocked!)
-                               (task-svc/refresh-projects!)))
-                      (.catchError (fn [error]
-                                     (toast/handle-error-with-toast ctx error "Ажлыг дуусгахад алдаа гарлаа"))))
-                  (m/Navigator.pop ctx)))
-               (mgl/MongolListTile
-                .leading (m/Icon m/Icons.delete)
-                .title (mgl/MongolText "Delete task")
-                .onTap
-                (fn []
-                  (m/Navigator.pop ctx)
-                  (-> (task-svc/delete-task item-id)
-                      (.then (fn [_]
-                               (refresh-projects-with-blocked!)
-                               (task-svc/refresh-projects!)))
-                      (.catchError (fn [error]
-                                     (toast/handle-error-with-toast ctx error "Ажлыг устгахад алдаа гарлаа"))))
-                  nil))])))))
-
-(defn- item-swipe-left-fn [ctx item-id item]
-  (-> (task-svc/enter-focus item-id)
-      (.then (fn [session-id]
-               (state/set-focused-task! item)
-               (state/set-focus-session-id! session-id)
-               (task-svc/refresh-focus-tasks!)
-               (dart-core/print (str "Entered focus: " item-id))))
-      (.catchError (fn [error]
-                     (toast/handle-error-with-toast ctx error "Focus-д ороход алдаа гарлаа")))))
-
 (defn- create-subtask-fn [ctx pid adding-to-project refresh-projects-with-blocked! subtask-content]
   (when (and (not (empty? subtask-content)) pid)
     (-> (task-svc/create-task subtask-content "task" "active" nil nil)
@@ -371,61 +147,44 @@
       .childrenPadding (m/EdgeInsets.only .left (comp/space :m))
       .children
       (if (and _child-items (seq _child-items))
-        (vec (map
-              (fn [row]
-                (let [item (:item row)
-                      item-id (.-id item)
-                      task-info (get @tasks-with-info item-id)
-                      blocked? (:blocked task-info false)
-                      task-status (keyword (.-status item))
-                      is-selected (contains? @selected-task-ids item-id)]
-                  (comp/mongol-task-item
-                   {:key item-id
-                    :content (.-content item)
-                    :status task-status
-                    :blocked? blocked?
-                    :selection-mode _selection-mode
-                    :selected is-selected
-                    :on-selection-changed (when _selection-mode
-                                           (fn [selected]
-                                             (if selected
-                                               (swap! selected-task-ids conj item-id)
-                                               (swap! selected-task-ids disj item-id))))
-                    :on-tap (fn []
-                              ;; Navigate to task detail page (only when not in selection mode)
-                              (when (not _selection-mode)
-                                (task-svc/refresh-task-detail! item-id)
-                                (m/Navigator.push
-                                 ctx
-                                 (m/MaterialPageRoute
-                                  .builder (fn [_]
-                                             (task-detail/task-detail-screen item-id)))))
-                              nil)
-                    :on-long-press
-                    (fn []
-                      ;; Structure adjustment menu (only when not in selection mode)
-                      (when (not _selection-mode)
-                        (item-long-press-fn ctx item-id refresh-projects-with-blocked!))
-                      nil)
-                    :on-swipe-up
-                    (fn []
-                      ;; Swipe up to enter Focus (vertical gesture) - only when not in selection mode
-                      (when (not _selection-mode)
-                        (item-swipe-left-fn ctx item-id item))
-                      nil)
-                    :on-swipe-left
-                    (fn []
-                      ;; Swipe left to enter Focus (horizontal gesture, for compatibility) - only when not in selection mode
-                      (when (not _selection-mode)
-                        (item-swipe-left-fn ctx item-id item))
-                      nil)
-                    :on-swipe-right
-                    (fn []
-                      ;; Swipe right: Return/move (navigate back) - only when not in selection mode
-                      (when (not _selection-mode)
-                        (m/Navigator.pop ctx))
-                      nil)})))
-              _child-items))
+        (vec
+         (map
+          (fn [row]
+            (let [item (:item row)
+                  item-id (.-id item)
+                  task-info (get @tasks-with-info item-id)
+                  blocked? (:blocked task-info false)
+                  task-status (keyword (.-status item))
+                  is-selected (contains? @selected-task-ids item-id)
+                  handlers (comp/make-task-handlers
+                           ctx item-id item task-status
+                           selected-task-ids selection-mode
+                           {:on-navigate-to-task (fn [tid]
+                                                  (task-svc/refresh-task-detail! tid)
+                                                  (m/Navigator.push
+                                                   ctx
+                                                   (m/MaterialPageRoute
+                                                    .builder (fn [_]
+                                                               (task-detail/task-detail-screen tid)))))
+                            :on-refresh (fn []
+                                         (refresh-projects-with-blocked!)
+                                         (task-svc/refresh-projects!))
+                            :on-long-press-menu (fn [ctx tid _blocked? _parent-id on-refresh]
+                                                 (comp/show-item-menu
+                                                  ctx tid on-refresh
+                                                  {:show-structure? true
+                                                   :show-basic? true}))
+                            :blocked? blocked?})]
+              (comp/mongol-task-item
+               (merge
+                {:key item-id
+                 :content (.-content item)
+                 :status task-status
+                 :blocked? blocked?
+                 :selection-mode _selection-mode
+                 :selected is-selected}
+                handlers))))
+          _child-items))
         [(mgl/MongolListTile
           .title (comp/mongol-text-block
                   {:text "No subtasks"
@@ -455,116 +214,6 @@
         (.catchError (fn [error]
                        (toast/handle-error-with-toast ctx error "Төслийг үүсгэхэд алдаа гарлаа"))))))
 
-(defn- batch-mark-completed-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
-  (m/IconButton
-   .icon (m/Icon m/Icons.check_circle)
-   .tooltip "Mark as completed"
-   .onPressed (fn []
-               (let [task-ids (vec @selected-task-ids)]
-                 (-> (task-svc/batch-update-status task-ids "completed")
-                     (.then (fn [successful-ids]
-                             (reset! selected-task-ids #{})
-                             (reset! selection-mode false)
-                             (refresh-projects-with-blocked!)
-                             (toast/show-success-toast ctx (str "Marked " (count successful-ids) " tasks as completed"))))
-                     (.catchError (fn [error]
-                                   (toast/handle-error-with-toast ctx error "Төлөвийг шинэчлэхэд алдаа гарлаа"))))))))
-
-(defn- batch-add-tag-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
-  (m/IconButton
-   .icon (m/Icon m/Icons.label)
-   .tooltip "Add tag"
-   .onPressed (fn []
-               (-> (tag-svc/get-all-tags)
-                   (.then (fn [tags]
-                           (if (seq tags)
-                             (m/showDialog
-                              .context ctx
-                              .builder
-                              (fn [_]
-                                (m/AlertDialog
-                                 .title (mgl/MongolText "Select tag")
-                                 .content (m/Container
-                                          .height 300
-                                          .width 200
-                                          .child (m/ListView.builder
-                                                 .itemCount (count tags)
-                                                 .itemBuilder (fn [_ idx]
-                                                               (let [tag (nth tags idx)]
-                                                                 (mgl/MongolListTile
-                                                                  .title (mgl/MongolText (.-name tag))
-                                                                  .onTap (fn []
-                                                                          (let [tag-id (.-id tag)
-                                                                                task-ids (vec @selected-task-ids)]
-                                                                            (m/Navigator.pop ctx)
-                                                                            (-> (tag-svc/batch-add-tag-to-items task-ids tag-id)
-                                                                                (.then (fn [count]
-                                                                                        (reset! selected-task-ids #{})
-                                                                                        (reset! selection-mode false)
-                                                                                        (refresh-projects-with-blocked!)
-                                                                                        (toast/show-success-toast ctx (str "Added tag to " count " tasks"))))
-                                                                                (.catchError (fn [error]
-                                                                                              (toast/handle-error-with-toast ctx error "Таг нэмэхэд алдаа гарлаа")))))))))))
-                                 .actions
-                                 [(mgl/MongolTextButton
-                                   .child (mgl/MongolText "Cancel")
-                                   .onPressed (fn [] (m/Navigator.pop ctx)))])))
-                             (toast/show-toast ctx "No tags available. Create a tag first." :info))))
-                   (.catchError (fn [error]
-                                 (toast/handle-error-with-toast ctx error "Тагийг авахад алдаа гарлаа")))))))
-
-(defn- batch-delete-btn [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
-  (m/IconButton
-   .icon (m/Icon m/Icons.delete)
-   .tooltip "Delete"
-   .onPressed (fn []
-                (m/showDialog
-                 .context ctx
-                 .builder
-                 (fn [_]
-                   (m/AlertDialog
-                    .content (mgl/MongolText (str "Delete " (count @selected-task-ids) " tasks?"))
-                    .actions
-                    [(mgl/MongolTextButton
-                      .child (mgl/MongolText "Cancel")
-                      .onPressed (fn [] (m/Navigator.pop ctx)))
-                     (mgl/MongolTextButton
-                      .child (mgl/MongolText "Delete")
-                      .onPressed (fn []
-                                   (let [task-ids (vec @selected-task-ids)]
-                                     (m/Navigator.pop ctx)
-                                     (-> (task-svc/batch-delete-tasks task-ids)
-                                         (.then (fn [count]
-                                                  (reset! selected-task-ids #{})
-                                                  (reset! selection-mode false)
-                                                  (refresh-projects-with-blocked!)
-                                                  (toast/show-success-toast ctx (str "Deleted " count " tasks"))))
-                                         (.catchError (fn [error]
-                                                        (toast/handle-error-with-toast ctx error "Устгахад алдаа гарлаа")))))
-                                   nil))])))
-                nil)))
-
-(defn- batch-operations-toolbar [ctx selected-task-ids selection-mode refresh-projects-with-blocked!]
-  (if (and @selection-mode (seq @selected-task-ids))
-    (m/Container
-     .padding (m/EdgeInsets.all (comp/space :m))
-     .color m/Colors.blue.shade50
-     .child (m/Row
-             .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
-             .children
-             [(comp/mongol-text-block
-               {:text (str "Selected: " (count @selected-task-ids))
-                :style (m/TextStyle .fontSize (comp/font-size :m))})
-              (batch-mark-completed-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
-              (batch-add-tag-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
-              (batch-delete-btn ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
-              (m/IconButton
-               .icon (m/Icon m/Icons.close)
-               .tooltip "Cancel selection"
-               .onPressed (fn []
-                           (reset! selected-task-ids #{})
-                           (reset! selection-mode false)))]))
-    (m/SizedBox)))
 
 (defn project-list-screen []
   (let [expanded (atom #{})
@@ -677,9 +326,9 @@
                              (m/SizedBox))])
         .body (m/Column
                .children
-               [(batch-operations-toolbar ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
+               [(comp/batch-operations-toolbar ctx selected-task-ids selection-mode refresh-projects-with-blocked!)
                 (m/Expanded
                  .child (comp/mongol-row-layout
                         {:main-row (comp/vertical-reveal-motion
                                     {:child main-view})
-                         :side-row (side-panel projects (vals @tasks-with-info))}))]))))))
+                         :side-row (comp/projects-overview-panel projects (vals @tasks-with-info))}))]))))))

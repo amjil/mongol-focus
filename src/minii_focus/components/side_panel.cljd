@@ -1,0 +1,72 @@
+(ns minii-focus.components.side-panel
+  "Side panel statistics components"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [minii-focus.components.text :as text]
+   [minii-focus.components.tokens :as tokens]))
+
+(defn overview-panel
+  "Generic statistics panel
+   title: Panel title
+   stats: List of statistics, format: [{:label \"Label\" :value \"Value\" :color :text-weak}]"
+  [title stats]
+  (m/Container
+   .padding (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Column
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           (concat
+            [(text/mongol-text-block
+              {:text title
+               :style (m/TextStyle .fontSize (tokens/font-size :m))})]
+            (mapcat
+             (fn [stat]
+               [(m/SizedBox .height (tokens/space :s))
+                (text/mongol-text-block
+                 {:text (str (:label stat) " " (:value stat))
+                  :style (m/TextStyle
+                          .color (tokens/color (or (:color stat) :text-weak))
+                          .fontSize (tokens/font-size :s))})])
+             stats)))))
+
+(defn today-overview-panel
+  "Today page statistics panel"
+  [tasks tasks-with-info]
+  (overview-panel
+   "Today overview"
+   [{:label "Total" :value (count tasks)}
+    {:label "Active" :value (count (filter #(= "active" (.-status %)) tasks))}
+    {:label "Blocked" :value (count (filter :blocked tasks-with-info))}]))
+
+(defn inbox-overview-panel
+  "Inbox page statistics panel"
+  [tasks tasks-with-info defer-date due-date]
+  (overview-panel
+   "Inbox overview"
+   [{:label "Pending" :value (count tasks)}
+    {:label "Blocked" :value (count (filter :blocked tasks-with-info))}
+    {:label "Start" :value (if @defer-date
+                            (.toString @defer-date)
+                            "Not set")}
+    {:label "Due" :value (if @due-date
+                          (.toString @due-date)
+                          "Not set")}]))
+
+(defn projects-overview-panel
+  "Projects page statistics panel"
+  [projects tasks-with-info]
+  (overview-panel
+   "Projects overview"
+   [{:label "Total" :value (count projects)}
+    {:label "Active" :value (count (filter #(= "active" (.-status %)) projects))}
+    {:label "Blocked" :value (count (filter :blocked tasks-with-info))}]))
+
+(defn forecast-overview-panel
+  "Forecast page statistics panel"
+  [buckets]
+  (overview-panel
+   "Time buckets"
+   [{:label "Overdue" :value (count (:overdue buckets))}
+    {:label "Today" :value (count (:today buckets))}
+    {:label "Upcoming" :value (count (:upcoming buckets))}]))
+
