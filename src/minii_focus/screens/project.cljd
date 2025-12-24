@@ -1,0 +1,827 @@
+(ns minii-focus.screens.project
+  "Project page
+  
+  Positioning: Project = A commitment that requires multiple steps to complete and needs periodic confirmation of 'whether it's still worth doing'
+  
+  Page structure:
+  - Left: Project list (very minimal)
+  - Right: Project details (status card, Next Action, task list, Review/Notes)"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mongol]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.project :as project-db]
+   [minii-focus.core.db.project-template :as project-template]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.toast :as toast]))
+
+;; ============================================
+;; Helper Functions
+;; ============================================
+
+(defn format-review-date
+  "Format review date
+  
+  Parameters:
+  - review-at: int? (milliseconds timestamp)
+  
+  Returns: string"
+  [review-at]
+  (if review-at
+    (let [now-ms (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+          days-ago (int (/ (- now-ms review-at) (* 1000 60 60 24)))]
+      (if (> days-ago 0)
+        (str days-ago " days ago")
+        "Today"))
+    "Not set"))
+
+(defn is-review-overdue?
+  "Check if review is overdue
+  
+  Parameters:
+  - review-at: int? (milliseconds timestamp)
+  
+  Returns: boolean"
+  [review-at]
+  (and review-at (> (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) review-at)))
+
+(defn get-health-color
+  "Get color based on health status
+  
+  Parameters:
+  - health: :ok | :no-next-action | :review-overdue | :on-hold | :archived
+  
+  Returns: Color"
+  [health]
+  (case health
+    :ok (tokens/color :text-main)
+    :no-next-action m/Colors.red
+    :review-overdue m/Colors.orange
+    :on-hold (tokens/color :text-weak)
+    :archived (tokens/color :text-weak)
+    (tokens/color :text-main)))
+
+(defn get-health-icon
+  "Get icon based on health status
+  
+  Parameters:
+  - health: :ok | :no-next-action | :review-overdue | :on-hold | :archived
+  
+  Returns: IconData"
+  [health]
+  (case health
+    :ok m/Icons.check_circle
+    :no-next-action m/Icons.warning
+    :review-overdue m/Icons.schedule
+    :on-hold m/Icons.pause_circle
+    :archived m/Icons.archive
+    m/Icons.help))
+
+;; ============================================
+;; Project List Item Component
+;; ============================================
+
+(defn project-list-item
+  "Project list item component
+  
+  Only displays:
+  - Project name
+  - next action marker
+  - overdue marker
+  - on-hold marker
+  - review due marker"
+  [{:keys [project next-action health on-selected]}]
+  (let [status (.-status project)
+        review-at (.-reviewAt project)
+        has-next-action (some? next-action)
+        is-overdue (is-review-overdue? review-at)
+        is-on-hold (= status "on-hold")]
+    (m/InkWell
+     .onTap (fn [] (when on-selected (on-selected project)))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Row
+                    .mainAxisSize m/MainAxisSize.min
+                    .children
+                    [(m/Expanded
+                      .child (comp/mongol-text-block
+                             {:text (.-title project)
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :m)
+                                     .color (get-health-color health))}))
+                     (m/Row
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      (vec (filter some?
+                                   [(when (and (not is-on-hold) (not has-next-action))
+                                     (m/Icon
+                                      m/Icons.warning
+                                      .size 16
+                                      .color m/Colors.red))
+                                    (when is-overdue
+                                      (m/Icon
+                                       m/Icons.schedule
+                                       .size 16
+                                       .color m/Colors.orange))
+                                    (when is-on-hold
+                                      (m/Icon
+                                       m/Icons.pause_circle
+                                       .size 16
+                                       .color (tokens/color :text-weak)))])))])))))
+
+;; ============================================
+;; Project Detail Components
+;; ============================================
+
+(defn project-status-card
+  "Project status card component
+  
+  Displays:
+  - Project name
+  - Status: Active / On Hold / Completed / Archived
+  - Last Review: X days ago
+  - Next Review: Today ⚠️
+  - Archive/Restore button
+  - Save as template button"
+  [{:keys [project health on-archive on-restore on-save-template]}]
+  (let [status (.-status project)
+        review-at (.-reviewAt project)
+        status-text (case status
+                      "active" "In Progress"
+                      "on-hold" "Paused"
+                      "completed" "Completed"
+                      "archived" "Archived"
+                      "In Progress")
+        review-text (format-review-date review-at)
+        is-overdue (is-review-overdue? review-at)
+        is-archived (= status "archived")]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :l))
+             .child (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(comp/mongol-text-block
+                      {:text (.-title project)
+                       :style (m/TextStyle
+                              .fontSize (tokens/font-size :l)
+                              .fontWeight m/FontWeight.bold)})
+                     (m/SizedBox .height (tokens/space :m))
+                     (m/Row
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [(m/Icon
+                        (get-health-icon health)
+                        .size 20
+                        .color (get-health-color health))
+                       (m/SizedBox .width (tokens/space :s))
+                       (comp/mongol-text-block
+                        {:text (str "Status: " status-text)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .color (get-health-color health))})])
+                     (m/SizedBox .height (tokens/space :s))
+                     (m/Row
+                      .mainAxisSize m/MainAxisSize.min
+                      .children
+                      [                       (comp/mongol-text-block
+                        {:text (str "Last Review: " review-text)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .color (tokens/color :text-weak))})
+                       (when is-overdue
+                         (m/Row
+                          .mainAxisSize m/MainAxisSize.min
+                          .children
+                          [(m/SizedBox .width (tokens/space :s))
+                           (m/Icon
+                            m/Icons.warning
+                            .size 16
+                            .color m/Colors.orange)]))])
+                     (m/SizedBox .height (tokens/space :m))
+                     ;; Action buttons
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+                      .children
+                      [(if is-archived
+                         (m/ElevatedButton
+                          .onPressed (when on-restore (fn [] (on-restore project)))
+                          .style (m/ButtonStyle
+                                 .backgroundColor (m/MaterialStateProperty.all m/Colors.green))
+                          .child (comp/mongol-text-block
+                                 {:text "Restore Project"
+                                  :style (m/TextStyle
+                                         .fontSize (tokens/font-size :s)
+                                         .color m/Colors.white)}))
+                         (m/OutlinedButton
+                          .onPressed (when on-archive (fn [] (on-archive project)))
+                          .child (comp/mongol-text-block
+                                 {:text "Archive Project"
+                                  :style (m/TextStyle
+                                         .fontSize (tokens/font-size :s)
+                                         .color (tokens/color :text-main))})))
+                       (m/OutlinedButton
+                        .onPressed (when on-save-template (fn [] (on-save-template project)))
+                        .child (comp/mongol-text-block
+                               {:text "Save as Template"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :s)
+                                       .color (tokens/color :text-main))}))])])))))
+
+(defn project-progress-card
+  "Project progress visualization component
+  
+  Displays:
+  - Progress bar (completed tasks / total tasks)
+  - Percentage"
+  [{:keys [tasks]}]
+  (let [total-count (count tasks)
+        completed-count (count (filter #(.-completed %) tasks))
+        progress (if (zero? total-count)
+                  0.0
+                  (/ completed-count total-count))
+        percentage (int (* progress 100))]
+    (m/Card
+     .margin (m/EdgeInsets.symmetric
+             :horizontal (tokens/space :m)
+             :vertical (tokens/space :s))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(comp/mongol-text-block
+                      {:text "Project Progress"
+                       :style (m/TextStyle
+                              .fontSize (tokens/font-size :m)
+                              .fontWeight m/FontWeight.bold)})
+                     (m/SizedBox .height (tokens/space :s))
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children
+                      [(comp/mongol-text-block
+                        {:text (str completed-count " / " total-count " tasks")
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .color (tokens/color :text-weak))})
+                       (comp/mongol-text-block
+                        {:text (str percentage "%")
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .fontWeight m/FontWeight.w500
+                                .color (tokens/color :accent))})])
+                     (m/SizedBox .height (tokens/space :xs))
+                     (m/LinearProgressIndicator
+                      .value progress
+                      .backgroundColor (tokens/color :bg-focus)
+                      .valueColor (m/AlwaysStoppedAnimation (tokens/color :accent)))])))))
+
+(defn project-stats-card
+  "Project task statistics component
+  
+  Displays:
+  - Total tasks
+  - Completed
+  - In progress
+  - Waiting"
+  [{:keys [tasks]}]
+  (let [total-count (count tasks)
+        completed-count (count (filter #(.-completed %) tasks))
+        active-count (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) tasks))
+        waiting-count (count (filter #(and (not (.-completed %)) (some? (.-deferAt %))) tasks))]
+    (m/Card
+     .margin (m/EdgeInsets.symmetric
+             :horizontal (tokens/space :m)
+             :vertical (tokens/space :s))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(comp/mongol-text-block
+                      {:text "Task Statistics"
+                       :style (m/TextStyle
+                              .fontSize (tokens/font-size :m)
+                              .fontWeight m/FontWeight.bold)})
+                     (m/SizedBox .height (tokens/space :s))
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children
+                      [(comp/mongol-text-block
+                        {:text "Total"
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .color (tokens/color :text-weak))})
+                       (comp/mongol-text-block
+                        {:text (str total-count)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .fontWeight m/FontWeight.w500)})])
+                     (m/SizedBox .height (tokens/space :xs))
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children
+                      [(m/Row
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/Icon
+                          m/Icons.check_circle
+                          .size 16
+                          .color m/Colors.green)
+                         (m/SizedBox .width (tokens/space :xs))
+                         (comp/mongol-text-block
+                          {:text "Completed"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :s)
+                                  .color (tokens/color :text-weak))})])
+                       (comp/mongol-text-block
+                        {:text (str completed-count)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .fontWeight m/FontWeight.w500
+                                .color m/Colors.green)})])
+                     (m/SizedBox .height (tokens/space :xs))
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children
+                      [(m/Row
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/Icon
+                          m/Icons.play_circle
+                          .size 16
+                          .color m/Colors.blue)
+                         (m/SizedBox .width (tokens/space :xs))
+                         (comp/mongol-text-block
+                          {:text "In Progress"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :s)
+                                  .color (tokens/color :text-weak))})])
+                       (comp/mongol-text-block
+                        {:text (str active-count)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .fontWeight m/FontWeight.w500
+                                .color m/Colors.blue)})])
+                     (m/SizedBox .height (tokens/space :xs))
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children
+                      [(m/Row
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/Icon
+                          m/Icons.schedule
+                          .size 16
+                          .color m/Colors.orange)
+                         (m/SizedBox .width (tokens/space :xs))
+                         (comp/mongol-text-block
+                          {:text "Waiting"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :s)
+                                  .color (tokens/color :text-weak))})])
+                       (comp/mongol-text-block
+                        {:text (str waiting-count)
+                         :style (m/TextStyle
+                                .fontSize (tokens/font-size :s)
+                                .fontWeight m/FontWeight.w500
+                                .color m/Colors.orange)})])])))))
+
+(defn next-action-block
+  "Next Action block component
+  
+  Only displays 1 Next Action, shows warning if none exists"
+  [{:keys [next-action on-action-tap]}]
+  (m/Card
+   .margin (m/EdgeInsets.symmetric
+           :horizontal (tokens/space :m)
+           :vertical (tokens/space :s))
+   .child (m/Padding
+           .padding (m/EdgeInsets.all (tokens/space :m))
+           .child (if next-action
+                   (m/InkWell
+                    .onTap (when on-action-tap
+                            (fn [] (on-action-tap next-action)))
+                    .child (m/Row
+                           .mainAxisSize m/MainAxisSize.min
+                           .children
+                           [(m/Icon
+                             m/Icons.arrow_forward
+                             .size 20
+                             .color (tokens/color :accent))
+                            (m/SizedBox .width (tokens/space :s))
+                            (m/Expanded
+                             .child (comp/mongol-text-block
+                                    {:text (.-title next-action)
+                                     :style (m/TextStyle
+                                            .fontSize (tokens/font-size :m)
+                                            .color (tokens/color :text-main))}))]))
+                   (m/Row
+                    .mainAxisSize m/MainAxisSize.min
+                    .children
+                    [(m/Icon
+                      m/Icons.warning
+                      .size 20
+                      .color m/Colors.red)
+                     (m/SizedBox .width (tokens/space :s))
+                     (comp/mongol-text-block
+                      {:text "⚠ This project has no executable next step"
+                       :style (m/TextStyle
+                               .fontSize (tokens/font-size :s)
+                               .color m/Colors.red)})])))))
+
+(defn project-tasks-section
+  "Project task list block (collapsible)
+  
+  Collapsed by default, grouped by status when expanded"
+  [{:keys [tasks expanded? on-toggle]}]
+  (let [active-tasks (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) tasks)
+        waiting-tasks (filter #(and (not (.-completed %)) (some? (.-deferAt %))) tasks)
+        completed-tasks (filter #(.-completed %) tasks)
+        children-list (vec (concat
+                           (when (seq active-tasks)
+                             [(comp/mongol-text-block
+                               {:text "In Progress"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :s)
+                                       .color (tokens/color :text-weak))})
+                              (m/SizedBox .height (tokens/space :xs))])
+                           (map (fn [task]
+                                  (m/Padding
+                                   .padding (m/EdgeInsets.symmetric
+                                            :vertical (tokens/space :xs))
+                                   .child (comp/mongol-text-block
+                                          {:text (.-title task)
+                                           :style (m/TextStyle
+                                                  .fontSize (tokens/font-size :m))})))
+                                active-tasks)
+                           (when (seq waiting-tasks)
+                             [(m/SizedBox .height (tokens/space :m))
+                              (comp/mongol-text-block
+                               {:text "Waiting"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :s)
+                                       .color (tokens/color :text-weak))})
+                              (m/SizedBox .height (tokens/space :xs))])
+                           (map (fn [task]
+                                  (m/Padding
+                                   .padding (m/EdgeInsets.symmetric
+                                            :vertical (tokens/space :xs))
+                                   .child (comp/mongol-text-block
+                                          {:text (.-title task)
+                                           :style (m/TextStyle
+                                                  .fontSize (tokens/font-size :m)
+                                                  .color (tokens/color :text-weak))})))
+                                waiting-tasks)
+                           (when (seq completed-tasks)
+                             [(m/SizedBox .height (tokens/space :m))
+                              (comp/mongol-text-block
+                               {:text "Completed"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :s)
+                                       .color (tokens/color :text-weak))})
+                              (m/SizedBox .height (tokens/space :xs))])
+                           (map (fn [task]
+                                  (m/Padding
+                                   .padding (m/EdgeInsets.symmetric
+                                            :vertical (tokens/space :xs))
+                                   .child (comp/mongol-text-block
+                                          {:text (.-title task)
+                                           :style (m/TextStyle
+                                                  .fontSize (tokens/font-size :m)
+                                                  .color (tokens/color :text-weak)
+                                                  .decoration m/TextDecoration.lineThrough)})))
+                                completed-tasks)))
+        expanded-content (when expanded?
+                          (m/Padding
+                           .padding (m/EdgeInsets.symmetric
+                                    :horizontal (tokens/space :m)
+                                    :vertical (tokens/space :s))
+                           .child (m/Column
+                                  .crossAxisAlignment m/CrossAxisAlignment.start
+                                  .children children-list)))
+        column-children (vec (filter some?
+                                    [(m/InkWell
+                                      .onTap (fn [] (when on-toggle (on-toggle)))
+                                      .child (m/Padding
+                                             .padding (m/EdgeInsets.all (tokens/space :m))
+                                             .child (m/Row
+                                                    .mainAxisSize m/MainAxisSize.min
+                                                    .children
+                                                    [(comp/mongol-text-block
+                                                      {:text "All Tasks"
+                                                       :style (m/TextStyle
+                                                               .fontSize (tokens/font-size :m)
+                                                               .fontWeight m/FontWeight.bold)})
+                                                     (m/Spacer)
+                                                     (m/Icon
+                                                      (if expanded?
+                                                        m/Icons.expand_less
+                                                        m/Icons.expand_more)
+                                                      .size 20)])))
+                                     expanded-content]))]
+    (m/Card
+     .margin (m/EdgeInsets.symmetric
+             .horizontal (tokens/space :m)
+             .vertical (tokens/space :s))
+     .child (m/Column
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children column-children))))
+
+(defn project-notes-section
+  "Project Review / Notes block
+  
+  Displays:
+  - Project purpose
+  - Success criteria
+  - Recent decision records
+  - Review notes"
+  [{:keys [project on-review]}]
+  (let [notes (.-notes project)
+        review-at (.-reviewAt project)
+        is-overdue (is-review-overdue? review-at)]
+    (m/Card
+     .margin (m/EdgeInsets.symmetric
+              .horizontal (tokens/space :m)
+              .vertical (tokens/space :s))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     [(m/Row
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(comp/mongol-text-block
+                         {:text "Review / Notes"
+                          :style (m/TextStyle
+                                  .fontSize (tokens/font-size :m)
+                                  .fontWeight m/FontWeight.bold)})
+                        (m/ElevatedButton
+                         .onPressed (when on-review (fn [] (on-review project)))
+                         .child (comp/mongol-text-block
+                                 {:text (if is-overdue "Review Now" "Set Review")
+                                  :style (m/TextStyle
+                                          .fontSize (tokens/font-size :s)
+                                          .color m/Colors.white)}))])
+                      (m/SizedBox .height (tokens/space :m))
+                      (if notes
+                        (comp/mongol-text-block
+                         {:text notes
+                          :style (m/TextStyle
+                                  .fontSize (tokens/font-size :m)
+                                  .color (tokens/color :text-main))})
+                        (comp/mongol-text-block
+                         {:text "No notes"
+                          :style (m/TextStyle
+                                  .fontSize (tokens/font-size :s)
+                                  .color (tokens/color :text-weak))}))])))))
+
+;; ============================================
+;; Main Screen
+;; ============================================
+
+(defn project-screen [_params]
+  (let [projects (atom [])
+        selected-project (atom nil)
+        next-actions (atom {})  ; project-id -> next-action
+        project-tasks (atom {})  ; project-id -> tasks
+        tasks-expanded (atom false)
+        loading (atom false)
+        dao (app-state/get-dao)]
+    
+    ;; Load projects on mount
+    (reset! loading true)
+    (-> (project-db/watch-all-projects dao)
+        (.then (fn [result]
+                (reset! projects (or result []))
+                (reset! loading false)
+                ;; Load next actions for all projects
+                (doseq [project @projects]
+                  (-> (project-db/get-next-action dao (.-id project))
+                      (.then (fn [next-action]
+                              (swap! next-actions assoc (.-id project) next-action)))
+                      (.catchError (fn [error]
+                                   (dart-core/print (str "Error loading next action: " error))))))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading projects: " error))
+                     (reset! loading false))))
+    
+    (f/widget
+     :context ctx
+     :bind {:projects projects
+            :selected-project selected-project
+            :next-actions next-actions
+            :project-tasks project-tasks
+            :tasks-expanded tasks-expanded
+            :loading loading}
+     
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                      {:text "Project"}))
+      .body (comp/mongol-column-layout
+             {:main-width 0.3  ; Left list takes 30%
+              :side-width 0.7  ; Right details take 70%
+              :main-column
+              ;; Left: Project list
+              (cond
+                @loading
+                (m/Center
+                 .child (m/CircularProgressIndicator))
+                
+                (empty? @projects)
+                (m/Center
+                 .child (comp/mongol-text-block
+                        {:text "No projects"
+                         :style (m/TextStyle
+                                .color (tokens/color :text-weak))}))
+                
+                :else
+                (m/ListView
+                 .children
+                 (vec (map (fn [project]
+                             (let [next-action (get @next-actions (.-id project))
+                                   health (project-db/project-health project next-action)]
+                               (project-list-item
+                                {:project project
+                                 :next-action next-action
+                                 :health health
+                                 :on-selected (fn [p]
+                                              (reset! selected-project p)
+                                              ;; Load tasks for selected project
+                                              (-> (project-db/get-project-tasks dao (.-id p))
+                                                  (.then (fn [tasks]
+                                                          (swap! project-tasks assoc (.-id p) tasks)))
+                                                  (.catchError (fn [error]
+                                                               (dart-core/print (str "Error loading tasks: " error))))))})))
+                           @projects))))
+              
+              :side-column
+              ;; Right: Project details
+              (if @selected-project
+                (let [project @selected-project
+                      next-action (get @next-actions (.-id project))
+                      health (project-db/project-health project next-action)
+                      tasks (get @project-tasks (.-id project) [])]
+                  (m/ListView
+                   .children
+                   [(project-status-card
+                     {:project project
+                      :health health
+                      :on-save-template (fn [p]
+                                        ;; Show save template dialog
+                                        (let [text-controller (m/TextEditingController.)]
+                                          (-> (m/showDialog
+                                               .context ctx
+                                               .builder (fn [dialog-ctx]
+                                                         (m/AlertDialog
+                                                          .title (comp/mongol-text-block
+                                                                  {:text "Save as Template"
+                                                                   :style (m/TextStyle
+                                                                          .fontSize (tokens/font-size :l)
+                                                                          .fontWeight m/FontWeight.bold)})
+                                                          .content (m/Column
+                                                                   .mainAxisSize m/MainAxisSize.min
+                                                                   .children
+                                                                   [(comp/mongol-text-block
+                                                                     {:text "Template Name:"
+                                                                      :style (m/TextStyle
+                                                                             .fontSize (tokens/font-size :m))})
+                                                                    (m/SizedBox .height (tokens/space :s))
+                                                                    (mongol/MongolTextField
+                                                                     .controller text-controller
+                                                                     .decoration (m/InputDecoration
+                                                                                 .hintText "Enter template name")
+                                                                     .style (m/TextStyle
+                                                                            .fontSize (tokens/font-size :m)
+                                                                            .fontFamily "OnonSoninSans"))])
+                                                          .actions
+                                                          [(m/TextButton
+                                                            .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                            .child (m/Text "Cancel"))
+                                                           (m/TextButton
+                                                            .onPressed (fn []
+                                                                       (let [template-name (.text text-controller)]
+                                                                         (m/Navigator.pop dialog-ctx)
+                                                                         (when (not (empty? template-name))
+                                                                           (-> (project-template/save-project-as-template! dao (.-id p) template-name)
+                                                                               (.then (fn [_template-id]
+                                                                                      (toast/show-success-toast ctx "Template saved")))
+                                                                               (.catchError (fn [error]
+                                                                                            (dart-core/print (str "Error saving template: " error))
+                                                                                            (toast/show-error-toast ctx "Failed to save template")))))))
+                                                            .child (m/Text "Save"))])))
+                                              (.then (fn [_] nil))
+                                              (.catchError (fn [error]
+                                                           (dart-core/print (str "Error showing dialog: " error)))))))
+                      :on-archive (fn [p]
+                                  ;; Archive project
+                                  (-> (dispatch/dispatch-event! ctx
+                                                               {:type :project/archive
+                                                                :payload {:project-id (.-id p)}
+                                                                :source :ui})
+                                      (.then (fn [_]
+                                              (toast/show-success-toast ctx "Project archived")
+                                              ;; Reload project list
+                                              (-> (project-db/watch-all-projects dao)
+                                                  (.then (fn [result]
+                                                          (reset! projects (or result []))
+                                                          ;; If currently selected project is archived, deselect it
+                                                          (when (= (.-id @selected-project) (.-id p))
+                                                            (reset! selected-project nil))))
+                                                  (.catchError (fn [error]
+                                                               (dart-core/print (str "Error reloading projects: " error))))))
+                                      (.catchError (fn [error]
+                                                   (dart-core/print (str "Error archiving project: " error))
+                                                   (toast/show-error-toast ctx "Failed to archive")))))
+                      :on-restore (fn [p]
+                                  ;; Restore project
+                                  (-> (dispatch/dispatch-event! ctx
+                                                               {:type :project/restore
+                                                                :payload {:project-id (.-id p)}
+                                                                :source :ui})
+                                      (.then (fn [_]
+                                              (toast/show-success-toast ctx "Project restored")
+                                              ;; Reload project list
+                                              (-> (project-db/watch-all-projects dao)
+                                                  (.then (fn [result]
+                                                          (reset! projects (or result []))
+                                                          ;; Reload next actions
+                                                          (doseq [proj @projects]
+                                                            (-> (project-db/get-next-action dao (.-id proj))
+                                                                (.then (fn [next-action]
+                                                                        (swap! next-actions assoc (.-id proj) next-action)))
+                                                                (.catchError (fn [error]
+                                                                             (dart-core/print (str "Error loading next action: " error))))))))
+                                                  (.catchError (fn [error]
+                                                               (dart-core/print (str "Error reloading projects: " error))))))
+                                      (.catchError (fn [error]
+                                                   (dart-core/print (str "Error restoring project: " error))
+                                                   (toast/show-error-toast ctx "Failed to restore")))))))})
+                    (project-progress-card
+                     {:tasks tasks})
+                    (project-stats-card
+                     {:tasks tasks})
+                    (next-action-block
+                     {:next-action next-action
+                      :on-action-tap (fn [action]
+                                      ;; TODO: Open task details or execute task
+                                      (dart-core/print (str "Tap next action: " (.-title action))))})
+                    (project-tasks-section
+                     {:tasks tasks
+                      :expanded? @tasks-expanded
+                      :on-toggle (fn []
+                                  (swap! tasks-expanded not))})
+                    (project-notes-section
+                     {:project project
+                      :on-review (fn [project]
+                                  ;; Show Review dialog
+                                  (let [now (dart-core/DateTime.now)
+                                        initial-date (if (.-reviewAt project)
+                                                      (let [review-ts (.-reviewAt project)
+                                                            review-date (dart-core/DateTime.fromMillisecondsSinceEpoch review-ts)]
+                                                        review-date)
+                                                      now)]
+                                    (-> (m/showDatePicker
+                                         .context ctx
+                                         .initialDate initial-date
+                                         .firstDate now
+                                         .lastDate (dart-core/DateTime (+ (.year now) 1)
+                                                                     12
+                                                                     31))
+                                        (.then (fn [selected-date]
+                                                (when selected-date
+                                                  (let [review-at-ms (.millisecondsSinceEpoch selected-date)]
+                                                    (-> (project-db/update-review-at! dao (.-id project) review-at-ms)
+                                                        (.then (fn [_]
+                                                                (toast/show-success-toast ctx "Review date set")
+                                                                ;; Reload project list to update status
+                                                                (-> (project-db/watch-all-projects dao)
+                                                                    (.then (fn [result]
+                                                                            (reset! projects (or result []))
+                                                                            ;; Reload next actions
+                                                                            (doseq [p @projects]
+                                                                              (-> (project-db/get-next-action dao (.-id p))
+                                                                                  (.then (fn [next-action]
+                                                                                          (swap! next-actions assoc (.-id p) next-action)))
+                                                                                  (.catchError (fn [error]
+                                                                                               (dart-core/print (str "Error loading next action: " error)))))))))
+                                                                    (.catchError (fn [error]
+                                                                                 (dart-core/print (str "Error reloading projects: " error))))))
+                                                        (.catchError (fn [error]
+                                                                     (dart-core/print (str "Error updating review date: " error))
+                                                                     (toast/show-error-toast ctx "Failed to set review date"))))))))
+                                        (.catchError (fn [error]
+                                                     (dart-core/print (str "Error showing date picker: " error)))))))})
+                (m/Center
+                 .child (comp/mongol-text-block
+                        {:text "Select a project to view details"
+                         :style (m/TextStyle
+                                .color (tokens/color :text-weak))}))])))})))))
+

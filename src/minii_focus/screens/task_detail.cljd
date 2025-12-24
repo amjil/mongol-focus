@@ -1,0 +1,344 @@
+(ns minii-focus.screens.task-detail
+  "Task Detail page
+  
+  Positioning: Entity page, not a main flow page
+  - Edit Task (title, Project, Perspective)
+  - View Task history (from Timeline)
+  - Not in main navigation entry, drill-in from other pages"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mongol]
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.timeline :as timeline-db]
+   [minii-focus.core.db.project :as project-db]
+   [minii-focus.core.db.perspective :as perspective-db]
+   [minii-focus.core.db.tx :as tx]
+   [minii-focus.core.utils.toast :as toast]
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/tables/tasks.dart" :as tasks]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn parse-json
+  "Parse JSON string"
+  [json-str]
+  (if json-str
+    (try
+      (json/jsonDecode json-str)
+      (catch :default _
+        []))
+    []))
+
+(defn format-timestamp
+  "Format timestamp to readable date time"
+  [timestamp]
+  (let [date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (* timestamp 1000))]
+    (str (.year date-time) "-" (.month date-time) "-" (.day date-time) " "
+         (.hour date-time) ":" (.minute date-time))))
+
+;; ============================================================================
+;; Timeline Event Item Component
+;; ============================================================================
+
+(defn timeline-event-item
+  "Timeline event item component"
+  [{:keys [event]}]
+  (m/Card
+   .margin (m/EdgeInsets.symmetric
+           :vertical (tokens/space :xs)
+           :horizontal (tokens/space :m))
+   .child (m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :m))
+          .child (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(comp/mongol-text-block
+                   {:text (.-title event)
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :m))})
+                  (m/SizedBox .height (tokens/space :xs))
+                  (comp/mongol-text-block
+                   {:text (format-timestamp (.-timestamp event))
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :s)
+                           .color (tokens/color :text-weak))})
+                  (when (.-duration event)
+                    (comp/mongol-text-block
+                     {:text (str "Duration: " (.-duration event) " minutes")
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :s)
+                             .color (tokens/color :text-weak))}))]))))
+
+;; ============================================================================
+;; Main Screen
+;; ============================================================================
+
+(defn task-detail-screen
+  "Task Detail page
+  
+  Parameters:
+  - params: map (contains :id key, representing task-id)"
+  [params]
+  (let [task-id (get params :id)
+        task (atom nil)
+        timeline-events (atom [])
+        projects (atom [])
+        perspectives (atom [])
+        loading (atom false)
+        editing (atom false)
+        title-controller (atom nil)
+        selected-project-id (atom nil)
+        selected-perspective-ids (atom [])
+        dao (app-state/get-dao)
+        db (app-state/get-db)]
+    ;; Load task
+    (reset! loading true)
+    (-> (task-db/get-by-id dao task-id)
+        (.then (fn [task-obj]
+                (if task-obj
+                  (do
+                    (reset! task task-obj)
+                    (reset! title-controller (m/TextEditingController. (.-title task-obj)))
+                    (reset! selected-project-id (.-projectId task-obj))
+                    (let [perspectives-json (.-perspectives task-obj)]
+                      (reset! selected-perspective-ids (parse-json perspectives-json)))
+                    ;; Load timeline events for this task
+                    (let [start-ts 0  ; From the earliest
+                          end-ts (int (/ (System/currentTimeMillis) 1000))]
+                      (-> (timeline-db/query-range dao start-ts end-ts)
+                          (.then (fn [events]
+                                  (reset! timeline-events
+                                         (filter (fn [e]
+                                                 (and (= (.-entityType e) "task")
+                                                      (= (.-entityId e) task-id)))
+                                                events))))
+                          (.catchError (fn [error]
+                                       (dart-core/print (str "Error loading timeline events: " error))))))
+                    (reset! loading false))
+                  (reset! loading false))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading task: " error))
+                     (reset! loading false))))
+    
+    ;; Load projects and perspectives
+    (-> (project-db/watch-all-projects dao)
+        (.then (fn [result]
+                (reset! projects (or result []))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading projects: " error)))))
+    
+    (-> (perspective-db/watch-all dao)
+        (.then (fn [stream]
+                (-> stream
+                    (.first)
+                    (.then (fn [result]
+                            (reset! perspectives (or result []))))
+                    (.catchError (fn [error]
+                                 (dart-core/print (str "Error loading perspectives: " error)))))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error watching perspectives: " error)))))
+    
+    (f/widget
+     :context ctx
+     :bind {:task task
+            :timeline-events timeline-events
+            :projects projects
+            :perspectives perspectives
+            :loading loading
+            :editing editing
+            :title-controller title-controller
+            :selected-project-id selected-project-id
+            :selected-perspective-ids selected-perspective-ids}
+     
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                      {:text "Task Details"})
+               .actions
+               [(m/IconButton
+                 .icon (m/Icon (if @editing m/Icons.check m/Icons.edit))
+                 .onPressed (fn []
+                              (if @editing
+                                ;; Save changes
+                                (let [new-title (.-text @title-controller)
+                                      new-project-id @selected-project-id
+                                      new-perspectives-json (json/jsonEncode @selected-perspective-ids)
+                                      updates (bridge/dart-new
+                                               app-db/TasksCompanion
+                                               {:title new-title
+                                                :projectId new-project-id
+                                                :perspectives new-perspectives-json})]
+                                  (-> (tx/with-tx db
+                                        (fn []
+                                          (task-db/update-task! dao task-id updates)))
+                                      (.then (fn [_]
+                                               (reset! editing false)
+                                               (toast/show-success-toast ctx "Saved")
+                                               ;; Reload task
+                                               (-> (task-db/get-by-id dao task-id)
+                                                   (.then (fn [task-obj]
+                                                            (when task-obj
+                                                              (reset! task task-obj)
+                                                              (reset! title-controller (m/TextEditingController. (.-title task-obj)))
+                                                              (reset! selected-project-id (.-projectId task-obj))
+                                                              (let [perspectives-json (.-perspectives task-obj)]
+                                                                (reset! selected-perspective-ids (parse-json perspectives-json))))))
+                                                   (.catchError (fn [error]
+                                                                  (dart-core/print (str "Error reloading task: " error)))))))
+                                      (.catchError (fn [error]
+                                                     (dart-core/print (str "Error updating task: " error))
+                                                     (toast/show-error-toast ctx "Failed to save"))))
+                                  nil)
+                                ;; Enter edit mode
+                                (reset! editing true))
+                              nil))])
+      .body (cond
+             @loading
+             (m/Center
+              .child (m/CircularProgressIndicator))
+             
+             (nil? @task)
+             (m/Center
+              .child (comp/mongol-text-block
+                     {:text "Task does not exist"
+                      :style (m/TextStyle
+                             .color (tokens/color :text-weak))}))
+             
+             :else
+             (comp/mongol-column-layout
+              {:main-column
+               (m/ListView
+                .children
+                [
+                 ;; 1️⃣ Task title (editable)
+                 (m/Container
+                  .padding (m/EdgeInsets.all (tokens/space :m))
+                  .child (if @editing
+                          (mongol/MongolTextField
+                           .controller @title-controller
+                           .style (m/TextStyle
+                                  .fontSize (tokens/font-size :l)
+                                  .fontFamily "OnonSoninSans")
+                           .decoration (m/InputDecoration
+                                       .labelText "Task Title"
+                                       .border (m/OutlineInputBorder)))
+                          (comp/mongol-text-block
+                           {:text (.-title @task)
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :l)
+                                   .fontWeight m/FontWeight.bold)})))
+                 
+                 ;; 2️⃣ Project selection (editable)
+                 (m/Container
+                  .padding (m/EdgeInsets.all (tokens/space :m))
+                  .child (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(comp/mongol-text-block
+                           {:text "Project"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :m)
+                                   .fontWeight m/FontWeight.bold)})
+                          (m/SizedBox .height (tokens/space :s))
+                          (if @editing
+                            (m/DropdownButton
+                             .value @selected-project-id
+                             .items (vec (concat
+                                         [(m/DropdownMenuItem
+                                          .value nil
+                                          .child (comp/mongol-text-block
+                                                 {:text "No Project"}))]
+                                         (map (fn [project]
+                                               (m/DropdownMenuItem
+                                                .value (.-id project)
+                                                .child (comp/mongol-text-block
+                                                       {:text (.-title project)})))
+                                             @projects)))
+                             .onChanged (fn [value]
+                                        (reset! selected-project-id value)))
+                            (comp/mongol-text-block
+                             {:text (if @selected-project-id
+                                     (let [project (first (filter #(= (.-id %) @selected-project-id) @projects))]
+                                       (if project
+                                         (.-title project)
+                                         "Unknown Project"))
+                                     "No Project")
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :m)
+                                     .color (tokens/color :text-main))}))]))
+                 
+                 ;; 3️⃣ Perspective selection (editable)
+                 (m/Container
+                  .padding (m/EdgeInsets.all (tokens/space :m))
+                  .child (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(comp/mongol-text-block
+                           {:text "Perspective"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :m)
+                                   .fontWeight m/FontWeight.bold)})
+                          (m/SizedBox .height (tokens/space :s))
+                          (if @editing
+                            (m/Wrap
+                             .children
+                             (vec (map (fn [perspective]
+                                       (m/FilterChip
+                                        .label (comp/mongol-text-block
+                                               {:text (.-title perspective)})
+                                        .selected (some #(= % (.-id perspective)) @selected-perspective-ids)
+                                        .onSelected (fn [selected]
+                                                    (if selected
+                                                      (swap! selected-perspective-ids conj (.-id perspective))
+                                                      (swap! selected-perspective-ids #(remove (fn [id] (= id (.-id perspective))) %))))))
+                                     @perspectives)))
+                            (if (empty? @selected-perspective-ids)
+                              (comp/mongol-text-block
+                               {:text "No Perspective"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :m)
+                                       .color (tokens/color :text-weak))})
+                              (m/Wrap
+                               .children
+                               (vec (map (fn [perspective-id]
+                                         (let [perspective (first (filter #(= (.-id %) perspective-id) @perspectives))]
+                                           (when perspective
+                                             (m/Chip
+                                              .label (comp/mongol-text-block
+                                                     {:text (.-title perspective)})))))
+                                       @selected-perspective-ids)))))]))
+                 
+                 ;; 4️⃣ Timeline history
+                 (m/Container
+                  .padding (m/EdgeInsets.all (tokens/space :m))
+                  .child (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(comp/mongol-text-block
+                           {:text "History"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :m)
+                                   .fontWeight m/FontWeight.bold)})
+                          (m/SizedBox .height (tokens/space :m))
+                          (if (empty? @timeline-events)
+                            (comp/mongol-text-block
+                             {:text "No history records"
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :s)
+                                     .color (tokens/color :text-weak))})
+                            (m/Column
+                             .children
+                             (vec (map (fn [event]
+                                       (timeline-event-item
+                                        {:event event}))
+                                     @timeline-events))))]))])}))))))
+

@@ -1,0 +1,35 @@
+(ns minii-focus.screens.registry
+  (:require
+    [minii-focus.screens.inbox :as inbox]
+    [minii-focus.screens.forecast :as forecast]
+    [minii-focus.screens.focus :as focus]
+    [minii-focus.screens.timeline :as timeline]
+    [minii-focus.screens.review :as review]
+    [minii-focus.screens.perspective :as perspective]
+
+    [minii-focus.screens.today :as today]
+    [minii-focus.screens.project :as project]
+
+    [minii-focus.screens.task-detail :as task-detail]
+    [minii-focus.screens.forecast-detail :as forecast-detail]
+    [minii-focus.screens.perspective-detail :as perspective-detail]
+
+    [minii-focus.screens.settings :as settings]))
+
+(def page-map
+  {:inbox              inbox/inbox-screen
+   :forecast           forecast/forecast-screen
+   :focus              focus/focus-screen
+   :timeline           timeline/timeline-screen
+   :review             review/review-screen
+   :perspective        perspective/perspective-screen
+
+   :today              today/today-screen
+   :project            project/project-screen
+
+   :task-detail        task-detail/task-detail-screen
+   :forecast-detail    forecast-detail/forecast-detail-screen
+   :perspective-detail perspective-detail/perspective-detail-screen
+
+   :settings           settings/settings-screen})
+

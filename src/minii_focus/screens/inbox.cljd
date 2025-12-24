@@ -1,0 +1,1209 @@
+(ns minii-focus.screens.inbox
+  "Inbox page
+  
+  Step 3: Connect Inbox page to execute-event!
+  
+  Only implement 3 actions:
+  - Create task → task/create
+  - Complete task → task/complete
+  - Archive task → task/archive
+  
+  Strictly prohibited:
+  - Inbox touching Forecast
+  - Inbox touching Perspective rules"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:flutter/services.dart" :as services]
+   ["package:mongol/mongol.dart" :as mongol]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.task :as task]
+   [minii-focus.core.db.task-tags :as task-tags]
+   [minii-focus.core.db.task-relations :as task-relations]
+   [minii-focus.core.db.task-template :as task-template]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.toast :as toast]
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/tables/tasks.dart" :as tasks]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]
+   ))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+(declare show-tags-manager)
+
+(defn show-edit-tags-dialog
+  "Show edit task tags dialog"
+  [ctx dao task task-tags-map-atom all-tags-atom]
+  (let [current-tags (get @task-tags-map-atom (.-id task) [])
+        available-tags @all-tags-atom
+        selected-tags (atom (set current-tags))]
+    (-> (m/showDialog
+         .context ctx
+         .builder (fn [dialog-ctx]
+                   (m/AlertDialog
+                    .title (comp/mongol-text-block
+                           {:text "Edit Tags"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :l)
+                                   .fontWeight m/FontWeight.bold)})
+                    .content (m/Container
+                             .width 300
+                             .height 400
+                             .child (m/ListView
+                                    .children
+                                    (if (empty? available-tags)
+                                      [(comp/mongol-text-block
+                                        {:text "No tags available, please create tags in tag management first"
+                                         :style (m/TextStyle
+                                                .fontSize (tokens/font-size :s)
+                                                .color (tokens/color :text-weak))})]
+                                      (vec (map (fn [tag]
+                                                (let [is-selected (contains? @selected-tags tag)]
+                                                  (m/CheckboxListTile
+                                                   .title (m/Text tag)
+                                                   .value is-selected
+                                                   .onChanged (fn [checked]
+                                                              (if checked
+                                                                (swap! selected-tags conj tag)
+                                                                (swap! selected-tags disj tag))))))
+                                              available-tags)))))
+                    .actions
+                    [(m/TextButton
+                      .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                      .child (m/Text "Cancel"))
+                     (m/TextButton
+                      .onPressed (fn []
+                                  (let [new-tags (vec @selected-tags)]
+                                    (m/Navigator.pop dialog-ctx)
+                                    (-> (task-tags/set-task-tags! dao (.-id task) new-tags)
+                                        (.then (fn [_]
+                                                (swap! task-tags-map-atom assoc (.-id task) new-tags)
+                                                (toast/show-success-toast ctx "Tags updated")))
+                                        (.catchError (fn [error]
+                                                     (dart-core/print (str "Error updating task tags: " error))
+                                                     (toast/show-error-toast ctx "Failed to update tags"))))))
+                      .child (m/Text "Save"))])))
+        (.then (fn [_] nil))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error showing edit tags dialog: " error)))))))
+
+(defn show-tags-manager
+  "Show tags manager dialog (add/delete tag definitions)"
+  [ctx dao all-tags-atom]
+  (let [new-tag-controller (m/TextEditingController.)]
+    (-> (task-tags/get-all-tags dao)
+        (.then (fn [tags]
+                (reset! all-tags-atom (or tags []))
+                (m/showDialog
+                 .context ctx
+                 .builder
+                 (fn [dialog-ctx]
+                   (m/AlertDialog
+                    .title (comp/mongol-text-block
+                           {:text "Tag Management"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :l)
+                                   .fontWeight m/FontWeight.bold)})
+                    .content (m/Container
+                             .width 420
+                             .height 520
+                             .child
+                             (m/Column
+                              .crossAxisAlignment m/CrossAxisAlignment.stretch
+                              .children
+                              [(comp/mongol-text-block
+                                {:text "Add Tag:"
+                                 :style (m/TextStyle
+                                        .fontSize (tokens/font-size :m)
+                                        .fontWeight m/FontWeight.w500)})
+                               (m/SizedBox .height (tokens/space :s))
+                               (mongol/MongolTextField
+                                .controller new-tag-controller
+                                .decoration (m/InputDecoration
+                                            .hintText "Enter tag name"
+                                            .border (m/OutlineInputBorder))
+                                .style (m/TextStyle
+                                       .fontSize (tokens/font-size :m)
+                                       .fontFamily "OnonSoninSans"))
+                               (m/SizedBox .height (tokens/space :s))
+                               (m/Row
+                                .children
+                                [(m/ElevatedButton
+                                  .onPressed (fn []
+                                               (let [raw (.text new-tag-controller)
+                                                     tag (.trim raw)]
+                                                 (cond
+                                                   (empty? tag)
+                                                   (toast/show-info-toast ctx "Please enter tag name")
+
+                                                   (some #(= % tag) @all-tags-atom)
+                                                   (toast/show-info-toast ctx "Tag already exists")
+
+                                                   :else
+                                                   (let [updated (->> (conj (vec @all-tags-atom) tag)
+                                                                      distinct
+                                                                      vec)]
+                                                     (-> (task-tags/save-all-tags! dao updated)
+                                                         (.then (fn [_]
+                                                                 (reset! all-tags-atom updated)
+                                                                 (.clear new-tag-controller)
+                                                                 (toast/show-success-toast ctx "Tag added")))
+                                                         (.catchError (fn [error]
+                                                                      (dart-core/print (str "Error saving tags: " error))
+                                                                      (toast/show-error-toast ctx "Failed to save tag"))))))))
+                                  .child (m/Text "Add"))
+                                 (m/SizedBox .width (tokens/space :s))
+                                 (m/TextButton
+                                  .onPressed (fn []
+                                               (.clear new-tag-controller))
+                                  .child (m/Text "Clear"))])
+                               (m/Divider)
+                               (comp/mongol-text-block
+                                {:text "Existing Tags:"
+                                 :style (m/TextStyle
+                                        .fontSize (tokens/font-size :m)
+                                        .fontWeight m/FontWeight.w500)})
+                               (m/SizedBox .height (tokens/space :s))
+                               (m/Expanded
+                                .child
+                                (if (empty? @all-tags-atom)
+                                  (m/Center
+                                   .child (comp/mongol-text-block
+                                           {:text "No tags"
+                                            :style (m/TextStyle
+                                                   .fontSize (tokens/font-size :s)
+                                                   .color (tokens/color :text-weak))}))
+                                  (m/ListView
+                                   .children
+                                   (vec
+                                    (map (fn [tag]
+                                           (m/ListTile
+                                            .title (m/Text tag)
+                                            .trailing (m/IconButton
+                                                       .icon (m/Icon m/Icons.delete_outline)
+                                                       .onPressed
+                                                       (fn []
+                                                         (let [updated (vec (remove #(= % tag) @all-tags-atom))]
+                                                           (-> (task-tags/save-all-tags! dao updated)
+                                                               (.then (fn [_]
+                                                                       (reset! all-tags-atom updated)
+                                                                       (toast/show-success-toast ctx "Tag deleted")))
+                                                               (.catchError (fn [error]
+                                                                            (dart-core/print (str "Error deleting tag: " error))
+                                                                            (toast/show-error-toast ctx "Failed to delete")))))))))
+                                         @all-tags-atom)))))]))
+                    .actions
+                    [(m/TextButton
+                      .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                      .child (m/Text "Close"))])))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error opening tags manager: " error))
+                     (toast/show-error-toast ctx "Failed to open tag management"))))))
+
+(defn show-edit-relations-dialog
+  "Show edit task relations dialog"
+  [ctx dao task task-relations-map-atom all-tasks-atom]
+  (let [current-relations (get @task-relations-map-atom (.-id task) {:blocked-by [] :blocks [] :related-to []})
+        available-tasks (filter #(not= (.-id %) (.-id task)) @all-tasks-atom)
+        blocked-by-selected (atom (set (:blocked-by current-relations)))
+        blocks-selected (atom (set (:blocks current-relations)))
+        related-to-selected (atom (set (:related-to current-relations)))]
+    (-> (m/showDialog
+         .context ctx
+         .builder (fn [dialog-ctx]
+                   (m/AlertDialog
+                    .title (comp/mongol-text-block
+                           {:text "Edit Task Relations"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :l)
+                                   .fontWeight m/FontWeight.bold)})
+                    .content (m/Container
+                             .width 400
+                             .height 500
+                             .child (m/ListView
+                                    .children
+                                    [(comp/mongol-text-block
+                                      {:text "Blocked by tasks:"
+                                       :style (m/TextStyle
+                                              .fontSize (tokens/font-size :m)
+                                              .fontWeight m/FontWeight.w500)})
+                                     (m/SizedBox .height (tokens/space :s))
+                                     (m/ListView
+                                      .shrinkWrap true
+                                      .children
+                                      (vec (map (fn [task-item]
+                                                 (let [is-selected (contains? @blocked-by-selected (.-id task-item))]
+                                                   (m/CheckboxListTile
+                                                    .title (m/Text (.-title task-item))
+                                                    .value is-selected
+                                                    .onChanged (fn [checked]
+                                                               (if checked
+                                                                 (swap! blocked-by-selected conj (.-id task-item))
+                                                                 (swap! blocked-by-selected disj (.-id task-item)))))))
+                                               available-tasks)))
+                                     (m/SizedBox .height (tokens/space :m))
+                                     (comp/mongol-text-block
+                                      {:text "Blocks tasks:"
+                                       :style (m/TextStyle
+                                              .fontSize (tokens/font-size :m)
+                                              .fontWeight m/FontWeight.w500)})
+                                     (m/SizedBox .height (tokens/space :s))
+                                     (m/ListView
+                                      .shrinkWrap true
+                                      .children
+                                      (vec (map (fn [task-item]
+                                                 (let [is-selected (contains? @blocks-selected (.-id task-item))]
+                                                   (m/CheckboxListTile
+                                                    .title (m/Text (.-title task-item))
+                                                    .value is-selected
+                                                    .onChanged (fn [checked]
+                                                               (if checked
+                                                                 (swap! blocks-selected conj (.-id task-item))
+                                                                 (swap! blocks-selected disj (.-id task-item)))))))
+                                               available-tasks)))
+                                     (m/SizedBox .height (tokens/space :m))
+                                     (comp/mongol-text-block
+                                      {:text "Related tasks:"
+                                       :style (m/TextStyle
+                                              .fontSize (tokens/font-size :m)
+                                              .fontWeight m/FontWeight.w500)})
+                                     (m/SizedBox .height (tokens/space :s))
+                                     (m/ListView
+                                      .shrinkWrap true
+                                      .children
+                                      (vec (map (fn [task-item]
+                                                 (let [is-selected (contains? @related-to-selected (.-id task-item))]
+                                                   (m/CheckboxListTile
+                                                    .title (m/Text (.-title task-item))
+                                                    .value is-selected
+                                                    .onChanged (fn [checked]
+                                                               (if checked
+                                                                 (swap! related-to-selected conj (.-id task-item))
+                                                                 (swap! related-to-selected disj (.-id task-item)))))))
+                                               available-tasks)))]))
+                    .actions
+                    [(m/TextButton
+                      .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                      .child (m/Text "Cancel"))
+                     (m/TextButton
+                      .onPressed (fn []
+                                  (let [new-relations {:blocked-by (vec @blocked-by-selected)
+                                                      :blocks (vec @blocks-selected)
+                                                      :related-to (vec @related-to-selected)}]
+                                    (m/Navigator.pop dialog-ctx)
+                                    (-> (task-relations/set-task-relations! dao (.-id task) new-relations)
+                                        (.then (fn [_]
+                                                (swap! task-relations-map-atom assoc (.-id task) new-relations)
+                                                (toast/show-success-toast ctx "Relations updated")))
+                                        (.catchError (fn [error]
+                                                     (dart-core/print (str "Error updating task relations: " error))
+                                                     (toast/show-error-toast ctx "Failed to update relations"))))))
+                      .child (m/Text "Save"))])))
+        (.then (fn [_] nil))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error showing edit relations dialog: " error)))))))
+
+(defn show-save-task-template-dialog
+  "Show save task as template dialog"
+  [ctx dao task task-templates-atom]
+  (let [template-name-controller (m/TextEditingController.)
+        initial-name (.-title task)]
+    (.text template-name-controller initial-name)
+    (-> (m/showDialog
+         .context ctx
+         .builder (fn [dialog-ctx]
+                   (m/AlertDialog
+                    .title (comp/mongol-text-block
+                           {:text "Save as Template"
+                            :style (m/TextStyle
+                                   .fontSize (tokens/font-size :l)
+                                   .fontWeight m/FontWeight.bold)})
+                    .content (m/Column
+                             .mainAxisSize m/MainAxisSize.min
+                             .children
+                             [(comp/mongol-text-block
+                               {:text "Template Name:"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :m))})
+                              (m/SizedBox .height (tokens/space :s))
+                              (mongol/MongolTextField
+                               .controller template-name-controller
+                               .decoration (m/InputDecoration
+                                           .hintText "Enter template name")
+                               .style (m/TextStyle
+                                      .fontSize (tokens/font-size :m)
+                                      .fontFamily "OnonSoninSans"))])
+                    .actions
+                    [(m/TextButton
+                      .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                      .child (m/Text "Cancel"))
+                     (m/TextButton
+                      .onPressed (fn []
+                                  (let [template-name (.text template-name-controller)]
+                                    (m/Navigator.pop dialog-ctx)
+                                    (when (not (empty? template-name))
+                                      (-> (task-template/save-task-as-template! dao (.-id task) template-name)
+                                          (.then (fn [_template-id]
+                                                  ;; Reload template list
+                                                  (-> (task-template/get-all-templates dao)
+                                                      (.then (fn [templates]
+                                                              (reset! task-templates-atom templates)
+                                                              (toast/show-success-toast ctx "Template saved")))
+                                                      (.catchError (fn [error]
+                                                                   (dart-core/print (str "Error reloading templates: " error))))))
+                                          (.catchError (fn [error]
+                                                       (dart-core/print (str "Error saving template: " error))
+                                                       (toast/show-error-toast ctx "Failed to save template"))))))))
+                      .child (m/Text "Save"))])))
+        (.then (fn [_] nil))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error showing save template dialog: " error)))))))
+
+(defn show-template-selector
+  "Show template selection dialog (create task from template)"
+  [ctx loading dao task-templates-atom tasks-atom]
+  (-> (task-template/get-all-templates dao)
+      (.then (fn [templates]
+              (reset! task-templates-atom templates)
+              (if (empty? templates)
+                (toast/show-info-toast ctx "No templates available, please save a task as template first")
+                (-> (m/showDialog
+                     .context ctx
+                     .builder (fn [dialog-ctx]
+                               (m/AlertDialog
+                                .title (comp/mongol-text-block
+                                       {:text "Create Task from Template"
+                                        :style (m/TextStyle
+                                               .fontSize (tokens/font-size :l)
+                                               .fontWeight m/FontWeight.bold)})
+                                .content (m/Container
+                                         .width 300
+                                         .height 400
+                                         .child (m/ListView
+                                                .children
+                                                (vec (map (fn [template]
+                                                          (m/ListTile
+                                                           .title (m/Text (or (:name template) (:title template)))
+                                                           .subtitle (m/Text (str "Title: " (:title template)))
+                                                           .onTap (fn []
+                                                                   (m/Navigator.pop dialog-ctx)
+                                                                   ;; Create task from template
+                                                                   (-> (task-template/create-task-from-template! dao (:id template))
+                                                                       (.then (fn [_new-task-id]
+                                                                               (toast/show-success-toast ctx "Task created")
+                                                                               ;; Reload task list
+                                                                               (reset! loading true)
+                                                                               (-> (task/watch-all-tasks dao)
+                                                                                   (.first)
+                                                                                   (.then (fn [result]
+                                                                                           (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                             (reset! tasks-atom incomplete-tasks)
+                                                                                             (reset! loading false))))
+                                                                                   (.catchError (fn [error]
+                                                                                                (dart-core/print (str "Error reloading: " error))
+                                                                                                (reset! loading false))))))
+                                                                       (.catchError (fn [error]
+                                                                                    (dart-core/print (str "Error creating task from template: " error))
+                                                                                    (toast/show-error-toast ctx "Failed to create task")))))))
+                                                        templates))))
+                                .actions
+                                [(m/TextButton
+                                  .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                  .child (m/Text "Cancel"))])))
+                    (.then (fn [_] nil))
+                    (.catchError (fn [error]
+                                 (dart-core/print (str "Error showing template selector: " error))))))))
+      (.catchError (fn [error]
+                   (dart-core/print (str "Error loading templates: " error))
+                   (toast/show-error-toast ctx "Failed to load templates")))))
+
+(defn format-date-time
+  "Format date time (display creation time)"
+  [date-time]
+  (let [now (dart-core/DateTime.now)
+        created date-time
+        diff-days (int (/ (- (.millisecondsSinceEpoch now) (.millisecondsSinceEpoch created)) (* 1000 60 60 24)))]
+    (cond
+      (= diff-days 0) "Today"
+      (= diff-days 1) "Yesterday"
+      (< diff-days 7) (str diff-days " days ago")
+      :else (str (.month created) "/" (.day created)))))
+
+(defn sort-tasks
+  "Sort task list
+  
+  Parameters:
+  - tasks: List<Task>
+  - sort-mode: :created-at-asc | :created-at-desc | :priority-desc | :priority-asc
+  
+  Returns: List<Task>"
+  [tasks sort-mode]
+  (let [sorted (case sort-mode
+                 :created-at-asc
+                 (sort (fn [a b] (compare (.-createdAt a) (.-createdAt b))) tasks)
+                 :created-at-desc
+                 (sort (fn [a b] (compare (.-createdAt b) (.-createdAt a))) tasks)
+                 :priority-desc
+                 (sort (fn [a b]
+                        (let [priority-a (or (.-priority a) 3)
+                              priority-b (or (.-priority b) 3)
+                              priority-compare (compare priority-a priority-b)]
+                          (if (not= priority-compare 0)
+                            priority-compare
+                            ;; When priorities are the same, sort by creation time descending
+                            (compare (.-createdAt b) (.-createdAt a)))))
+                      tasks)
+                 :priority-asc
+                 (sort (fn [a b]
+                        (let [priority-a (or (.-priority a) 3)
+                              priority-b (or (.-priority b) 3)
+                              priority-compare (compare priority-b priority-a)]
+                          (if (not= priority-compare 0)
+                            priority-compare
+                            ;; When priorities are the same, sort by creation time descending
+                            (compare (.-createdAt b) (.-createdAt a)))))
+                      tasks)
+                 tasks)]
+    (vec sorted)))
+
+;; ============================================================================
+;; Inbox page main function
+;; ============================================================================
+
+(defn inbox-screen [_params]
+  (let [tasks (atom [])
+        selected-tasks (atom #{})  ; Selected task ID set
+        sort-mode (atom :priority-desc)  ; Sort mode: :created-at-asc | :created-at-desc | :priority-desc | :priority-asc
+        batch-mode (atom false)  ; Whether in batch selection mode
+        loading (atom false)
+        selected-tag (atom nil)  ; Currently selected tag (for filtering)
+        search-query (atom "")  ; Search query text
+        all-tags (atom [])  ; All tag definitions
+        task-tags-map (atom {})  ; task-id -> tags mapping
+        task-relations-map (atom {})  ; task-id -> relations mapping
+        task-templates (atom [])  ; All task templates
+        dao (app-state/get-dao)]
+    ;; Load incomplete Tasks and tags
+    (reset! loading true)
+    (-> (task/watch-all-tasks dao)
+        (.first)
+        (.then (fn [result]
+                (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                  (reset! tasks incomplete-tasks)
+                  ;; Load all tags
+                  (-> (task-tags/get-all-tags dao)
+                      (.then (fn [tags]
+                              (reset! all-tags tags)
+                              ;; Load all task tags
+                              (let [tag-promises (map (fn [task-item]
+                                                       (-> (task-tags/get-task-tags dao (.-id task-item))
+                                                           (.then (fn [tags]
+                                                                   [(.-id task-item) tags]))))
+                                                     incomplete-tasks)]
+                                (-> (dart-core/Future.wait (vec tag-promises))
+                                    (.then (fn [results]
+                                            (let [tags-map (reduce (fn [acc [task-id tags]]
+                                                                    (assoc acc task-id tags))
+                                                                  {}
+                                                                  results)]
+                                              (reset! task-tags-map tags-map)
+                                              ;; Load all task relations
+                                              (let [relation-promises (map (fn [task-item]
+                                                                           (-> (task-relations/get-task-relations dao (.-id task-item))
+                                                                               (.then (fn [relations]
+                                                                                      [(.-id task-item) relations]))))
+                                                                         incomplete-tasks)]
+                                                (-> (dart-core/Future.wait (vec relation-promises))
+                                                    (.then (fn [results]
+                                                            (let [relations-map (reduce (fn [acc [task-id relations]]
+                                                                                        (assoc acc task-id relations))
+                                                                                      {}
+                                                                                      results)]
+                                                              (reset! task-relations-map relations-map)
+                                                              (reset! loading false))))
+                                                    (.catchError (fn [error]
+                                                                 (dart-core/print (str "Error loading task relations: " error))
+                                                                 (reset! loading false))))))))
+                                    (.catchError (fn [error]
+                                                 (dart-core/print (str "Error loading task tags: " error))
+                                                 (reset! loading false))))))
+                      (.catchError (fn [error]
+                                   (dart-core/print (str "Error loading tags: " error))
+                                   (reset! loading false)))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading tasks: " error))
+                     (reset! loading false))))
+    
+    (f/widget
+     :context ctx
+     :let [text-controller (m/TextEditingController.)
+           search-controller (m/TextEditingController.)
+           clear-search! (fn []
+                          (reset! search-query "")
+                          (.clear search-controller))
+           open-search-dialog! (fn []
+                                 ;; Show search dialog
+                                 (-> (m/showDialog
+                                      .context ctx
+                                      .builder (fn [dialog-ctx]
+                                                (m/AlertDialog
+                                                 .title (comp/mongol-text-block
+                                                        {:text "Search Tasks"
+                                                         :style (m/TextStyle
+                                                                .fontSize (tokens/font-size :l)
+                                                                .fontWeight m/FontWeight.bold)})
+                                                 .content (m/Column
+                                                          .mainAxisSize m/MainAxisSize.min
+                                                          .children
+                                                          [(mongol/MongolTextField
+                                                            .controller search-controller
+                                                            .decoration (m/InputDecoration
+                                                                        .hintText "Enter search keywords"
+                                                                        .prefixIcon (m/Icon m/Icons.search))
+                                                            .style (m/TextStyle
+                                                                   .fontSize (tokens/font-size :m)
+                                                                   .fontFamily "OnonSoninSans")
+                                                            .autofocus true
+                                                            .onChanged (fn [text]
+                                                                        (reset! search-query text)))])
+                                                 .actions
+                                                 [(m/TextButton
+                                                   .onPressed (fn []
+                                                                (clear-search!)
+                                                                (m/Navigator.pop dialog-ctx))
+                                                   .child (m/Text "Clear"))
+                                                  (m/TextButton
+                                                   .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                   .child (m/Text "Close"))]))))
+                                     (.then (fn [_] nil))
+                                     (.catchError (fn [error]
+                                                  (dart-core/print (str "Error showing search dialog: " error)))))]
+     :bind {:text-controller text-controller
+            :search-controller search-controller
+            :tasks tasks
+            :selected-tasks selected-tasks
+            :sort-mode sort-mode
+            :batch-mode batch-mode
+            :loading loading
+            :search-query search-query
+            :db-ctx ctx}
+     
+     (m/Focus
+      .autofocus true
+      .child
+      (m/CallbackShortcuts
+       .bindings {(m/SingleActivator. services/LogicalKeyboardKey.keyF :control true) (fn [] (open-search-dialog!))
+                  (m/SingleActivator. services/LogicalKeyboardKey.keyF :meta true) (fn [] (open-search-dialog!))
+                  (m/SingleActivator. services/LogicalKeyboardKey.escape) (fn [] (clear-search!))
+                  (m/SingleActivator. services/LogicalKeyboardKey.keyB :control true) (fn [] (reset! batch-mode (not @batch-mode)))
+                  (m/SingleActivator. services/LogicalKeyboardKey.keyB :meta true) (fn [] (reset! batch-mode (not @batch-mode)))}
+       .child
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .title (comp/mongol-text-block
+                        {:text "Inbox"})
+                 .actions
+                 [(m/IconButton
+                   .icon (m/Icon m/Icons.search)
+                   .onPressed (fn [] (open-search-dialog!)))
+                (m/IconButton
+                 .icon (m/Icon m/Icons.file_copy)
+                 .onPressed (fn []
+                             ;; Show template selection dialog
+                             (show-template-selector ctx @loading dao task-templates tasks)))
+                (m/IconButton
+                 .icon (m/Icon m/Icons.label)
+                 .onPressed (fn []
+                             ;; Show tag management dialog
+                             (show-tags-manager ctx dao all-tags)))
+                (m/IconButton
+                 .icon (m/Icon (if @batch-mode m/Icons.check_box_outline_blank m/Icons.select_all))
+                 .onPressed (fn []
+                             (reset! batch-mode (not @batch-mode))
+                             (when (not @batch-mode)
+                               (reset! selected-tasks #{}))))
+                (m/PopupMenuButton
+                 .itemBuilder (fn [_ctx]
+                               [(m/PopupMenuItem
+                                 .value :priority-desc
+                                 .child (m/Row
+                                        .children
+                                        [(m/Icon m/Icons.flag)
+                                         (m/SizedBox .width (tokens/space :s))
+                                         (m/Text "Priority High→Low")]))
+                                (m/PopupMenuItem
+                                 .value :priority-asc
+                                 .child (m/Row
+                                        .children
+                                        [(m/Icon m/Icons.flag)
+                                         (m/SizedBox .width (tokens/space :s))
+                                         (m/Text "Priority Low→High")]))
+                                (m/PopupMenuDivider)
+                                (m/PopupMenuItem
+                                 .value :created-at-desc
+                                 .child (m/Row
+                                        .children
+                                        [(m/Icon m/Icons.access_time)
+                                         (m/SizedBox .width (tokens/space :s))
+                                         (m/Text "Newest First")]))
+                                (m/PopupMenuItem
+                                 .value :created-at-asc
+                                 .child (m/Row
+                                        .children
+                                        [(m/Icon m/Icons.access_time)
+                                         (m/SizedBox .width (tokens/space :s))
+                                         (m/Text "Oldest First")]))])
+                 .onSelected (fn [mode]
+                              (reset! sort-mode mode)))])
+        .body (comp/mongol-column-layout
+               {:main-column
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.max
+                 .crossAxisAlignment m/CrossAxisAlignment.stretch
+                 .children
+                 [;; 1️⃣ Top: Quick capture area (Create Task)
+                  (m/Container
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .color (tokens/color :bg)
+                   .child (mongol/MongolTextField
+                           .controller text-controller
+                           .style (m/TextStyle
+                                   .fontSize (tokens/font-size :m)
+                                   .fontFamily "OnonSoninSans")
+                           .decoration (m/InputDecoration
+                                        .hintText "Quick capture... (supports multi-line)"
+                                        .border (m/OutlineInputBorder))
+                           .maxLines nil  ; Support multi-line
+                           .minLines 1
+                           .textInputAction m/TextInputAction.newline
+                           .onSubmitted (fn [text]
+                                          ;; For multi-line input, Shift+Enter for newline, Enter to submit
+                                          ;; Here only handle Enter submission
+                                          (when (not (empty? text))
+                                            ;; 1. Create task → task/create
+                                            (-> (dispatch/dispatch-event! ctx
+                                                                          {:type :task/create
+                                                                           :payload {:title text}
+                                                                           :source :ui})
+                                                (.then (fn [_]
+                                                         (.clear text-controller)
+                                                         ;; Reload
+                                                         (reset! loading true)
+                                                         (-> (task/watch-all-tasks dao)
+                                                             (.first)
+                                                             (.then (fn [result]
+                                                                      (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                        (reset! tasks incomplete-tasks)
+                                                                        (reset! loading false))))
+                                                             (.catchError (fn [error]
+                                                                            (dart-core/print (str "Error reloading: " error))
+                                                                            (reset! loading false))))
+                                                         (toast/show-success-toast ctx "Task created")))
+                                                (.catchError (fn [error]
+                                                               (dart-core/print (str "Error creating task: " error))
+                                                               (toast/show-error-toast ctx "Failed to create"))))
+                                            nil))))
+
+                  ;; Tag filter bar (All + each tag)
+                  (m/Container
+                   .padding (m/EdgeInsets.symmetric
+                            :horizontal (tokens/space :m)
+                            :vertical (tokens/space :s))
+                   .color (tokens/color :bg)
+                   .child (m/Wrap
+                           .spacing (tokens/space :xs)
+                           .runSpacing (tokens/space :xs)
+                           .children
+                           (vec (concat
+                                 [(m/FilterChip
+                                   .label (m/Text "All")
+                                   .selected (nil? @selected-tag)
+                                   .onSelected (fn [_] (reset! selected-tag nil)))]
+                                 (map (fn [tag]
+                                        (m/FilterChip
+                                         .label (m/Text tag)
+                                         .selected (= @selected-tag tag)
+                                         .onSelected (fn [selected]
+                                                       (if selected
+                                                         (reset! selected-tag tag)
+                                                         (reset! selected-tag nil)))))
+                                      @all-tags)
+                                 (when @selected-tag
+                                   [(m/ActionChip
+                                     .label (m/Text "Clear Tag")
+                                     .onPressed (fn [] (reset! selected-tag nil)))])))))
+
+                ;; Search bar (if there is a search query)
+                (when (and (not (empty? @search-query))
+                           (not= @search-query ""))
+                  (m/Container
+                   .padding (m/EdgeInsets.all (tokens/space :s))
+                   .color (tokens/color :bg-focus)
+                   .child (m/Row
+                           .children
+                           [(m/Icon m/Icons.search
+                                    .size 20
+                                    .color (tokens/color :text-weak))
+                            (m/SizedBox .width (tokens/space :s))
+                            (m/Expanded
+                             .child (comp/mongol-text-block
+                                    {:text (str "Search: " @search-query)
+                                     :style (m/TextStyle
+                                            .fontSize (tokens/font-size :s)
+                                            .color (tokens/color :text-weak))}))
+                            (m/IconButton
+                             .icon (m/Icon m/Icons.close)
+                             .iconSize 20
+                             .onPressed (fn []
+                                          (clear-search!)))])))
+                ;; Batch operation bar
+                (if @batch-mode
+                  (m/Container
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .color (tokens/color :accent-light)
+                   .child (m/Row
+                           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                           .children
+                           [(comp/mongol-text-block
+                             {:text (str "Selected: " (count @selected-tasks) " items")
+                              :style (m/TextStyle
+                                      .fontSize (tokens/font-size :m)
+                                      .fontWeight m/FontWeight.w500)})
+                            (m/Row
+                             .children
+                             [(m/TextButton
+                               .onPressed (fn []
+                                            (when (seq @selected-tasks)
+                                              (reset! loading true)
+                                              (-> (dart-core/Future.wait
+                                                   (vec (map (fn [task-id]
+                                                               (dispatch/dispatch-event! ctx
+                                                                                         {:type :task/complete
+                                                                                          :payload {:task-id task-id}
+                                                                                          :source :ui}))
+                                                             @selected-tasks)))
+                                                  (.then (fn [_]
+                                                           (let [completed-count (count @selected-tasks)]
+                                                             (reset! selected-tasks #{})
+                                                             (reset! batch-mode false)
+                                                             (-> (task/watch-all-tasks dao)
+                                                                 (.first)
+                                                                 (.then (fn [result]
+                                                                          (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                            (reset! tasks incomplete-tasks)
+                                                                            (reset! loading false))))
+                                                                 (.catchError (fn [error]
+                                                                                (dart-core/print (str "Error reloading: " error))
+                                                                                (reset! loading false))))
+                                                             (toast/show-success-toast ctx (str "Completed " completed-count " tasks")))))
+                                                  (.catchError (fn [error]
+                                                                 (dart-core/print (str "Error batch completing: " error))
+                                                                 (reset! loading false)
+                                                                 (toast/show-error-toast ctx "Failed to batch complete"))))))
+                              .child (m/Text "Complete"))
+                              (m/SizedBox .width (tokens/space :s))
+                              (m/TextButton
+                               .onPressed (fn []
+                                            (when (seq @selected-tasks)
+                                              ;; Show batch edit dialog - batch set priority
+                                              (m/showDialog
+                                                   .context ctx
+                                                   .builder (fn [priority-dialog-ctx]
+                                                             (m/AlertDialog
+                                                              .title (comp/mongol-text-block
+                                                                     {:text "Batch Set Priority"
+                                                                      :style (m/TextStyle
+                                                                             .fontSize (tokens/font-size :l)
+                                                                             .fontWeight m/FontWeight.bold)})
+                                                              .content (m/Column
+                                                                       .mainAxisSize m/MainAxisSize.min
+                                                                       .children
+                                                                       [(comp/mongol-text-block
+                                                                         {:text (str "Selected " (count @selected-tasks) " tasks")
+                                                                          :style (m/TextStyle
+                                                                                 .fontSize (tokens/font-size :m))})
+                                                                        (m/SizedBox .height (tokens/space :m))
+                                                                        (comp/mongol-text-block
+                                                                         {:text "Select Priority:"
+                                                                          :style (m/TextStyle
+                                                                                 .fontSize (tokens/font-size :m)
+                                                                                 .fontWeight m/FontWeight.w500)})
+                                                                        (m/SizedBox .height (tokens/space :s))
+                                                                        (m/ListView
+                                                                         .shrinkWrap true
+                                                                         .children
+                                                                         (vec (map (fn [priority]
+                                                                                   (m/ListTile
+                                                                                    .leading (m/Icon
+                                                                                             m/Icons.flag
+                                                                                             .color (case priority
+                                                                                                     0 m/Colors.red
+                                                                                                     1 m/Colors.orange
+                                                                                                     2 m/Colors.yellow.shade700
+                                                                                                     3 (tokens/color :text-weak)
+                                                                                                     4 m/Colors.blue
+                                                                                                     5 m/Colors.grey
+                                                                                                     (tokens/color :text-weak)))
+                                                                                    .title (comp/mongol-text-block
+                                                                                           {:text (str "P" priority)})
+                                                                                    .onTap (fn []
+                                                                                            (m/Navigator.pop priority-dialog-ctx)
+                                                                                            (reset! loading true)
+                                                                                            (let [selected-count (count @selected-tasks)]
+                                                                                              (-> (dart-core/Future.wait
+                                                                                                   (vec (map (fn [task-id]
+                                                                                                             (let [updates (bridge/dart-new
+                                                                                                                           app-db/TasksCompanion
+                                                                                                                           {:priority priority})]
+                                                                                                               (task/update-task! dao task-id updates)))
+                                                                                                           @selected-tasks)))
+                                                                                                  (.then (fn [_]
+                                                                                                          (reset! selected-tasks #{})
+                                                                                                          (reset! batch-mode false)
+                                                                                                          (-> (task/watch-all-tasks dao)
+                                                                                                              (.first)
+                                                                                                              (.then (fn [result]
+                                                                                                                      (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                                                        (reset! tasks incomplete-tasks)
+                                                                                                                        (reset! loading false))))
+                                                                                                              (.catchError (fn [error]
+                                                                                                                           (dart-core/print (str "Error reloading: " error))
+                                                                                                                           (reset! loading false))))
+                                                                                                          (toast/show-success-toast ctx (str "Updated priority for " selected-count " tasks"))))
+                                                                                                  (.catchError (fn [error]
+                                                                                                               (dart-core/print (str "Error batch updating priority: " error))
+                                                                                                               (reset! loading false)
+                                                                                                               (toast/show-error-toast ctx "Failed to batch update"))))))))
+                                                                                 (range 0 6))))])
+                                                              .actions
+                                                              [(m/TextButton
+                                                                .onPressed (fn [] (m/Navigator.pop priority-dialog-ctx))
+                                                                .child (m/Text "Cancel"))])))))
+                              .child (m/Text "Batch Edit"))
+                              (m/SizedBox .width (tokens/space :s))
+                              (m/TextButton
+                               .onPressed (fn []
+                                            (when (seq @selected-tasks)
+                                              (reset! loading true)
+                                              (-> (dart-core/Future.wait
+                                                   (vec (map (fn [task-id]
+                                                               (dispatch/dispatch-event! ctx
+                                                                                         {:type :task/archive
+                                                                                          :payload {:task-id task-id}
+                                                                                          :source :ui}))
+                                                             @selected-tasks)))
+                                                  (.then (fn [_]
+                                                           (let [archived-count (count @selected-tasks)]
+                                                             (reset! selected-tasks #{})
+                                                             (reset! batch-mode false)
+                                                             (-> (task/watch-all-tasks dao)
+                                                                 (.first)
+                                                                 (.then (fn [result]
+                                                                         (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                           (reset! tasks incomplete-tasks)
+                                                                           (reset! loading false))))
+                                                                 (.catchError (fn [error]
+                                                                              (dart-core/print (str "Error reloading: " error))
+                                                                              (reset! loading false))))
+                                                             (toast/show-success-toast ctx (str "Archived " archived-count " tasks")))))
+                                                  (.catchError (fn [error]
+                                                                 (dart-core/print (str "Error batch archiving: " error))
+                                                                 (reset! loading false)
+                                                                 (toast/show-error-toast ctx "Failed to batch archive"))))))
+                              .child (m/Text "Archive"))])]))
+                  (m/SizedBox))
+
+                ;; 2️⃣ Middle: Task list
+                (m/Expanded
+                 .child (cond
+                          @loading
+                          (m/Center
+                           .child (m/CircularProgressIndicator))
+
+                          (empty? @tasks)
+                          (m/Center
+                           .child (comp/mongol-text-block
+                                   {:text "Inbox is empty"
+                                    :style (m/TextStyle
+                                            .color (tokens/color :text-weak))}))
+
+                          :else
+                          (let [;; First filter by tag
+                                tag-filtered-tasks (if @selected-tag
+                                                     (filter (fn [task-item]
+                                                              (let [tags (get @task-tags-map (.-id task-item) [])]
+                                                                (some #(= % @selected-tag) tags)))
+                                                            @tasks)
+                                                     @tasks)
+                                ;; Then filter by search query
+                                search-filtered-tasks (if (and (not (empty? @search-query))
+                                                               (not= @search-query ""))
+                                                       (filter (fn [task-item]
+                                                                (let [title (.-title task-item)
+                                                                      query-lower (.toLowerCase @search-query)
+                                                                      title-lower (.toLowerCase title)]
+                                                                  (.contains title-lower query-lower)))
+                                                              tag-filtered-tasks)
+                                                       tag-filtered-tasks)
+                                sorted-tasks (sort-tasks search-filtered-tasks @sort-mode)]
+                            (m/ListView
+                             .children
+                             (vec (map (fn [task-item]
+                                         (let [task-id (.-id task-item)
+                                               is-selected (contains? @selected-tasks task-id)]
+                                           (m/Card
+                                            .margin (m/EdgeInsets.symmetric
+                                                     :vertical (tokens/space :s)
+                                                     :horizontal (tokens/space :m))
+                                            .child (m/ListTile
+                                                    .leading (if @batch-mode
+                                                               (m/Checkbox
+                                                                .value is-selected
+                                                                .onChanged (fn [checked]
+                                                                             (if checked
+                                                                               (swap! selected-tasks conj task-id)
+                                                                               (swap! selected-tasks disj task-id))))
+                                                               (m/Checkbox
+                                                                .value false
+                                                                .onChanged (fn [_]
+                                                                             ;; 2. Complete task → task/complete
+                                                                             (-> (dispatch/dispatch-event! ctx
+                                                                                                           {:type :task/complete
+                                                                                                            :payload {:task-id task-id}
+                                                                                                            :source :ui})
+                                                                                 (.then (fn [_]
+                                                                                          ;; Reload
+                                                                                          (reset! loading true)
+                                                                                          (-> (task/watch-all-tasks dao)
+                                                                                              (.first)
+                                                                                              (.then (fn [result]
+                                                                                                       (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                                         (reset! tasks incomplete-tasks)
+                                                                                                         (reset! loading false))))
+                                                                                              (.catchError (fn [error]
+                                                                                                             (dart-core/print (str "Error reloading: " error))
+                                                                                                             (reset! loading false))))
+                                                                                          (toast/show-success-toast ctx "Task completed")))
+                                                                                 (.catchError (fn [error]
+                                                                                                (dart-core/print (str "Error completing task: " error))
+                                                                                                (toast/show-error-toast ctx "Failed to complete"))))
+                                                                             nil)))
+                                                    .title (comp/mongol-text-block
+                                                            {:text (.-title task-item)})
+                                                    .subtitle (m/Column
+                                                              .crossAxisAlignment m/CrossAxisAlignment.start
+                                                              .children
+                                                              (vec (filter some?
+                                                                           [(comp/mongol-text-block
+                                                                             {:text (format-date-time (.-createdAt task-item))
+                                                                              :style (m/TextStyle
+                                                                                      .fontSize (tokens/font-size :s)
+                                                                                      .color (tokens/color :text-weak))})
+                                                                            (when (and (.-priority task-item)
+                                                                                      (not= (.-priority task-item) 3))
+                                                                              (m/Row
+                                                                               .mainAxisSize m/MainAxisSize.min
+                                                                               .children
+                                                                               [(m/Icon
+                                                                                 m/Icons.flag
+                                                                                 .size 14
+                                                                                 .color (case (.-priority task-item)
+                                                                                         0 m/Colors.red
+                                                                                         1 m/Colors.orange
+                                                                                         2 m/Colors.yellow.shade700
+                                                                                         4 m/Colors.blue
+                                                                                         5 m/Colors.grey
+                                                                                         (tokens/color :text-weak)))
+                                                                                (m/SizedBox .width (tokens/space :xs))
+                                                                                (comp/mongol-text-block
+                                                                                 {:text (str "P" (.-priority task-item))
+                                                                                  :style (m/TextStyle
+                                                                                          .fontSize (tokens/font-size :xs)
+                                                                                          .color (case (.-priority task-item)
+                                                                                                  0 m/Colors.red
+                                                                                                  1 m/Colors.orange
+                                                                                                  2 m/Colors.yellow.shade700
+                                                                                                  4 m/Colors.blue
+                                                                                                  5 m/Colors.grey
+                                                                                                  (tokens/color :text-weak)))})]))
+                                                                            ;; Display tags
+                                                                            (let [tags (get @task-tags-map (.-id task-item) [])]
+                                                                              (when (seq tags)
+                                                                                (m/Wrap
+                                                                                 .spacing (tokens/space :xs)
+                                                                                 .runSpacing (tokens/space :xs)
+                                                                                 .children
+                                                                                 (vec (map (fn [tag]
+                                                                                           (m/Chip
+                                                                                            .label (m/Text tag)
+                                                                                            .labelStyle (m/TextStyle
+                                                                                                        .fontSize (tokens/font-size :xs))
+                                                                                            .padding (m/EdgeInsets.symmetric
+                                                                                                     :horizontal (tokens/space :xs))
+                                                                                            .materialTapTargetSize m/MaterialTapTargetSize.shrinkWrap
+                                                                                            .visualDensity m/VisualDensity.compact))
+                                                                                         tags)))))])))
+                                                    .trailing (if @batch-mode
+                                                                (if is-selected
+                                                                  (m/Icon m/Icons.check_circle
+                                                                          .color (tokens/color :accent))
+                                                                  nil)
+                                                                (m/PopupMenuButton
+                                                                 .itemBuilder (fn [_ctx]
+                                                                               [                                                                                (m/PopupMenuItem
+                                                                                 .value :set-priority
+                                                                                 .child (m/Row
+                                                                                        .children
+                                                                                        [(m/Icon m/Icons.flag)
+                                                                                         (m/SizedBox .width (tokens/space :s))
+                                                                                         (m/Text "Set Priority")]))
+                                                                                (m/PopupMenuItem
+                                                                                 .value :edit-tags
+                                                                                 .child (m/Row
+                                                                                        .children
+                                                                                        [(m/Icon m/Icons.label)
+                                                                                         (m/SizedBox .width (tokens/space :s))
+                                                                                         (m/Text "Edit Tags")]))
+                                                                                (m/PopupMenuItem
+                                                                                 .value :save-as-template
+                                                                                 .child (m/Row
+                                                                                        .children
+                                                                                        [(m/Icon m/Icons.save)
+                                                                                         (m/SizedBox .width (tokens/space :s))
+                                                                                         (m/Text "Save as Template")]))
+                                                                                (m/PopupMenuDivider)
+                                                                                (m/PopupMenuItem
+                                                                                 .value :archive
+                                                                                 .child (m/Row
+                                                                                        .children
+                                                                                        [(m/Icon m/Icons.archive)
+                                                                                         (m/SizedBox .width (tokens/space :s))
+                                                                                         (m/Text "Archive")]))])
+                                                                 .onSelected (fn [action]
+                                                                              (case action
+                                                                                :set-priority
+                                                                                ;; Show priority selection dialog
+                                                                                (-> (m/showDialog
+                                                                                     .context ctx
+                                                                                     .builder (fn [dialog-ctx]
+                                                                                               (m/AlertDialog
+                                                                                                .title (comp/mongol-text-block
+                                                                                                        {:text "Set Priority"
+                                                                                                         :style (m/TextStyle
+                                                                                                                .fontSize (tokens/font-size :l)
+                                                                                                                .fontWeight m/FontWeight.bold)})
+                                                                                                .content (m/Column
+                                                                                                         .mainAxisSize m/MainAxisSize.min
+                                                                                                         .children
+                                                                                                         (vec (map (fn [priority]
+                                                                                                                   (let [current-priority (or (.-priority task-item) 3)
+                                                                                                                         is-selected (= priority current-priority)]
+                                                                                                                     (m/ListTile
+                                                                                                                      .leading (m/Icon
+                                                                                                                               m/Icons.flag
+                                                                                                                               .color (case priority
+                                                                                                                                       0 m/Colors.red
+                                                                                                                                       1 m/Colors.orange
+                                                                                                                                       2 m/Colors.yellow.shade700
+                                                                                                                                       3 (tokens/color :text-weak)
+                                                                                                                                       4 m/Colors.blue
+                                                                                                                                       5 m/Colors.grey
+                                                                                                                                       (tokens/color :text-weak)))
+                                                                                                                      .title (comp/mongol-text-block
+                                                                                                                             {:text (str "P" priority
+                                                                                                                                         (case priority
+                                                                                                                                           0 " - Urgent"
+                                                                                                                                           1 " - High"
+                                                                                                                                           2 " - Medium-High"
+                                                                                                                                           3 " - Normal"
+                                                                                                                                           4 " - Low"
+                                                                                                                                           5 " - Lowest"
+                                                                                                                                           ""))})
+                                                                                                                      .trailing (when is-selected
+                                                                                                                                 (m/Icon m/Icons.check
+                                                                                                                                         .color (tokens/color :accent)))
+                                                                                                                      .onTap (fn []
+                                                                                                                             (m/Navigator.pop dialog-ctx)
+                                                                                                                             ;; Update priority
+                                                                                                                             (let [updates (bridge/dart-new
+                                                                                                                                          app-db/TasksCompanion
+                                                                                                                                          {:priority priority})]
+                                                                                                                               (-> (task/update-task! dao task-id updates)
+                                                                                                                                   (.then (fn [_]
+                                                                                                                                           (toast/show-success-toast ctx (str "Priority set to P" priority))
+                                                                                                                                           ;; Reload
+                                                                                                                                           (reset! loading true)
+                                                                                                                                           (-> (task/watch-all-tasks dao)
+                                                                                                                                               (.first)
+                                                                                                                                               (.then (fn [result]
+                                                                                                                                                       (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                                                                                         (reset! tasks incomplete-tasks)
+                                                                                                                                                         (reset! loading false))))
+                                                                                                                                               (.catchError (fn [error]
+                                                                                                                                                            (dart-core/print (str "Error reloading: " error))
+                                                                                                                                                            (reset! loading false))))))
+                                                                                                                                   (.catchError (fn [error]
+                                                                                                                                                (dart-core/print (str "Error updating priority: " error))
+                                                                                                                                                (toast/show-error-toast ctx "Failed to set priority")))))))))
+                                                                                                                   (range 0 6))))
+                                                                                                .actions
+                                                                                                [(m/TextButton
+                                                                                                  .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                                                                  .child (m/Text "Cancel"))])))
+                                                                                     (.then (fn [_] nil))
+                                                                                     (.catchError (fn [error]
+                                                                                                  (dart-core/print (str "Error showing priority dialog: " error)))))
+                                                                                
+                                                                                :edit-tags
+                                                                                ;; Show edit tags dialog
+                                                                                (show-edit-tags-dialog ctx dao task-item task-tags-map all-tags)
+                                                                                
+                                                                                :edit-relations
+                                                                                ;; Show edit relations dialog
+                                                                                (show-edit-relations-dialog ctx dao task-item task-relations-map tasks)
+                                                                                
+                                                                                :save-as-template
+                                                                                ;; Save task as template
+                                                                                (show-save-task-template-dialog ctx dao task-item task-templates)
+                                                                                
+                                                                                :archive
+                                                                                ;; 3. Archive task → task/archive
+                                                                                (-> (dispatch/dispatch-event! ctx
+                                                                                                              {:type :task/archive
+                                                                                                               :payload {:task-id task-id}
+                                                                                                               :source :ui})
+                                                                                    (.then (fn [_]
+                                                                                             ;; Reload
+                                                                                             (reset! loading true)
+                                                                                             (-> (task/watch-all-tasks dao)
+                                                                                                 (.first)
+                                                                                                 (.then (fn [result]
+                                                                                                         (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                                           (reset! tasks incomplete-tasks)
+                                                                                                           (reset! loading false))))
+                                                                                                 (.catchError (fn [error]
+                                                                                                              (dart-core/print (str "Error reloading: " error))
+                                                                                                              (reset! loading false))))
+                                                                                             (toast/show-success-toast ctx "Task archived")))
+                                                                                    (.catchError (fn [error]
+                                                                                                 (dart-core/print (str "Error archiving task: " error))
+                                                                                                 (toast/show-error-toast ctx "Failed to archive"))))
+                                                                                
+                                                                                nil)))))))
+                                         sorted-tasks)))))))
+
+                ;; 3️⃣ Bottom: Clear progress hint (psychological driver)
+                (m/Container
+                 .padding (m/EdgeInsets.all (tokens/space :m))
+                 .color (tokens/color :bg-focus)
+                 .child (comp/mongol-text-block
+                         {:text (str "Inbox: " (count @tasks) " unprocessed items")
+                          :style (m/TextStyle
+                                  .fontSize (tokens/font-size :s)
+                                  .color (tokens/color :text-weak))}))])}))))))))))
+

@@ -1,0 +1,37 @@
+(ns minii-focus.core.sync.daily-sync
+  "Cross-day Auto Sync Service
+  
+  Responsible for detecting date changes and triggering Forecast sync"
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/daily_sync_bridge.dart" :as daily-sync-bridge]))
+
+(defn check-and-sync-daily!
+  "Check and execute cross-day sync
+  
+  If date has changed, triggers Forecast sync and updates last sync date
+  This is an idempotent operation, can be safely called multiple times
+  
+  Parameters:
+  - db: AppDatabase instance
+  
+  Returns: Future<void>"
+  [db]
+  (bridge/dart-call
+   daily-sync-bridge/checkAndSyncDaily
+   db))
+
+(defn force-sync-forecast!
+  "Force sync Forecast (ignore date check)
+  
+  Used for manual trigger or initial sync on app startup
+  
+  Parameters:
+  - db: AppDatabase instance
+  
+  Returns: Future<void>"
+  [db]
+  (bridge/dart-call
+   daily-sync-bridge/forceSyncForecast
+   db))
+

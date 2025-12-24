@@ -1,0 +1,178 @@
+(ns minii-focus.core.domain.perspective.core
+  "Perspective Engine Core Data Structures
+  
+  Design goal of Perspective Engine:
+  A Perspective answers 5 questions:
+  1. What data am I looking at? (source)
+  2. Which ones do I want to see? (filter)
+  3. How do I want to group them? (group)
+  4. How do I want to sort them? (sort)
+  5. What should the interface look like? (display)
+  
+  👉 Perspective ≠ Query
+  👉 Perspective = View Definition")
+
+;; ============================================================================
+;; Core Data Structures
+;; ============================================================================
+
+(def Perspective
+  "Perspective Definition (Pure Data)
+  
+  {:id          string
+   :name        string            ;; Display name (Mongolian)
+   :icon        keyword           ;; :forecast :list :tag etc.
+   :source      keyword           ;; :tasks | :forecast | :projects
+   :filters     vector            ;; FilterSpec[]
+   :group-by    keyword           ;; :none | :date | :project | :tag
+   :sort-by     keyword           ;; :manual | :due | :urgency
+   :display     map}              ;; DisplaySpec
+  
+  This is the minimal field set, but each one is 'valuable'."
+  {:id string?
+   :name string?
+   :icon keyword?
+   :source keyword?
+   :filters vector?
+   :group-by keyword?
+   :sort-by keyword?
+   :display map?})
+
+(def FilterSpec
+  "FilterSpec (Intentionally kept very simple)
+  
+  Example:
+  {:field :due
+   :op    :<
+   :value :today}
+  
+  Or:
+  {:field :status
+   :op    :in
+   :value [:active :waiting]}
+  
+  Why not start with a DSL?
+  Because:
+  - What you need now is structural stability
+  - Not 'advanced expressiveness'
+  - DSL can be added later, but data structures are hard to change once set."
+  {:field keyword?
+   :op keyword?
+   :value any?})
+
+(def DisplaySpec
+  "DisplaySpec (This is where you differentiate yourself)
+  
+  {:layout      :vertical           ;; :vertical | :compact
+   :show-notes  boolean             ;; Whether to show notes
+   :show-project boolean            ;; Whether to show project
+   :dense       boolean             ;; Whether to display densely
+   :scroll-axis :horizontal}        ;; Very important for vertical writing
+  
+  ⚠️ Note:
+  DisplaySpec is not UI Widget parameters
+  It's perspective semantics"
+  {:layout keyword?
+   :show-notes boolean?
+   :show-project boolean?
+   :dense boolean?
+   :scroll-axis keyword?})
+
+;; ============================================================================
+;; Supported Source Types
+;; ============================================================================
+
+(def source-types
+  "Supported data source types"
+  #{:tasks :forecast :projects})
+
+;; ============================================================================
+;; Supported GroupBy Types
+;; ============================================================================
+
+(def group-by-types
+  "Supported grouping types"
+  #{:none :date :project :tag})
+
+;; ============================================================================
+;; Supported SortBy Types
+;; ============================================================================
+
+(def sort-by-types
+  "Supported sorting types"
+  #{:manual :due :urgency :created})
+
+;; ============================================================================
+;; Supported Filter Operators
+;; ============================================================================
+
+(def filter-ops
+  "Supported filter operators"
+  #{:== :!= :< :<= :> :>= :in :is-null :is-not-null :within})
+
+;; ============================================================================
+;; Supported Display Layout Types
+;; ============================================================================
+
+(def display-layouts
+  "Supported display layout types"
+  #{:vertical :compact})
+
+;; ============================================================================
+;; Supported Scroll Axis Types
+;; ============================================================================
+
+(def scroll-axes
+  "Supported scroll axis types"
+  #{:horizontal :vertical})
+
+;; ============================================================================
+;; Validation Functions
+;; ============================================================================
+
+(defn valid-perspective?
+  "Validate if Perspective is valid
+  
+  Parameters:
+  - p: Perspective map
+  
+  Returns: boolean"
+  [p]
+  (and (map? p)
+       (string? (:id p))
+       (string? (:name p))
+       (keyword? (:icon p))
+       (contains? source-types (:source p))
+       (vector? (:filters p))
+       (contains? group-by-types (:group-by p))
+       (contains? sort-by-types (:sort-by p))
+       (map? (:display p))))
+
+(defn valid-filter-spec?
+  "Validate if FilterSpec is valid
+  
+  Parameters:
+  - f: FilterSpec map
+  
+  Returns: boolean"
+  [f]
+  (and (map? f)
+       (keyword? (:field f))
+       (contains? filter-ops (:op f))
+       (some? (:value f))))
+
+(defn valid-display-spec?
+  "Validate if DisplaySpec is valid
+  
+  Parameters:
+  - d: DisplaySpec map
+  
+  Returns: boolean"
+  [d]
+  (and (map? d)
+       (contains? display-layouts (:layout d))
+       (boolean? (:show-notes d))
+       (boolean? (:show-project d))
+       (boolean? (:dense d))
+       (contains? scroll-axes (:scroll-axis d))))
+

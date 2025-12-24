@@ -1,0 +1,29 @@
+(ns minii-focus.core.ui.nav
+  (:require
+    ["package:flutter/material.dart" :as m]
+    [minii-focus.core.router.nav :as nav]))
+
+(def main-tabs
+  [{:route :inbox :label "Inbox" :icon m/Icons.inbox}
+   {:route :forecast :label "Forecast" :icon m/Icons.calendar_today}
+   {:route :focus :label "Focus" :icon m/Icons.timer}
+   {:route :timeline :label "Timeline" :icon m/Icons.timeline}
+   {:route :review :label "Review" :icon m/Icons.review}
+   {:route :perspective :label "Perspective" :icon m/Icons.explore}])
+
+(defn bottom-nav-bar [current-route]
+  (m/BottomNavigationBar
+   .type m/BottomNavigationBarType.fixed
+   .currentIndex (or (first (keep-indexed (fn [idx {:keys [route]}]
+                                            (when (= route current-route) idx))
+                                          main-tabs))
+                     0)
+   .onTap (fn [idx]
+           (let [selected-tab (nth main-tabs idx)]
+             (nav/navigate! (:route selected-tab))))
+   .items (into []
+               (for [{:keys [label icon]} main-tabs]
+                 (m/BottomNavigationBarItem
+                  .icon (m/Icon icon)
+                  .label label)))))
+

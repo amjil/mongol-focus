@@ -1,0 +1,143 @@
+(ns minii-focus.core.db.forecast
+  "Forecast DAO Wrapper
+  
+  Provides ClojureDart API for Forecast, hiding Drift details."
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/forecast_bridge.dart" :as forecast-bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+
+(defn forecast-companion
+  "Build ForecastsCompanion
+  
+  Parameters:
+  - id: string
+  - task-id: string
+  - scheduled-date: int (yyyyMMdd)
+  - done: boolean (default false)
+  - skipped: boolean (default false)
+  - confidence: int (0-100, default 50)
+  - source: int (0=auto, 1=review, default 0)
+  - created-at: int (timestamp in milliseconds)
+  
+  ⚠️ Companion building must be centralized, only change here when schema changes"
+  [{:keys [id task-id scheduled-date done skipped confidence source created-at]}]
+  (bridge/dart-new
+   app-db/ForecastsCompanion.insert
+   {:id id
+    :taskId task-id
+    :scheduledDate scheduled-date
+    :done (or done false)
+    :skipped (or skipped false)
+    :confidence (or confidence 50)
+    :source (or source 0)
+    :createdAt created-at}))
+
+(defn insert-forecast!
+  "Insert new forecast
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-map: {:id ... :task-id ... :scheduled-date ... etc}
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-map]
+  (let [companion (forecast-companion forecast-map)]
+    (bridge/dart-call
+     forecast-bridge/insertForecast
+     dao-bridge
+     companion)))
+
+(defn mark-done!
+  "Mark forecast as completed
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-id]
+  (bridge/dart-call
+   forecast-bridge/markForecastDone
+   dao-bridge
+   forecast-id))
+
+(defn watch-by-date
+  "Query Forecasts for specified date
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - yyyymmdd: int (yyyyMMdd format)
+  
+  Returns: Stream<List<Forecast>>"
+  [dao-bridge yyyymmdd]
+  (bridge/dart-call
+   forecast-bridge/watchForecastsByDate
+   dao-bridge
+   yyyymmdd))
+
+(defn get-by-id
+  "Get Forecast details by ID
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  
+  Returns: Future<Forecast?>"
+  [dao-bridge forecast-id]
+  (bridge/dart-call
+   forecast-bridge/getForecastById
+   dao-bridge
+   forecast-id))
+
+(defn delete-forecast!
+  "Delete Forecast
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-id]
+  (bridge/dart-call
+   forecast-bridge/deleteForecast
+   dao-bridge
+   forecast-id))
+
+(defn update-scheduled-date!
+  "Update Forecast's scheduledDate
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  - new-date: int (yyyyMMdd format)
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-id new-date]
+  (let [updates (bridge/dart-new
+                 app-db/ForecastsCompanion
+                 {:scheduledDate new-date})]
+    (bridge/dart-call
+     forecast-bridge/updateForecast
+     dao-bridge
+     forecast-id
+     updates)))
+
+(defn mark-skipped!
+  "Mark Forecast as skipped (canceled)
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-id]
+  (let [updates (bridge/dart-new
+                 app-db/ForecastsCompanion
+                 {:skipped true})]
+    (bridge/dart-call
+     forecast-bridge/updateForecast
+     dao-bridge
+     forecast-id
+     updates)))
+

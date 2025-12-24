@@ -1,0 +1,740 @@
+(ns minii-focus.screens.forecast
+  "Forecast page
+  
+  Features:
+  - Forecast auto-generation
+  - Manual adjustment
+  - Overload warning"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.forecast :as forecast]
+   [minii-focus.core.db.timeline :as timeline]
+   [minii-focus.core.db.tx :as tx]
+   [minii-focus.core.db.task :as task]
+   [minii-focus.core.dao.forecast :as forecast-gen]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.time :as time]
+   [minii-focus.core.utils.toast :as toast]))
+
+(defn format-date [yyyymmdd]
+  (let [year (int (/ yyyymmdd 10000))
+        month-day (mod yyyymmdd 10000)
+        month (int (/ month-day 100))
+        day (mod month-day 100)]
+    (str year "-" month "-" day)))
+
+(defn load-task-titles-map
+  "Batch load task titles into map
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-ids: List<string> task ID list
+  
+  Returns: Future<Map<string, string>> task-id -> title mapping"
+  [dao task-ids]
+  (if (empty? task-ids)
+    (dart-core/Future.value {})
+    (-> (dart-core/Future.wait
+         (vec (map (fn [task-id]
+                    (-> (task/get-by-id dao task-id)
+                        (.then (fn [task-obj]
+                                (if task-obj
+                                  {task-id (.-title task-obj)}
+                                  {task-id (str "Task: " task-id)})))
+                        (.catchError (fn [error]
+                                     (dart-core/print (str "Error loading task " task-id ": " error))
+                                     {task-id (str "Task: " task-id)}))))
+                  task-ids)))
+        (.then (fn [results]
+                (reduce merge {} results))))))
+
+(def daily-capacity-limit 8)  ; Daily load limit (hard limit)
+
+(defn calculate-daily-load
+  "Calculate daily load
+  
+  Parameters:
+  - forecasts: List<Forecast>
+  
+  Returns: int (number of incomplete Forecasts)"
+  [forecasts]
+  (count (filter #(not (.-done %)) forecasts)))
+
+(defn is-overloaded?
+  "Check if overloaded
+  
+  Parameters:
+  - forecast-count: int
+  - capacity-limit: int (optional, defaults to daily-capacity-limit)
+  
+  Returns: boolean"
+  [forecast-count & [capacity-limit]]
+  (let [limit (or capacity-limit daily-capacity-limit)]
+    (> forecast-count limit)))
+
+(defn calculate-forecast-accuracy
+  "Calculate forecast accuracy
+  
+  Parameters:
+  - dao: DaoBridge
+  - days-back: int (query data from how many days back, default 7 days)
+  
+  Returns: Future<{:accuracy double :total-forecasts int :completed-forecasts int :avg-error double}>"
+  [dao days-back]
+  (let [now-ts (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+        today-yyyymmdd (time/ts->yyyymmdd now-ts)]
+    ;; Query Forecast data from last N days
+    (-> (dart-core/Future.wait
+         (vec (map (fn [offset]
+                    (let [date-yyyymmdd (time/yyyymmdd-add-days today-yyyymmdd (- offset))]
+                      (-> (forecast/watch-by-date dao date-yyyymmdd)
+                          (.first)
+                          (.then (fn [forecasts] (or forecasts []))))))
+                  (range 0 days-back))))
+        (.then (fn [results]
+                (let [all-forecasts (apply concat results)
+                      total (count all-forecasts)
+                      completed (count (filter #(.-done %) all-forecasts))
+                      accuracy (if (> total 0)
+                                (/ completed total)
+                                0.0)]
+                  {:accuracy accuracy
+                   :total-forecasts total
+                   :completed-forecasts completed
+                   :avg-error (- 1.0 accuracy)})))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error calculating accuracy: " error))
+                     {:accuracy 0.0
+                      :total-forecasts 0
+                      :completed-forecasts 0
+                      :avg-error 1.0})))))
+
+(defn forecast-screen [_params]
+  (let [forecasts-list (atom [])
+        forecasts-order (atom [])  ; Forecast ID order list
+        task-titles-map (atom {})
+        loading (atom false)
+        view-mode (atom :day)  ; :day | :week | :list
+        selected-forecasts (atom #{})  ; Selected Forecast ID set
+        batch-mode (atom false)  ; Whether in batch selection mode
+        accuracy-data (atom nil)  ; Forecast accuracy data
+        accuracy-loading (atom false)  ; Accuracy loading state
+        history-comparison (atom [])  ; History comparison data
+        history-loading (atom false)  ; History comparison loading state
+        dao (app-state/get-dao)
+        db (app-state/get-db)
+        ctx {:db db :dao dao}
+        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+    ;; Load forecasts for today
+    (reset! loading true)
+    (-> (forecast/watch-by-date dao today-yyyymmdd)
+        (.first)
+        (.then (fn [result]
+                 (let [forecasts (or result [])
+                       task-ids (distinct (map #(.-taskId %) forecasts))]
+                   (reset! forecasts-list forecasts)
+                   ;; Initialize order list (sorted by creation time)
+                   (reset! forecasts-order (vec (map #(.-id %) (sort-by #(.-createdAt %) forecasts))))
+                   (-> (load-task-titles-map dao task-ids)
+                       (.then (fn [titles-map]
+                                (reset! task-titles-map titles-map)
+                                (reset! loading false)))
+                       (.catchError (fn [error]
+                                      (dart-core/print (str "Error loading task titles: " error))
+                                      (reset! loading false)))))))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error loading forecasts: " error))
+                       (reset! loading false))))
+
+    ;; Load forecast accuracy
+    (reset! accuracy-loading true)
+    (-> (calculate-forecast-accuracy dao 7)
+        (.then (fn [result]
+                 (reset! accuracy-data result)
+                 (reset! accuracy-loading false)))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error loading accuracy: " error))
+                       (reset! accuracy-loading false))))
+
+    ;; Load history comparison data (last 7 days)
+    (reset! history-loading true)
+    (-> (dart-core/Future.wait
+         (vec (map (fn [offset]
+                     (let [date-yyyymmdd (time/yyyymmdd-add-days today-yyyymmdd (- offset))]
+                       (-> (forecast/watch-by-date dao date-yyyymmdd)
+                           (.first)
+                           (.then (fn [forecasts]
+                                    (let [forecasts-list (or forecasts [])
+                                          total (count forecasts-list)
+                                          completed (count (filter #(.-done %) forecasts-list))]
+                                      {:date date-yyyymmdd
+                                       :total total
+                                       :completed completed
+                                       :accuracy (if (> total 0) (/ completed total) 0.0)}))))))
+                   (range 0 7))))
+        (.then (fn [results]
+                 (reset! history-comparison (vec (reverse results)))  ; Sort by time ascending
+                 (reset! history-loading false)))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error loading history: " error))
+                       (reset! history-loading false))))
+
+    ;; Function to load Forecasts
+    (letfn [(load-forecasts [mode]
+              (reset! loading true)
+              (let [load-promise (case mode
+                                   :day
+                                   ;; Day view: load today
+                                   (-> (forecast/watch-by-date dao today-yyyymmdd)
+                                       (.first))
+
+                                   :week
+                                   ;; Week view: load next 7 days
+                                   (-> (dart-core/Future.wait
+                                        (vec (map (fn [offset]
+                                                    (let [date-yyyymmdd (time/yyyymmdd-add-days today-yyyymmdd offset)]
+                                                      (-> (forecast/watch-by-date dao date-yyyymmdd)
+                                                          (.first)
+                                                          (.then (fn [forecasts] (or forecasts []))))))
+                                                  (range 0 7))))
+                                       (.then (fn [results]
+                                                (apply concat results))))
+
+                                   :list
+                                   ;; List view: load all incomplete (simplified: load next 30 days)
+                                   (-> (dart-core/Future.wait
+                                        (vec (map (fn [offset]
+                                                    (let [date-yyyymmdd (time/yyyymmdd-add-days today-yyyymmdd offset)]
+                                                      (-> (forecast/watch-by-date dao date-yyyymmdd)
+                                                          (.first)
+                                                          (.then (fn [forecasts]
+                                                                   (filter (fn [f] (not (.-done f)))
+                                                                           (or forecasts [])))))))
+                                                  (range 0 30))))
+                                       (.then (fn [results]
+                                                (apply concat results)))
+                                       (.then (fn [all-forecasts]
+                                                ;; Deduplicate and sort by date
+                                                (let [id-map (reduce (fn [acc f]
+                                                                       (if (contains? acc (.-id f))
+                                                                         acc
+                                                                         (assoc acc (.-id f) f)))
+                                                                     {}
+                                                                     all-forecasts)]
+                                                  (vec (sort-by (fn [f] (.-scheduledDate f))
+                                                                (vals id-map))))))))]
+                (-> load-promise
+                    (.then (fn [forecasts]
+                             (let [forecasts-vec (vec forecasts)
+                                   task-ids (distinct (map #(.-taskId %) forecasts-vec))]
+                               (reset! forecasts-list forecasts-vec)
+                               (-> (load-task-titles-map dao task-ids)
+                                   (.then (fn [titles-map]
+                                            (reset! task-titles-map titles-map)
+                                            (reset! loading false)))
+                                   (.catchError (fn [error]
+                                                  (dart-core/print (str "Error loading task titles: " error))
+                                                  (reset! loading false)))))))
+                    (.catchError (fn [error]
+                                   (dart-core/print (str "Error loading forecasts: " error))
+                                   (reset! loading false))))))]
+
+      ;; Initial load
+      (load-forecasts @view-mode)
+
+      (f/widget
+       :context ctx
+       :bind {:forecasts forecasts-list
+              :task-titles task-titles-map
+              :loading loading
+              :view-mode view-mode
+              :selected-forecasts selected-forecasts
+              :batch-mode batch-mode
+              :accuracy-data accuracy-data
+              :accuracy-loading accuracy-loading
+              :history-comparison history-comparison
+              :history-loading history-loading}
+       :watch [_view view-mode
+               _batch batch-mode]
+
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .title (comp/mongol-text-block
+                         {:text (if @batch-mode
+                                  (str "Batch Operations (" (count @selected-forecasts) ")")
+                                  "Forecast")})
+                 .actions
+                 (vec (filter some?
+                              [(when @batch-mode
+                                 (m/IconButton
+                                  .icon (m/Icon m/Icons.edit_calendar)
+                                  .tooltip "Batch Adjust Date"
+                                  .onPressed (fn []
+                                               ;; Batch adjust date
+                                               (if (empty? @selected-forecasts)
+                                                 (toast/show-info-toast ctx "Please select forecasts to adjust first")
+                                                 (let [now (dart-core/DateTime.now)]
+                                                   (-> (m/showDatePicker
+                                                        .context ctx
+                                                        .initialDate now
+                                                        .firstDate now
+                                                        .lastDate (dart-core/DateTime (+ (.year now) 1) 12 31))
+                                                       (.then (fn [selected-date]
+                                                                (when selected-date
+                                                                  (let [new-yyyymmdd (+ (* (.year selected-date) 10000)
+                                                                                        (* (.month selected-date) 100)
+                                                                                        (.day selected-date))
+                                                                        selected-ids (vec @selected-forecasts)]
+                                                                    (reset! loading true)
+                                                                    (-> (dart-core/Future.wait
+                                                                         (vec (map (fn [forecast-id]
+                                                                                     (dispatch/dispatch-event! ctx
+                                                                                                               {:type :forecast/reschedule
+                                                                                                                :payload {:forecast-id forecast-id
+                                                                                                                          :date new-yyyymmdd}
+                                                                                                                :source :ui}))
+                                                                                   selected-ids)))
+                                                                        (.then (fn [_]
+                                                                                 (reset! selected-forecasts #{})
+                                                                                 (reset! batch-mode false)
+                                                                                 (load-forecasts @view-mode)
+                                                                                 (toast/show-success-toast ctx (str "Adjusted date for " (count selected-ids) " forecasts"))))
+                                                                        (.catchError (fn [error]
+                                                                                       (dart-core/print (str "Error batch rescheduling: " error))
+                                                                                       (reset! loading false)
+                                                                                       (toast/show-error-toast ctx "Failed to batch adjust"))))))))
+                                                       (.catchError (fn [error]
+                                                                      (dart-core/print (str "Error showing date picker: " error))))))))))
+                              (when @batch-mode
+                                (m/IconButton
+                                 .icon (m/Icon m/Icons.close)
+                                 .tooltip "Cancel Batch Selection"
+                                 .onPressed (fn []
+                                              (reset! selected-forecasts #{})
+                                              (reset! batch-mode false))))
+                              (m/PopupMenuButton
+                               .itemBuilder (fn [_ctx]
+                                              [(m/PopupMenuItem
+                                                .value :day
+                                                .child (m/Text "Day View"))
+                                               (m/PopupMenuItem
+                                                .value :week
+                                                .child (m/Text "Week View"))
+                                               (m/PopupMenuItem
+                                                .value :list
+                                                .child (m/Text "List View"))
+                                               (m/PopupMenuDivider)
+                                               (m/PopupMenuItem
+                                                .value :batch-mode
+                                                .child (m/Text (if @batch-mode "Exit Batch Mode" "Batch Mode")))])
+                                .onSelected (fn [mode]
+                                              (if (= mode :batch-mode)
+                                                (do
+                                                  (reset! batch-mode (not @batch-mode))
+                                                  (when (not @batch-mode)
+                                                    (reset! selected-forecasts #{})))
+                                                (do
+                                                  (reset! view-mode mode)
+                                                  (load-forecasts mode)))))])))
+        .body (comp/mongol-column-layout
+               {:main-column
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.max
+                 .crossAxisAlignment m/CrossAxisAlignment.stretch
+                 .children
+                 [(m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .child (m/Row
+                           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                           .children
+                           [(comp/mongol-text-block
+                             {:text (str "Today's Forecast (" (format-date today-yyyymmdd) ")")
+                              :style (m/TextStyle
+                                      .fontSize (tokens/font-size :l)
+                                      .fontWeight m/FontWeight.bold)})
+                            (m/ElevatedButton
+                             .onPressed (fn []
+                                          (reset! loading true)
+                                          (-> (forecast-gen/regenerate! db
+                                                                        {:entity :task
+                                                                         :filters [{:field :completed :op := :value false}]
+                                                                         :order-by [{:field :created-at :dir :asc}]
+                                                                         :limit 50}
+                                                                        7)
+                                              (.then (fn [_]
+                                                       (reset! loading false)
+                                                       (toast/show-success-toast ctx "Forecast regenerated")
+                                                       ;; Reload forecasts
+                                                       (-> (forecast/watch-by-date dao today-yyyymmdd)
+                                                           (.first)
+                                                           (.then (fn [result]
+                                                                    (let [forecasts (or result [])
+                                                                          task-ids (distinct (map #(.-taskId %) forecasts))]
+                                                                      (reset! forecasts-list forecasts)
+                                                                      ;; Reinitialize order list
+                                                                      (reset! forecasts-order (vec (map #(.-id %) (sort-by #(.-createdAt %) forecasts))))
+                                                                      (-> (load-task-titles-map dao task-ids)
+                                                                          (.then (fn [titles-map]
+                                                                                   (reset! task-titles-map titles-map)
+                                                                                   (reset! loading false)))
+                                                                          (.catchError (fn [error]
+                                                                                         (dart-core/print (str "Error loading task titles: " error))
+                                                                                         (reset! loading false)))))))
+                                                           (.catchError (fn [error]
+                                                                          (dart-core/print (str "Error reloading forecasts: " error))
+                                                                          (reset! loading false))))))
+                                              (.catchError (fn [error]
+                                                             (dart-core/print (str "Error regenerating forecast: " error))
+                                                             (reset! loading false)
+                                                             (toast/show-error-toast ctx "Failed to generate forecast"))))
+                                          nil)
+                             .child (comp/mongol-text-block
+                                     {:text "Regenerate"}))]))
+                  ;; Forecast accuracy card
+                  (when @accuracy-data
+                    (m/Container
+                     .margin (m/EdgeInsets.symmetric
+                              :horizontal (tokens/space :m)
+                              :vertical (tokens/space :s))
+                     .padding (m/EdgeInsets.all (tokens/space :m))
+                     .decoration (m/BoxDecoration
+                                  .color (tokens/color :bg-focus)
+                                  .borderRadius (m/BorderRadius.circular 8))
+                     .child (m/Column
+                             .crossAxisAlignment m/CrossAxisAlignment.start
+                             .children
+                             [(comp/mongol-text-block
+                               {:text "Forecast Accuracy (Last 7 Days)"
+                                :style (m/TextStyle
+                                        .fontSize (tokens/font-size :m)
+                                        .fontWeight m/FontWeight.bold)})
+                              (m/SizedBox .height (tokens/space :s))
+                              (m/Row
+                               .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                               .children
+                               [(m/Column
+                                 .crossAxisAlignment m/CrossAxisAlignment.start
+                                 .children
+                                 [(comp/mongol-text-block
+                                   {:text (str (int (* (:accuracy @accuracy-data) 100)) "%")
+                                    :style (m/TextStyle
+                                            .fontSize (tokens/font-size :xl)
+                                            .fontWeight m/FontWeight.bold
+                                            .color (cond
+                                                     (>= (:accuracy @accuracy-data) 0.7) m/Colors.green
+                                                     (>= (:accuracy @accuracy-data) 0.5) m/Colors.orange
+                                                     :else m/Colors.red))})
+                                  (comp/mongol-text-block
+                                   {:text (str "Completed " (:completed-forecasts @accuracy-data) " / " (:total-forecasts @accuracy-data))
+                                    :style (m/TextStyle
+                                            .fontSize (tokens/font-size :s)
+                                            .color (tokens/color :text-weak))})])
+                                (m/Container
+                                 .width 100
+                                 .height 8
+                                 .decoration (m/BoxDecoration
+                                              .color (tokens/color :bg-weak)
+                                              .borderRadius (m/BorderRadius.circular 4))
+                                 .child (m/Container
+                                         .width (* 100 (:accuracy @accuracy-data))
+                                         .height 8
+                                         .decoration (m/BoxDecoration
+                                                      .color (cond
+                                                               (>= (:accuracy @accuracy-data) 0.7) m/Colors.green
+                                                               (>= (:accuracy @accuracy-data) 0.5) m/Colors.orange
+                                                               :else m/Colors.red)
+                                                      .borderRadius (m/BorderRadius.circular 4))))])])))
+                  ;; History comparison card
+                  (when (and (not @history-loading) (not (empty? @history-comparison)))
+                    (m/Container
+                     .margin (m/EdgeInsets.symmetric
+                              :horizontal (tokens/space :m)
+                              :vertical (tokens/space :s))
+                     .padding (m/EdgeInsets.all (tokens/space :m))
+                     .decoration (m/BoxDecoration
+                                  .color (tokens/color :bg-focus)
+                                  .borderRadius (m/BorderRadius.circular 8))
+                     .child (m/Column
+                             .crossAxisAlignment m/CrossAxisAlignment.start
+                             .children
+                             [(comp/mongol-text-block
+                               {:text "History Comparison (Last 7 Days)"
+                                :style (m/TextStyle
+                                        .fontSize (tokens/font-size :m)
+                                        .fontWeight m/FontWeight.bold)})
+                              (m/SizedBox .height (tokens/space :s))
+                              (m/ListView
+                               .shrinkWrap true
+                               .children
+                               (vec (map (fn [day-data]
+                                           (m/Padding
+                                            .padding (m/EdgeInsets.symmetric
+                                                      :vertical (tokens/space :xs))
+                                            .child (m/Row
+                                                    .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                                    .children
+                                                    [(comp/mongol-text-block
+                                                      {:text (format-date (:date day-data))
+                                                       :style (m/TextStyle
+                                                               .fontSize (tokens/font-size :s))})
+                                                     (comp/mongol-text-block
+                                                      {:text (str (:completed day-data) "/" (:total day-data) " (" (int (* (:accuracy day-data) 100)) "%)")
+                                                       :style (m/TextStyle
+                                                               .fontSize (tokens/font-size :s)
+                                                               .color (cond
+                                                                        (>= (:accuracy day-data) 0.7) m/Colors.green
+                                                                        (>= (:accuracy day-data) 0.5) m/Colors.orange
+                                                                        :else m/Colors.red))})])))
+                                         @history-comparison)))])))
+                  ;; Overload warning
+                  (when (is-overloaded? (calculate-daily-load @forecasts-list))
+                    (m/Container
+                     .margin (m/EdgeInsets.symmetric
+                              :horizontal (tokens/space :m)
+                              :vertical (tokens/space :s))
+                     .padding (m/EdgeInsets.all (tokens/space :m))
+                     .decoration (m/BoxDecoration
+                                  .color m/Colors.orange.shade50
+                                  .border (m/Border.all
+                                           :color m/Colors.orange.shade300
+                                           :width 1)
+                                  .borderRadius (m/BorderRadius.circular 8))
+                     .child (m/Row
+                             .children
+                             [(m/Icon
+                               m/Icons.warning
+                               .color m/Colors.orange.shade700
+                               .size 20)
+                              (m/SizedBox .width (tokens/space :s))
+                              (m/Expanded
+                               .child (comp/mongol-text-block
+                                       {:text (str "⚠ Today's forecast overloaded: "
+                                                   (calculate-daily-load @forecasts-list)
+                                                   " items (limit: "
+                                                   daily-capacity-limit
+                                                   ")")
+                                        :style (m/TextStyle
+                                                .fontSize (tokens/font-size :s)
+                                                .color m/Colors.orange.shade900
+                                                .fontWeight m/FontWeight.w500)}))])))
+                  (m/Expanded
+                   .child (cond
+                            @loading
+                            (m/Center
+                             .child (m/CircularProgressIndicator))
+
+                            (empty? @forecasts-list)
+                            (m/Center
+                             .child (comp/mongol-text-block
+                                     {:text "No forecasts for today"
+                                      :style (m/TextStyle
+                                              .color (tokens/color :text-weak))}))
+
+                            :else
+                            (let [ordered-forecasts (filter some?
+                                                            (vec (map (fn [id]
+                                                                        (first (filter #(= (.-id %) id) @forecasts-list)))
+                                                                      @forecasts-order)))]  ; Filter out nil
+                              (m/ReorderableListView
+                               .onReorder (fn [old-index new-index]
+                                            (let [old-index (if (> new-index old-index) old-index (inc old-index))
+                                                  new-index (if (> new-index old-index) (inc new-index) new-index)]
+                                              (when (and (>= old-index 0)
+                                                         (< old-index (count @forecasts-order))
+                                                         (>= new-index 0)
+                                                         (< new-index (count @forecasts-order)))
+                                                (let [item (nth @forecasts-order old-index)
+                                                      new-order (vec (concat
+                                                                      (take old-index @forecasts-order)
+                                                                      (drop (inc old-index) @forecasts-order)))]
+                                                  (reset! forecasts-order
+                                                          (vec (concat
+                                                                (take new-index new-order)
+                                                                [item]
+                                                                (drop new-index new-order))))))))
+                               .children (vec (map-indexed
+                                               (fn [_idx forecast-item]
+                                                 (m/Card
+                                                  .key (m/ValueKey (.-id forecast-item))
+                                                  .margin (m/EdgeInsets.symmetric
+                                                           :vertical (tokens/space :s)
+                                                           :horizontal (tokens/space :m))
+                                                  .child (m/ListTile
+                                                          .leading (when @batch-mode
+                                                                     (m/Checkbox
+                                                                      .value (contains? @selected-forecasts (.-id forecast-item))
+                                                                      .onChanged (fn [checked]
+                                                                                   (if checked
+                                                                                     (swap! selected-forecasts conj (.-id forecast-item))
+                                                                                     (swap! selected-forecasts disj (.-id forecast-item))))))
+                                                          .title (let [task-id (.-taskId forecast-item)
+                                                                       task-title (get @task-titles-map task-id)]
+                                                                   (comp/mongol-text-block
+                                                                    {:text (or task-title
+                                                                               (str "Task: " task-id))}))
+                                                          .subtitle (comp/mongol-text-block
+                                                                     {:text (str "Confidence: " (or (.-confidence forecast-item) 0) "%")
+                                                                      :style (m/TextStyle
+                                                                              .fontSize (tokens/font-size :s)
+                                                                              .color (tokens/color :text-weak))})
+                                                          .onTap (when @batch-mode
+                                                                   (fn []
+                                                                     (let [forecast-id (.-id forecast-item)]
+                                                                       (if (contains? @selected-forecasts forecast-id)
+                                                                         (swap! selected-forecasts disj forecast-id)
+                                                                         (swap! selected-forecasts conj forecast-id)))))
+                                                          .trailing (cond
+                                                                      (.-done forecast-item)
+                                                                      (m/Icon m/Icons.check_circle
+                                                                              .color m/Colors.green)
+                                                                      @batch-mode
+                                                                      nil
+                                                                      :else
+                                                                      (m/PopupMenuButton
+                                                                       .itemBuilder (fn [_ctx]
+                                                                                      [(m/PopupMenuItem
+                                                                                        .value :complete
+                                                                                        .child (m/Row
+                                                                                                .children
+                                                                                                [(m/Icon m/Icons.check)
+                                                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                                                 (m/Text "Complete")]))
+                                                                                       (m/PopupMenuItem
+                                                                                        .value :reschedule
+                                                                                        .child (m/Row
+                                                                                                .children
+                                                                                                [(m/Icon m/Icons.edit_calendar)
+                                                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                                                 (m/Text "Reschedule")]))
+                                                                                       (m/PopupMenuItem
+                                                                                        .value :cancel
+                                                                                        .child (m/Row
+                                                                                                .children
+                                                                                                [(m/Icon m/Icons.cancel)
+                                                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                                                 (m/Text "Cancel")]))
+                                                                                       (m/PopupMenuDivider)
+                                                                                       (m/PopupMenuItem
+                                                                                        .value :delete
+                                                                                        .child (m/Row
+                                                                                                .children
+                                                                                                [(m/Icon m/Icons.delete
+                                                                                                         .color m/Colors.red)
+                                                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                                                 (m/Text "Delete"
+                                                                                                         .style (m/TextStyle
+                                                                                                                 .color m/Colors.red))]))])
+                                                                       .onSelected (fn [action]
+                                                                                     (let [forecast-id (.-id forecast-item)
+                                                                                           task-id (.-taskId forecast-item)]
+                                                                                       (case action
+                                                                                         :complete
+                                                                                         ;; Complete forecast
+                                                                                         (-> (task/get-by-id dao task-id)
+                                                                                             (.then (fn [task-obj]
+                                                                                                      (let [task-title (if task-obj (.-title task-obj) "Unknown Task")
+                                                                                                            event {:id (str "event-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
+                                                                                                                   :timestamp (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+                                                                                                                   :type "forecast-done"
+                                                                                                                   :entity-type "forecast"
+                                                                                                                   :entity-id forecast-id
+                                                                                                                   :title (str "Complete forecast: " task-title)
+                                                                                                                   :duration nil
+                                                                                                                   :perspectives nil}]
+                                                                                                        (-> (tx/with-tx db
+                                                                                                              (fn []
+                                                                                                                (-> (forecast/mark-done! dao forecast-id)
+                                                                                                                    (.then (fn [_]
+                                                                                                                             (timeline/insert-event! dao event))))))
+                                                                                                            (.then (fn [_]
+                                                                                                                     (reset! forecasts-list
+                                                                                                                             (map (fn [f]
+                                                                                                                                    (if (= (.-id f) forecast-id)
+                                                                                                                                      (assoc f :done true)
+                                                                                                                                      f))
+                                                                                                                                  @forecasts-list))
+                                                                                                                     (toast/show-success-toast ctx "Forecast completed")))
+                                                                                                            (.catchError (fn [error]
+                                                                                                                           (dart-core/print (str "Error completing forecast: " error))
+                                                                                                                           (toast/show-error-toast ctx "Failed to complete forecast")))))))
+                                                                                             (.catchError (fn [error]
+                                                                                                            (dart-core/print (str "Error getting task: " error))
+                                                                                                            (toast/show-error-toast ctx "Failed to get task info"))))
+
+                                                                                         :reschedule
+                                                                                         ;; Reschedule - show date picker dialog
+                                                                                         (let [current-date (.-scheduledDate forecast-item)
+                                                                                               current-year (int (/ current-date 10000))
+                                                                                               current-month (int (/ (mod current-date 10000) 100))
+                                                                                               current-day (mod current-date 100)
+                                                                                               initial-date (dart-core/DateTime current-year current-month current-day)]
+                                                                                           (-> (m/showDatePicker
+                                                                                                .context ctx
+                                                                                                .initialDate initial-date
+                                                                                                .firstDate (dart-core/DateTime.now)
+                                                                                                .lastDate (dart-core/DateTime (+ (.year (dart-core/DateTime.now)) 1)
+                                                                                                                              12
+                                                                                                                              31))
+                                                                                               (.then (fn [selected-date]
+                                                                                                        (when selected-date
+                                                                                                          (let [new-yyyymmdd (+ (* (.year selected-date) 10000)
+                                                                                                                                (* (.month selected-date) 100)
+                                                                                                                                (.day selected-date))]
+                                                                                                            (-> (dispatch/dispatch-event! ctx
+                                                                                                                                          {:type :forecast/reschedule
+                                                                                                                                           :payload {:forecast-id forecast-id
+                                                                                                                                                     :date new-yyyymmdd}
+                                                                                                                                           :source :ui})
+                                                                                                                (.then (fn [_]
+                                                                                                                         ;; Reload forecasts
+                                                                                                                         (load-forecasts @view-mode)
+                                                                                                                         (toast/show-success-toast ctx "Date adjusted")))
+                                                                                                                (.catchError (fn [error]
+                                                                                                                               (dart-core/print (str "Error rescheduling forecast: " error))
+                                                                                                                               (toast/show-error-toast ctx "Failed to adjust date"))))))))
+                                                                                               (.catchError (fn [error]
+                                                                                                              (dart-core/print (str "Error showing date picker: " error))))))
+
+                                                                                         :cancel
+                                                                                         ;; Cancel forecast
+                                                                                         (-> (dispatch/dispatch-event! ctx
+                                                                                                                       {:type :forecast/cancel
+                                                                                                                        :payload {:forecast-id forecast-id}
+                                                                                                                        :source :ui})
+                                                                                             (.then (fn [_]
+                                                                                                      (reset! forecasts-list
+                                                                                                              (filter (fn [f]
+                                                                                                                        (not= (.-id f) forecast-id))
+                                                                                                                      @forecasts-list))
+                                                                                                      (reset! forecasts-order
+                                                                                                              (filter #(not= % forecast-id) @forecasts-order))
+                                                                                                      (toast/show-success-toast ctx "Forecast canceled")))
+                                                                                             (.catchError (fn [error]
+                                                                                                            (dart-core/print (str "Error canceling forecast: " error))
+                                                                                                            (toast/show-error-toast ctx "Failed to cancel forecast"))))
+
+                                                                                         :delete
+                                                                                         ;; Delete forecast
+                                                                                         (-> (dispatch/dispatch-event! ctx
+                                                                                                                       {:type :forecast/remove
+                                                                                                                        :payload {:forecast-id forecast-id}
+                                                                                                                        :source :ui})
+                                                                                             (.then (fn [_]
+                                                                                                      (reset! forecasts-list
+                                                                                                              (filter (fn [f]
+                                                                                                                        (not= (.-id f) forecast-id))
+                                                                                                                      @forecasts-list))
+                                                                                                      (reset! forecasts-order
+                                                                                                              (filter #(not= % forecast-id) @forecasts-order))
+                                                                                                      (toast/show-success-toast ctx "Forecast deleted")))
+                                                                                             (.catchError (fn [error]
+                                                                                                            (dart-core/print (str "Error deleting forecast: " error))
+                                                                                                            (toast/show-error-toast ctx "Failed to delete forecast"))))
+
+                                                                                         nil))))))))
+                                               ordered-forecasts))))))])}))))))

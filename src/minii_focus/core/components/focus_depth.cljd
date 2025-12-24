@@ -1,0 +1,219 @@
+(ns minii-focus.core.components.focus-depth
+  "Focus Depth Visualization Component
+  
+  Displays the depth of the current Focus session, showing focus level through visualization."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [minii-focus.core.components.text :as text]
+   [minii-focus.core.components.tokens :as tokens]))
+
+(defn focus-depth-bar
+  "Focus depth bar component
+  
+  Parameters:
+  - depth: double (0.0 ~ 1.0) - Current depth value
+  - max-depth: double (optional, default 1.0) - Maximum depth value
+  - width: double (optional, default 200.0) - Bar width
+  - height: double (optional, default 20.0) - Bar height
+  
+  Returns: Widget"
+  [& {:keys [depth max-depth width height]
+      :or {max-depth 1.0 width 200.0 height 20.0}}]
+  (let [normalized-depth (min 1.0 (max 0.0 (/ depth max-depth)))
+        percentage (int (* normalized-depth 100))]
+    (m/Column
+     .crossAxisAlignment m/CrossAxisAlignment.start
+     .children
+     [(m/Row
+       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       .children
+       [(text/mongol-text-block
+         {:text "Focus Depth"
+          :style (m/TextStyle
+                 .fontSize (tokens/font-size :s)
+                 .color (tokens/color :text-weak))})
+        (text/mongol-text-block
+         {:text (str percentage "%")
+          :style (m/TextStyle
+                 .fontSize (tokens/font-size :s)
+                 .fontWeight m/FontWeight.bold
+                 .color (tokens/color :accent))})])
+      (m/SizedBox .height (tokens/space :xs))
+      (m/Container
+       .width width
+       .height height
+       .decoration (m/BoxDecoration
+                   .color (tokens/color :bg-weak)
+                   .borderRadius (m/BorderRadius.circular (tokens/space :xs)))
+       .child (m/Stack
+              .children
+              [(m/Container
+                .width (* width normalized-depth)
+                .height height
+                .decoration (m/BoxDecoration
+                           .color (cond
+                                   (>= normalized-depth 0.7) m/Colors.green
+                                   (>= normalized-depth 0.4) m/Colors.orange
+                                   :else m/Colors.grey)
+                           .borderRadius (m/BorderRadius.circular (tokens/space :xs))))]))])))
+
+(declare focus-depth-trend-indicator)
+
+(defn focus-depth-chart
+  "Focus depth history chart component (displays depth of last N sessions)
+  
+  Parameters:
+  - depths: List<double> - Historical depth values list
+  - max-items: int (optional, default 7) - Maximum number of items to display
+  
+  Returns: Widget"
+  [& {:keys [depths max-items]
+      :or {depths [] max-items 7}}]
+  (let [recent-depths (take max-items (reverse depths))
+        max-depth (if (empty? recent-depths)
+                   1.0
+                   (apply max recent-depths))
+        chart-height 100.0
+        chart-width 300.0
+        item-width (/ chart-width (max 1 (count recent-depths)))]
+    (m/Column
+     .crossAxisAlignment m/CrossAxisAlignment.start
+     .children
+     [(text/mongol-text-block
+       {:text "Depth History"
+        :style (m/TextStyle
+               .fontSize (tokens/font-size :s)
+               .fontWeight m/FontWeight.w500)})
+      (m/SizedBox .height (tokens/space :s))
+      (if (empty? recent-depths)
+        (text/mongol-text-block
+         {:text "No Historical Data"
+          :style (m/TextStyle
+                 .fontSize (tokens/font-size :s)
+                 .color (tokens/color :text-weak))})
+        (m/Column
+         .crossAxisAlignment m/CrossAxisAlignment.start
+         .children
+         [(m/Container
+           .width chart-width
+           .height chart-height
+           .decoration (m/BoxDecoration
+                       .color (tokens/color :bg-weak)
+                       .borderRadius (m/BorderRadius.circular (tokens/space :s)))
+           .child (m/Row
+                  .crossAxisAlignment m/CrossAxisAlignment.end
+                  .children
+                  (vec (map-indexed
+                        (fn [idx depth]
+                          (let [normalized-depth (if (> max-depth 0)
+                                                   (/ depth max-depth)
+                                                   0)
+                                bar-height (* chart-height normalized-depth)]
+                            (m/Container
+                             .width (- item-width 2)
+                             .height bar-height
+                             .margin (m/EdgeInsets.only
+                                     :right (if (< idx (dec (count recent-depths)))
+                                             2
+                                             0))
+                             .decoration (m/BoxDecoration
+                                         .color (cond
+                                                 (>= normalized-depth 0.7) m/Colors.green
+                                                 (>= normalized-depth 0.4) m/Colors.orange
+                                                 :else m/Colors.grey)
+                                         .borderRadius (m/BorderRadius.only
+                                                       :topLeft (tokens/space :xs)
+                                                       :topRight (tokens/space :xs))))))
+                        recent-depths))))
+          (m/SizedBox .height (tokens/space :s))
+          (focus-depth-trend-indicator {:depths depths})]))])))
+
+(defn calculate-focus-depth
+  "Calculate current Focus session depth
+  
+  Parameters:
+  - elapsed-seconds: int - Elapsed seconds
+  - total-seconds: int - Total seconds
+  - pause-count: int - Pause count
+  - is-paused: boolean - Whether currently paused
+  
+  Returns: double (0.0 ~ 1.0)"
+  [elapsed-seconds total-seconds pause-count is-paused]
+  (let [progress (/ elapsed-seconds (max 1 total-seconds))
+        pause-penalty (* pause-count 0.1)
+        pause-penalty-now (if is-paused 0.2 0.0)
+        base-depth (min 1.0 progress)
+        final-depth (max 0.0 (- base-depth pause-penalty pause-penalty-now))]
+    final-depth))
+
+(defn analyze-depth-trend
+  "Analyze depth trend
+  
+  Parameters:
+  - depths: List<double> - Historical depth values list (chronological order, newest first)
+  
+  Returns: {:trend :rising|:falling|:stable :avg-depth double :change double}"
+  [depths]
+  (if (< (count depths) 2)
+    {:trend :stable :avg-depth (if (empty? depths) 0.0 (first depths)) :change 0.0}
+    (let [recent-depths (take 7 (reverse depths))  ; Take last 7, in chronological order
+          first-half (take (int (/ (count recent-depths) 2)) recent-depths)
+          second-half (drop (int (/ (count recent-depths) 2)) recent-depths)
+          first-avg (if (empty? first-half)
+                     0.0
+                     (/ (reduce + 0 first-half) (count first-half)))
+          second-avg (if (empty? second-half)
+                      0.0
+                      (/ (reduce + 0 second-half) (count second-half)))
+          change-val (- second-avg first-avg)
+          avg-depth (/ (reduce + 0 recent-depths) (count recent-depths))
+          trend (cond
+                 (> change-val 0.05) :rising
+                 (< change-val -0.05) :falling
+                 :else :stable)]
+      {:trend trend :avg-depth avg-depth :change change-val})))
+
+(defn focus-depth-trend-indicator
+  "Focus depth trend indicator component
+  
+  Parameters:
+  - depths: List<double> - Historical depth values list
+  
+  Returns: Widget"
+  [& {:keys [depths]
+      :or {depths []}}]
+  (let [trend-analysis (analyze-depth-trend depths)
+        trend (:trend trend-analysis)
+        avg-depth (:avg-depth trend-analysis)
+        trend-icon (case trend
+                     :rising m/Icons.trending_up
+                     :falling m/Icons.trending_down
+                     :stable m/Icons.trending_flat)
+        trend-color (case trend
+                      :rising m/Colors.green
+                      :falling m/Colors.red
+                      :stable (tokens/color :text-weak))
+        trend-text (case trend
+                     :rising "Rising"
+                     :falling "Falling"
+                     :stable "Stable")]
+    (if (empty? depths)
+      (text/mongol-text-block
+       {:text "No Trend Data"
+        :style (m/TextStyle
+               .fontSize (tokens/font-size :s)
+               .color (tokens/color :text-weak))})
+      (m/Row
+       .mainAxisSize m/MainAxisSize.min
+       .children
+       [(m/Icon
+         trend-icon
+         .size 16
+         .color trend-color)
+        (m/SizedBox .width (tokens/space :xs))
+        (text/mongol-text-block
+         {:text (str trend-text " (Avg: " (int (* avg-depth 100)) "%)")
+          :style (m/TextStyle
+                 .fontSize (tokens/font-size :s)
+                 .color trend-color)})]))))
+

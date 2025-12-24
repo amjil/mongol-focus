@@ -1,0 +1,119 @@
+(ns minii-focus.core.domain.review-forecast-example
+  "Review → Forecast Calibration Usage Example
+  
+  Demonstrates how to use the Review → Forecast calibration system.
+  
+  Process:
+  1. Click 'Confirm' on Review page
+  2. Automatically calibrate Forecast
+  3. Timeline next period gray prediction line updates"
+  (:require
+   [minii-focus.core.db.review :as review]
+   [minii-focus.core.db.forecast-calibration :as forecast-calib]
+   [minii-focus.core.domain.forecast-calibration :as calib]))
+
+;; ============================================================================
+;; Usage Example
+;; ============================================================================
+
+(defn confirm-review!
+  "Confirm Review, automatically calibrate Forecast
+  
+  This is the core logic after clicking 'Confirm' on the Review page.
+  
+  Parameters:
+  - db: AppDatabase instance
+  - dao-bridge: DaoBridge instance
+  - review-data: {:period-start ... :period-end ... :expected-count ... :actual-count ... :expected-duration ... :actual-duration ... :mood-score ... :focus-score ...}
+  - forecast-id: string (Forecast ID to calibrate)
+  
+  Returns: Future<void>"
+  [db dao-bridge review-data forecast-id]
+  (let [review-id (str "review-" (System/currentTimeMillis))
+        review-with-id (assoc review-data
+                             :id review-id
+                             :created-at (System/currentTimeMillis))
+        
+        ;; Get current Forecast
+        forecast-future (forecast-calib/get-forecast-calibration dao-bridge forecast-id)]
+    
+    ;; Insert Review
+    (-> (review/insert-review! dao-bridge review-with-id)
+        (.then (fn [_]
+                 ;; Get Forecast and calibrate
+                 (.then forecast-future
+                        (fn [forecast]
+                          (if forecast
+                            (let [forecast-map {:id (:id forecast)
+                                               :target-count (:target-count forecast)
+                                               :target-duration (:target-duration forecast)
+                                               :confidence (:confidence forecast)
+                                               :volatility (:volatility forecast)}
+                                  review-map {:expected-count (:expected-count review-data)
+                                             :actual-count (:actual-count review-data)
+                                             :expected-duration (:expected-duration review-data)
+                                             :actual-duration (:actual-duration review-data)
+                                             :mood-score (:mood-score review-data)
+                                             :focus-score (:focus-score review-data)}]
+                              ;; Apply calibration (transaction)
+                              (forecast-calib/apply-review->forecast!
+                               db dao-bridge forecast-map review-map))
+                            (println "Forecast not found:" forecast-id)))))))))
+
+;; ============================================================================
+;; Example Data
+;; ============================================================================
+
+(def example-review-data
+  "Example Review data
+  
+  Case of low completion rate this period"
+  {:period-start 1704067200000  ; 2024-01-01 00:00:00
+   :period-end 1704153600000    ; 2024-01-02 00:00:00
+   :expected-count 10
+   :actual-count 7              ; Actually only completed 7, below expectation
+   :expected-duration 300       ; Expected 300 minutes
+   :actual-duration 210         ; Actually 210 minutes
+   :mood-score -0.4             ; Poor mood
+   :focus-score 0.6})           ; Medium focus
+
+(def example-forecast-data
+  "Example Forecast data
+  
+  Current prediction parameters"
+  {:id "forecast-daily-001"
+   :period-type "daily"
+   :target-count 10.0
+   :target-duration 300.0
+   :confidence 0.7
+   :volatility 0.3
+   :updated-at (System/currentTimeMillis)})
+
+;; ============================================================================
+;; Calibration Result Example
+;; ============================================================================
+
+(comment
+  "Calibration calculation example"
+  
+  ;; Calibrate using example data
+  (let [calibrated (calib/calibrate-forecast
+                    {:target-count 10.0
+                     :target-duration 300.0
+                     :confidence 0.7
+                     :volatility 0.3}
+                    {:expected-count 10
+                     :actual-count 7
+                     :expected-duration 300
+                     :actual-duration 210
+                     :mood-score -0.4
+                     :focus-score 0.6})]
+    
+    ;; Expected results:
+    ;; - target-count: ~9.1 (because actual/expected = 0.7, EMA calibration)
+    ;; - target-duration: ~285 (because actual/expected = 0.7, EMA calibration)
+    ;; - confidence: ~0.55 (because mood-score < -0.3, reduce by 0.15)
+    ;; - volatility: ~0.42 (because focus-score = 0.6, volatility increases)
+    
+    calibrated))
+

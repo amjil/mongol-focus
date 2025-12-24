@@ -1,0 +1,55 @@
+(ns minii-focus.core.infra.bridge
+  "ClojureDart ↔ Dart Bridge Utility Layer
+   
+   Provides utility functions like dart/call and dart/new for calling Dart code.
+   
+   Type conventions:
+   - map → Companion
+   - string → String
+   - int → int
+   - nil → null
+   - vector → JSON string"
+  (:require
+   [clojure.string :as str]))
+
+(defn camel-case
+  "Convert kebab-case keyword to camelCase string
+   
+   Examples:
+   (camel-case :entity-type) => \"entityType\"
+   (camel-case :id) => \"id\""
+  [k]
+  (if (keyword? k)
+    (let [s (name k)
+          parts (str/split s #"-")]
+      (if (= 1 (count parts))
+        s
+        (str (first parts)
+             (apply str (map str/capitalize (rest parts))))))
+    (str k)))
+
+(defn dart-call
+  "Call Dart function
+  
+  Example:
+   (dart-call bridge/insertTimelineEvent dao-bridge companion)"
+  [dart-fn & args]
+  (apply dart-fn args))
+
+(defn dart-new
+  "Create Dart Companion object
+  
+  Example:
+   (dart-new TimelineEventsCompanion {:id id :timestamp ts :entity-type \"task\"})
+  
+  Parameter map keys are automatically converted to camelCase (e.g., :entity-type → entityType)
+  
+  Note: companion-class should be an actual Dart class, e.g., app-db/TimelineEventsCompanion"
+  [companion-class params]
+  (let [dart-params (reduce-kv
+                     (fn [m k v]
+                       (assoc m (name (camel-case k)) v))
+                     {}
+                     params)]
+    (apply companion-class (mapcat identity dart-params))))
+

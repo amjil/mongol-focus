@@ -1,0 +1,190 @@
+(ns minii-focus.core.db.project
+  "Project DAO Wrapper
+  
+  Provides ClojureDart API for Project, hiding Drift details."
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["dart:core" :as dart-core]
+   ["package:cljd_mongol_focus/db/bridge/project_bridge.dart" :as project-bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+
+(defn project-companion
+  "Build ProjectsCompanion
+  
+  Parameters:
+  - id: string
+  - title: string
+  - created-at: int (timestamp in seconds)
+  - review-at: int? (timestamp in milliseconds, nullable)
+  - completed: boolean (default false)
+  - status: string (default 'active')
+  - notes: string? (nullable)
+  
+  ⚠️ Companion building must be centralized, only change here when schema changes"
+  [{:keys [id title created-at review-at completed status notes]}]
+  (let [now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))] ; Timestamp in seconds
+    (bridge/dart-new
+     app-db/ProjectsCompanion.insert
+     {:id id
+      :title title
+      :createdAt (or created-at now)
+      :reviewAt review-at  ; nullable, nil will be handled automatically
+      :completed completed  ; nullable, nil will be handled automatically
+      :status (or status "active")
+      :notes notes})))  ; nullable, nil will be handled automatically
+
+(defn insert-project!
+  "Insert new project
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-map: {:id string :title string :created-at int? :review-at int? :completed boolean? :status string? :notes string?}
+  
+  Returns: Future<void>"
+  [dao-bridge project-map]
+  (let [companion (project-companion project-map)]
+    (bridge/dart-call
+     project-bridge/insertProject
+     dao-bridge
+     companion)))
+
+(defn watch-all-projects
+  "Query all projects
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  
+  Returns: Future<List<Project>>"
+  [dao-bridge]
+  (bridge/dart-call
+   project-bridge/watchAllProjects
+   dao-bridge))
+
+(defn get-by-id
+  "Get project details by ID
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  
+  Returns: Future<Project?>"
+  [dao-bridge project-id]
+  (bridge/dart-call
+   project-bridge/getProjectById
+   dao-bridge
+   project-id))
+
+(defn get-next-action
+  "Get project's Next Action
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  
+  Returns: Future<Task?>"
+  [dao-bridge project-id]
+  (bridge/dart-call
+   project-bridge/getNextAction
+   dao-bridge
+   project-id))
+
+(defn get-project-tasks
+  "Get all tasks for project
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  
+  Returns: Future<List<Task>>"
+  [dao-bridge project-id]
+  (bridge/dart-call
+   project-bridge/getProjectTasks
+   dao-bridge
+   project-id))
+
+(defn update-status!
+  "Update project status
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  - status: string ('active' | 'on-hold' | 'completed')
+  
+  Returns: Future<void>"
+  [dao-bridge project-id status]
+  (bridge/dart-call
+   project-bridge/updateProjectStatus
+   dao-bridge
+   project-id
+   status))
+
+(defn update-review-at!
+  "Update project review date
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  - review-at: int? (timestamp in milliseconds, nullable)
+  
+  Returns: Future<void>"
+  [dao-bridge project-id review-at]
+  (bridge/dart-call
+   project-bridge/updateProjectReviewAt
+   dao-bridge
+   project-id
+   review-at))
+
+(defn update-title!
+  "Update project title
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - project-id: string
+  - title: string
+  
+  Returns: Future<void>"
+  [dao-bridge project-id title]
+  (bridge/dart-call
+   project-bridge/updateProjectTitle
+   dao-bridge
+   project-id
+   title))
+
+;; ============================================
+;; ProjectHealth Calculation Logic (Derived State)
+;; ============================================
+
+(defn project-health
+  "Calculate project health status
+  
+  Parameters:
+  - project: Project object
+  - next-action: Task? (nullable)
+  
+  Returns: :ok | :no-next-action | :review-overdue | :on-hold | :archived
+  
+  Rules:
+  - archived: status = 'archived'
+  - on-hold: status = 'on-hold'
+  - no-next-action: status = 'active' and next-action = nil
+  - review-overdue: reviewAt exists and is overdue
+  - ok: other cases"
+  [project next-action]
+  (let [status (.-status project)
+        review-at (.-reviewAt project)
+        now-ms (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))]
+    (cond
+      (= status "archived")
+      :archived
+
+      (= status "on-hold")
+      :on-hold
+
+      (and (= status "active") (nil? next-action))
+      :no-next-action
+
+      (and review-at (> now-ms review-at))
+      :review-overdue
+
+      :else
+      :ok)))

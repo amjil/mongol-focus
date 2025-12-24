@@ -1,0 +1,79 @@
+(ns minii-focus.core.domain.review.rules
+  "Single Rule Implementation
+  
+  Each rule is a pure function that receives signal and forecast, returns updated forecast.
+  Rules are serial, not if-else.")
+
+(defn rule-under-invested
+  "Rule 1️⃣ Under-invested → Reduce + Shallow tasks
+  
+  Conditions:
+  - actual-focus-ratio < expected-weight * 0.6
+  - postpone-ratio > 0.3
+  
+  Actions:
+  - forecast-count reduced to 80%
+  - forecast-type set to :shallow"
+  [signal forecast]
+  (if (and (< (:actual-focus-ratio signal)
+              (* (:expected-weight signal) 0.6))
+           (> (:postpone-ratio signal) 0.3))
+    (-> forecast
+        (update :forecast-count #(int (* % 0.8)))
+        (assoc :forecast-type :shallow))
+    forecast))
+
+(defn rule-high-done-but-insufficient
+  "Rule 2️⃣ High completion rate + User marked insufficient → Stable increase
+  
+  Conditions:
+  - done-ratio > 0.7
+  - user-judgement = :insufficient
+  
+  Actions:
+  - forecast-count increased by 1
+  - If currently :maintenance, change to :shallow"
+  [signal forecast]
+  (if (and (> (:done-ratio signal) 0.7)
+           (= (:user-judgement signal) :insufficient))
+    (-> forecast
+        (update :forecast-count inc)
+        (update :forecast-type
+                #(if (= % :maintenance) :shallow %)))
+    forecast))
+
+(defn rule-over-invested
+  "Rule 3️⃣ Over-invested → Reduce weight + Reduce count
+  
+  Conditions:
+  - actual-focus-ratio > expected-weight * 1.5
+  - user-judgement = :excessive
+  
+  Actions:
+  - next-weight reduced to 85%
+  - forecast-count reduced by 1 (minimum 0)"
+  [signal forecast]
+  (if (and (> (:actual-focus-ratio signal)
+              (* (:expected-weight signal) 1.5))
+           (= (:user-judgement signal) :excessive))
+    (-> forecast
+        (update :next-weight #(* % 0.85))
+        (update :forecast-count #(max 0 (dec %))))
+    forecast))
+
+(defn rule-high-abandon
+  "Rule 4️⃣ High abandon rate → Freeze growth
+  
+  Conditions:
+  - abandon-ratio > 0.25
+  
+  Actions:
+  - frozen? set to true
+  - forecast-type set to :maintenance"
+  [signal forecast]
+  (if (> (:abandon-ratio signal) 0.25)
+    (assoc forecast
+           :frozen? true
+           :forecast-type :maintenance)
+    forecast))
+

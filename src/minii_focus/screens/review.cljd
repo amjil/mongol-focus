@@ -1,0 +1,944 @@
+(ns minii-focus.screens.review
+  "Review page
+  
+  Review is not a statistics page, nor a log accumulation page. It only does three things:
+  1. Make you aware: where time and energy are spent
+  2. Discover imbalances (project / perspective / capability / life domain)
+  3. Provide basis for calibrating Perspective / Forecast for the next cycle
+  
+  In one sentence: Review is the feedback loop of the Perspective Engine.
+  
+  Page structure:
+  1. Review period selection (day/week/month, no custom support)
+  2. Overview (completion summary + time and attention distribution)
+  3. Perspective Review (core area, one block per Perspective)
+  4. Action Review (key tasks, postponed ≥2 times, abandoned)
+  5. Review → Next step closed-loop design"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as dart-convert]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.domain.review.aggregate :as review-aggregate]
+   [minii-focus.core.db.review :as review-db]
+   [minii-focus.core.db.perspective :as perspective-db]
+   [minii-focus.core.dao.forecast :as forecast-gen]
+   [minii-focus.core.router.nav :as nav]
+   [minii-focus.core.utils.toast :as toast]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn format-period-label
+  "Format period label
+  
+  Parameters:
+  - period-type: :day | :week | :month
+  
+  Returns: string"
+  [period-type]
+  (case period-type
+    :day "Today"
+    :week "This Week"
+    :month "This Month"
+    "This Week"))
+
+(defn format-date-only [ts]
+  (let [date (dart-core/DateTime.fromMillisecondsSinceEpoch ts)
+        year (.year date)
+        month (.month date)
+        day (.day date)]
+    (str year "-" month "-" day)))
+
+(defn infer-period-type
+  "Infer period type from periodStart/periodEnd (Review table doesn't store type, so approximate inference)"
+  [period-start period-end]
+  (let [dur (max 0 (- period-end period-start))]
+    (cond
+      (< dur (* 2 24 60 60)) :day
+      (< dur (* 10 24 60 60)) :week
+      :else :month)))
+
+(defn review-row->map
+  "Convert Dart Review object to map (for history comparison display)"
+  [r]
+  (let [period-start (or (.-periodStart r) 0)
+        period-end (or (.-periodEnd r) 0)]
+    {:id (.-id r)
+     :period-start period-start
+     :period-end period-end
+     :period-type (infer-period-type period-start period-end)
+     :expected-count (or (.-expectedCount r) 0)
+     :actual-count (or (.-actualCount r) 0)
+     :expected-duration (or (.-expectedDuration r) 0)
+     :actual-duration (or (.-actualDuration r) 0)
+     :mood-score (or (.-moodScore r) 0.0)
+     :focus-score (or (.-focusScore r) 0.0)
+     :created-at (or (.-createdAt r) 0)}))
+
+(defn history-compare-section
+  "Review history comparison section (based on Reviews table)"
+  [{:keys [selected-period reviews-history history-loading]}]
+  (let [all (or reviews-history [])
+        filtered (vec (filter #(= (:period-type %) selected-period) all))
+        sorted (vec (sort (fn [a b] (compare (:created-at b) (:created-at a))) filtered))
+        top (vec (take 8 sorted))
+        body (cond
+               history-loading
+               (m/Center .child (m/CircularProgressIndicator))
+
+               (empty? top)
+               (comp/mongol-text-block
+                {:text "No historical Reviews yet (submit a Review on this page first to save it)"
+                 :style (m/TextStyle
+                        .fontSize (tokens/font-size :s)
+                        .color (tokens/color :text-weak))})
+
+               :else
+               (m/Column
+                .children
+                (vec
+                 (map-indexed
+                  (fn [idx r]
+                    (let [prev (when (< (inc idx) (count sorted)) (nth sorted (inc idx)))
+                          delta-count (when prev (- (:actual-count r) (:actual-count prev)))
+                          delta-min (when prev (- (:actual-duration r) (:actual-duration prev)))
+                          delta-text (when prev
+                                       (str (when delta-count (str "Tasks " (if (neg? delta-count) "" "+") delta-count " "))
+                                            (when delta-min (str "Minutes " (if (neg? delta-min) "" "+") delta-min))))]
+                      (m/ListTile
+                       .title (comp/mongol-text-block
+                              {:text (str (format-date-only (:period-start r))
+                                         " → "
+                                         (format-date-only (:period-end r)))
+                               :style (m/TextStyle
+                                      .fontSize (tokens/font-size :m)
+                                      .fontWeight m/FontWeight.w600)})
+                       .subtitle (comp/mongol-text-block
+                                 {:text (str "Completed: " (:actual-count r)
+                                            " · Focus: " (:actual-duration r) " min"
+                                            " · Mood: " (:mood-score r)
+                                            " · Focus Score: " (:focus-score r)
+                                            (when (and delta-text (not= delta-text "")) (str " · Δ " delta-text)))
+                                  :style (m/TextStyle
+                                         .fontSize (tokens/font-size :s)
+                                         .color (tokens/color :text-weak))}))))
+                  top))))]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [(comp/mongol-text-block
+                     {:text "History Comparison"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :l)
+                             .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height (tokens/space :s))
+                    (comp/mongol-text-block
+                     {:text (str "Period: " (format-period-label selected-period)
+                                 " · Recent " (count top) " entries")
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :s)
+                             .color (tokens/color :text-weak))})
+                    (m/SizedBox .height (tokens/space :m))
+                    body])))))
+
+(defn get-perspective-status
+  "Determine Perspective status
+  
+  Parameters:
+  - stats: Perspective statistics
+  
+  Returns: :over | :under | :ok"
+  [stats]
+  ;; TODO: Need to judge based on Perspective's expected weight and actual investment
+  ;; Currently simplified, judge based on focus-minutes
+  (let [focus-minutes (:focus-minutes stats)
+        done-count (:done-count stats)]
+    (cond
+      (and (> focus-minutes 0) (< done-count 2))
+      :under
+      (> focus-minutes 120)
+      :over
+      :else
+      :ok)))
+
+(defn get-status-icon
+  "Get status icon
+  
+  Parameters:
+  - status: :over | :under | :ok
+  
+  Returns: IconData"
+  [status]
+  (case status
+    :over m/Icons.trending_up
+    :under m/Icons.trending_down
+    :ok m/Icons.check_circle
+    m/Icons.help))
+
+(defn get-status-color
+  "Get status color
+  
+  Parameters:
+  - status: :over | :under | :ok
+  
+  Returns: Color"
+  [status]
+  (case status
+    :over m/Colors.orange
+    :under m/Colors.red
+    :ok m/Colors.green
+    (tokens/color :text-main)))
+
+(defn get-status-text
+  "Get status text
+  
+  Parameters:
+  - status: :over | :under | :ok
+  
+  Returns: string"
+  [status]
+  (case status
+    :over "⚠ Over this period"
+    :under "⚠ Under this period"
+    :ok "✓ As expected"
+    ""))
+
+;; ============================================================================
+;; UI Components
+;; ============================================================================
+
+(defn period-selector
+  "Period selector component
+  
+  Parameters:
+  - selected-period: :day | :week | :month
+  - on-period-changed: (fn [period-type])"
+  [{:keys [selected-period on-period-changed]}]
+  (m/Row
+   .mainAxisAlignment m/MainAxisAlignment.center
+   .children
+   [(m/ChoiceChip
+     .label (comp/mongol-text-block {:text "Today"})
+     .selected (= selected-period :day)
+     .onSelected (fn [_] (when on-period-changed (on-period-changed :day)))
+     .selectedColor (tokens/color :accent-light))
+    (m/SizedBox .width (tokens/space :s))
+    (m/ChoiceChip
+     .label (comp/mongol-text-block {:text "This Week"})
+     .selected (= selected-period :week)
+     .onSelected (fn [_] (when on-period-changed (on-period-changed :week)))
+     .selectedColor (tokens/color :accent-light))
+    (m/SizedBox .width (tokens/space :s))
+    (m/ChoiceChip
+     .label (comp/mongol-text-block {:text "This Month"})
+     .selected (= selected-period :month)
+     .onSelected (fn [_] (when on-period-changed (on-period-changed :month)))
+     .selectedColor (tokens/color :accent-light))]))
+
+(defn overview-section
+  "Overview section
+  
+  Displays:
+  - Completion summary
+  - Time and attention distribution (by Perspective)"
+  [{:keys [overview-data]}]
+  (let [overview (:overview overview-data)
+        distribution (:perspective-distribution overview)]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [(comp/mongol-text-block
+                     {:text "Overview"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :l)
+                             .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height (tokens/space :m))
+                    
+                    ;; Completion summary
+                    (comp/mongol-text-block
+                     {:text "Completion Summary"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :m)
+                             .fontWeight m/FontWeight.w500)})
+                    (m/SizedBox .height (tokens/space :s))
+                    (comp/mongol-text-block
+                     {:text (str "Tasks Completed: " (or (:task-completed overview) 0))})
+                    (comp/mongol-text-block
+                     {:text (str "Forecasts Completed: " (or (:forecast-completed overview) 0))})
+                    (comp/mongol-text-block
+                     {:text (str "Postponed/Abandoned: " (+ (or (:postponed-count overview) 0)
+                                                  (or (:abandoned-count overview) 0)))})
+                    (m/SizedBox .height (tokens/space :m))
+                    
+                    ;; Time and attention distribution
+                    (comp/mongol-text-block
+                     {:text "Time and Attention Distribution"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :m)
+                             .fontWeight m/FontWeight.w500)})
+                    (m/SizedBox .height (tokens/space :s))
+                    (if (empty? distribution)
+                      (comp/mongol-text-block
+                       {:text "No data yet"
+                        :style (m/TextStyle
+                               .color (tokens/color :text-weak))})
+                      (m/Column
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .children
+                       (vec (map
+                             (fn [[p-id stats]]
+                               (let [p (:perspective stats)
+                                     focus-minutes (:focus-minutes stats)
+                                     max-focus (apply max (map (fn [[_ s]]
+                                                                (:focus-minutes s))
+                                                              distribution))
+                                     bar-width (if (> max-focus 0)
+                                                (* (/ focus-minutes max-focus) 200)
+                                                0)]
+                                 (m/Padding
+                                  .padding (m/EdgeInsets.symmetric
+                                           :vertical (tokens/space :xs))
+                                  .child (m/Row
+                                         .children
+                                         [(m/Expanded
+                                           .flex 2
+                                           .child (comp/mongol-text-block
+                                                 {:text (or (:title p) p-id)
+                                                  :style (m/TextStyle
+                                                         .fontSize (tokens/font-size :s))}))
+                                          (m/Expanded
+                                           .flex 3
+                                           .child (m/Container
+                                                  .height 8
+                                                  .width bar-width
+                                                  .decoration (m/BoxDecoration
+                                                              .color (tokens/color :accent)
+                                                              .borderRadius (m/BorderRadius.circular 4))))
+                                          (m/SizedBox .width (tokens/space :s))
+                                          (comp/mongol-text-block
+                                           {:text (str focus-minutes " min")
+                                            :style (m/TextStyle
+                                                   .fontSize (tokens/font-size :s)
+                                                   .color (tokens/color :text-weak))})])))
+                             (seq distribution))))))])))))
+
+(defn perspective-review-section
+  "Perspective Review section (core area)
+  
+  One block per Perspective, displays:
+  - Number of completed tasks
+  - Related Forecast count
+  - Actual investment
+  - Status (over/under/as expected)
+  
+  Interactions:
+  - Tap to enter Perspective detail Review
+  - One-click status marking"
+  [{:keys [perspectives-data on-perspective-tap]}]
+  (m/Column
+   .crossAxisAlignment m/CrossAxisAlignment.start
+   .children
+   [(m/Padding
+     .padding (m/EdgeInsets.all (tokens/space :m))
+     .child (comp/mongol-text-block
+            {:text "Perspective Review"
+             :style (m/TextStyle
+                    .fontSize (tokens/font-size :l)
+                    .fontWeight m/FontWeight.bold)}))
+    (if (empty? perspectives-data)
+      (m/Padding
+       .padding (m/EdgeInsets.all (tokens/space :m))
+       .child (comp/mongol-text-block
+              {:text "No Perspective data yet"
+               :style (m/TextStyle
+                      .color (tokens/color :text-weak))}))
+      (m/Column
+       .children
+       (vec (map
+             (fn [stats]
+               (let [p (:perspective stats)
+                     status (get-perspective-status stats)]
+                 (m/Card
+                  .margin (m/EdgeInsets.symmetric
+                          :horizontal (tokens/space :m)
+                          :vertical (tokens/space :s))
+                  .child (m/InkWell
+                         .onTap (fn [] (when on-perspective-tap
+                                        (on-perspective-tap (:id p))))
+                         .child (m/Padding
+                                .padding (m/EdgeInsets.all (tokens/space :m))
+                                .child (m/Column
+                                       .crossAxisAlignment m/CrossAxisAlignment.start
+                                       .children
+                                       [(m/Row
+                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                         .children
+                                         [(comp/mongol-text-block
+                                           {:text (or (:title p) (:id p))
+                                            :style (m/TextStyle
+                                                   .fontSize (tokens/font-size :m)
+                                                   .fontWeight m/FontWeight.w500)})
+                                          (m/Row
+                                           .children
+                                           [(m/Icon
+                                            (get-status-icon status)
+                                            .size 20
+                                            .color (get-status-color status))
+                                           (m/SizedBox .width (tokens/space :xs))
+                                           (comp/mongol-text-block
+                                            {:text (get-status-text status)
+                                             :style (m/TextStyle
+                                                    .fontSize (tokens/font-size :s)
+                                                    .color (get-status-color status))})])])
+                                        (m/SizedBox .height (tokens/space :s))
+                                        (comp/mongol-text-block
+                                         {:text (str "Tasks Completed: " (:done-count stats))})
+                                        (comp/mongol-text-block
+                                         {:text (str "Related Forecasts: " (:forecast-count stats))})
+                                        (comp/mongol-text-block
+                                         {:text (str "Actual Investment: "
+                                                   (if (> (:focus-minutes stats) 0)
+                                                     (str (:focus-minutes stats) " min")
+                                                     "Low"))})]))))))
+             perspectives-data))))]))
+
+(defn action-review-section
+  "Action Review section
+  
+  Displays three types of tasks:
+  - ✅ Key tasks completed this period
+  - ⏸ Tasks postponed ≥2 times
+  - ❌ Abandoned tasks"
+  [{:keys [actions-data]}]
+  (let [actions (:actions actions-data)
+        completed (:completed actions)
+        postponed (:postponed actions)
+        abandoned (:abandoned actions)]
+    (m/Column
+     .crossAxisAlignment m/CrossAxisAlignment.start
+     .children
+     [(m/Padding
+       .padding (m/EdgeInsets.all (tokens/space :m))
+       .child (comp/mongol-text-block
+              {:text "Action Review"
+               :style (m/TextStyle
+                      .fontSize (tokens/font-size :l)
+                      .fontWeight m/FontWeight.bold)}))
+      (if (and (empty? completed)
+               (empty? postponed)
+               (empty? abandoned))
+        (m/Padding
+         .padding (m/EdgeInsets.all (tokens/space :m))
+         .child (comp/mongol-text-block
+                {:text "No tasks requiring reflection yet"
+                 :style (m/TextStyle
+                        .color (tokens/color :text-weak))}))
+        (m/Column
+         .children
+         (vec (filter some?
+                      (concat
+                       (when (seq completed)
+                         [(m/Padding
+                           .padding (m/EdgeInsets.symmetric
+                                    :horizontal (tokens/space :m)
+                                    :vertical (tokens/space :s))
+                           .child (comp/mongol-text-block
+                                  {:text "✅ Key Tasks Completed This Period"
+                                   :style (m/TextStyle
+                                          .fontSize (tokens/font-size :m)
+                                          .fontWeight m/FontWeight.w500)}))
+                          (m/Column
+                           .children
+                           (vec (map
+                                 (fn [task]
+                                   (m/Card
+                                    .margin (m/EdgeInsets.symmetric
+                                            :horizontal (tokens/space :m)
+                                            :vertical (tokens/space :xs))
+                                    .child (m/Padding
+                                           .padding (m/EdgeInsets.all (tokens/space :s))
+                                           .child (comp/mongol-text-block
+                                                  {:text (:title task)}))))
+                                 (take 5 completed))))])
+                       
+                       (when (seq postponed)
+                         [(m/Padding
+                           .padding (m/EdgeInsets.symmetric
+                                    :horizontal (tokens/space :m)
+                                    :vertical (tokens/space :s))
+                           .child (comp/mongol-text-block
+                                  {:text "⏸ Tasks Postponed ≥2 Times"
+                                   :style (m/TextStyle
+                                          .fontSize (tokens/font-size :m)
+                                          .fontWeight m/FontWeight.w500)}))
+                          (m/Column
+                           .children
+                           (vec (map
+                                 (fn [task]
+                                   (m/Card
+                                    .margin (m/EdgeInsets.symmetric
+                                            :horizontal (tokens/space :m)
+                                            :vertical (tokens/space :xs))
+                                    .child (m/Padding
+                                           .padding (m/EdgeInsets.all (tokens/space :s))
+                                           .child (comp/mongol-text-block
+                                                  {:text (:title task)}))))
+                                 postponed)))])
+                       
+                       (when (seq abandoned)
+                         [(m/Padding
+                           .padding (m/EdgeInsets.symmetric
+                                    :horizontal (tokens/space :m)
+                                    :vertical (tokens/space :s))
+                           .child (comp/mongol-text-block
+                                  {:text "❌ Abandoned Tasks"
+                                   :style (m/TextStyle
+                                          .fontSize (tokens/font-size :m)
+                                          .fontWeight m/FontWeight.w500)}))
+                          (m/Column
+                           .children
+                           (vec (map
+                                 (fn [task]
+                                   (m/Card
+                                    .margin (m/EdgeInsets.symmetric
+                                            :horizontal (tokens/space :m)
+                                            :vertical (tokens/space :xs))
+                                    .child (m/Padding
+                                           .padding (m/EdgeInsets.all (tokens/space :s))
+                                           .child (comp/mongol-text-block
+                                                  {:text (:title task)}))))
+                                 abandoned)))]))))))])))
+
+(defn next-actions-section
+  "Review → Next step closed-loop design
+  
+  Three clear actions:
+  - Adjust Perspective weights
+  - Generate next period Forecast
+  - Enter Focus"
+  [{:keys [on-adjust-perspectives on-generate-forecast on-enter-focus]}]
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :m))
+          .child (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(comp/mongol-text-block
+                   {:text "Next Steps"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+                  (m/SizedBox .height (tokens/space :m))
+                  (m/ElevatedButton
+                   .onPressed (fn [] (when on-adjust-perspectives
+                                      (on-adjust-perspectives)))
+                   .style (m/ButtonStyle
+                          .backgroundColor (m/MaterialStateProperty.all
+                                            (tokens/color :accent)))
+                   .child (comp/mongol-text-block
+                          {:text "Adjust Perspective Weights"
+                           :style (m/TextStyle
+                                  .color m/Colors.white)}))
+                  (m/SizedBox .height (tokens/space :s))
+                  (m/ElevatedButton
+                   .onPressed (fn [] (when on-generate-forecast
+                                      (on-generate-forecast)))
+                   .style (m/ButtonStyle
+                          .backgroundColor (m/MaterialStateProperty.all
+                                            (tokens/color :accent)))
+                   .child (comp/mongol-text-block
+                          {:text "Generate Next Period Forecast"
+                           :style (m/TextStyle
+                                  .color m/Colors.white)}))
+                  (m/SizedBox .height (tokens/space :s))
+                  (m/ElevatedButton
+                   .onPressed (fn [] (when on-enter-focus
+                                      (on-enter-focus)))
+                   .style (m/ButtonStyle
+                          .backgroundColor (m/MaterialStateProperty.all
+                                            (tokens/color :accent)))
+                   .child (comp/mongol-text-block
+                          {:text "Enter Focus"
+                           :style (m/TextStyle
+                                  .color m/Colors.white)}))]))))
+
+(defn auto-suggestions-section
+  "Review → Auto-generate suggestions (lightweight rules, cover 80% first)"
+  [{:keys [review-data]}]
+  (let [expected-count (or (:expected-count review-data) (:expectedCount review-data) 0)
+        actual-count (or (:actual-count review-data) (:actualCount review-data) 0)
+        expected-duration (or (:expected-duration review-data) (:expectedDuration review-data) 0)
+        actual-duration (or (:actual-duration review-data) (:actualDuration review-data) 0)
+        postponed (or (:postponed review-data) [])
+        abandoned (or (:abandoned review-data) [])
+        completion-rate (if (pos? expected-count)
+                          (/ actual-count expected-count)
+                          (if (pos? actual-count) 1.0 0.0))
+        focus-rate (if (pos? expected-duration)
+                     (/ actual-duration expected-duration)
+                     (if (pos? actual-duration) 1.0 0.0))
+        suggestions (vec
+                     (filter some?
+                             [(when (< completion-rate 0.6)
+                                {:title "Low Completion Rate"
+                                 :body "Suggest reducing daily_capacity or expectedCount by 10%～30% for next period, and focus P0 on fewer tasks."})
+                              (when (and (>= completion-rate 0.9) (> expected-count 0))
+                                {:title "High Completion Rate"
+                                 :body "Suggest slightly increasing capacity (+10%) for next period, or invest more energy in deep tasks."})
+                              (when (< focus-rate 0.6)
+                                {:title "Insufficient Focus Duration"
+                                 :body "Suggest setting smaller focus units (e.g., 15–25 minutes), and schedule the most important tasks during the most alert hours of the day."})
+                              (when (>= (count postponed) 3)
+                                {:title "Many Postponed Tasks"
+                                 :body "Suggest reviewing tasks postponed ≥2 times: either break them down into smaller actions, or downgrade/archive them to avoid repeatedly occupying attention."})
+                              (when (>= (count abandoned) 2)
+                                {:title "Too Many Abandoned Tasks"
+                                 :body "Suggest reviewing abandonment reasons: scope too large, missing dependencies, or priority misjudgment; reduce parallel projects in next period."})]))]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [(comp/mongol-text-block
+                     {:text "Auto Suggestions"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :l)
+                             .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height (tokens/space :m))
+                    (if (empty? suggestions)
+                      (comp/mongol-text-block
+                       {:text "Stable performance this period: no obvious points needing adjustment."
+                        :style (m/TextStyle
+                               .fontSize (tokens/font-size :s)
+                               .color (tokens/color :text-weak))})
+                      (m/Column
+                       .children
+                       (vec
+                        (map (fn [{:keys [title body]}]
+                               (m/Card
+                                .margin (m/EdgeInsets.symmetric :vertical (tokens/space :s))
+                                .child (m/Padding
+                                       .padding (m/EdgeInsets.all (tokens/space :m))
+                                       .child (m/Column
+                                              .crossAxisAlignment m/CrossAxisAlignment.start
+                                              .children
+                                              [(comp/mongol-text-block
+                                                {:text title
+                                                 :style (m/TextStyle
+                                                        .fontSize (tokens/font-size :m)
+                                                        .fontWeight m/FontWeight.w600)})
+                                               (m/SizedBox .height (tokens/space :s))
+                                               (comp/mongol-text-block
+                                                {:text body
+                                                 :style (m/TextStyle
+                                                        .fontSize (tokens/font-size :s)
+                                                        .color (tokens/color :text-weak))})]))))
+                             suggestions))))])))))
+
+;; ============================================================================
+;; Helper Functions for Actions
+;; ============================================================================
+
+(defn parse-json
+  "Parse JSON string"
+  [json-str]
+  (if json-str
+    (try
+      (dart-convert/jsonDecode json-str)
+      (catch Exception _
+        []))
+    []))
+
+(defn update-weight-history
+  "Update weight history record
+  
+  Parameters:
+  - old-history: string? (JSON string)
+  - new-weight: double
+  - timestamp: int
+  
+  Returns: string (JSON string)"
+  [old-history new-weight timestamp]
+  (let [history (parse-json old-history)
+        new-entry {:timestamp timestamp
+                   :weight new-weight}
+        updated-history (conj (vec history) new-entry)]
+    (dart-convert/jsonEncode updated-history)))
+
+(defn show-perspective-weight-dialog
+  "Show Perspective weight adjustment dialog
+  
+  Parameters:
+  - ctx: context
+  - dao: DaoBridge
+  - db: AppDatabase"
+  [ctx dao _db]
+  ;; Load all Perspectives, then show dialog
+  (-> (perspective-db/watch-all dao)
+      (.first)
+      (.then (fn [perspectives-list]
+              (let [perspectives (or perspectives-list [])
+                    weight-controllers (atom {})]
+                ;; Create Slider controller for each Perspective
+                (doseq [p perspectives]
+                  (swap! weight-controllers assoc
+                         (.-id p)
+                         (m/TextEditingController.
+                          :text (str (.-weight p)))))
+                
+                ;; Show dialog
+                (m/showDialog
+                 .context ctx
+                 .builder (fn [dialog-ctx]
+                           (m/AlertDialog
+                            .title (comp/mongol-text-block
+                                   {:text "Adjust Perspective Weights"
+                                    :style (m/TextStyle
+                                           .fontSize (tokens/font-size :l)
+                                           .fontWeight m/FontWeight.bold)})
+                            .content (m/Container
+                                     .width 400
+                                     .height 500
+                                     .child (m/ListView
+                                            .children
+                                            (vec (map
+                                                  (fn [p]
+                                                    (let [p-id (.-id p)
+                                                          p-title (.-title p)
+                                                          current-weight (.-weight p)
+                                                          weight-controller (get @weight-controllers p-id)]
+                                                      (m/Card
+                                                       .margin (m/EdgeInsets.symmetric
+                                                               :vertical (tokens/space :s))
+                                                       .child (m/Padding
+                                                              .padding (m/EdgeInsets.all (tokens/space :m))
+                                                              .child (m/Column
+                                                                     .crossAxisAlignment m/CrossAxisAlignment.start
+                                                                     .children
+                                                                     [(comp/mongol-text-block
+                                                                       {:text p-title
+                                                                        :style (m/TextStyle
+                                                                               .fontSize (tokens/font-size :m)
+                                                                               .fontWeight m/FontWeight.w500)})
+                                                                      (m/SizedBox .height (tokens/space :s))
+                                                                      (m/Slider
+                                                                       .value current-weight
+                                                                       .min 0.0
+                                                                       .max 1.0
+                                                                       .divisions 100
+                                                                       .label (str (int (* current-weight 100)) "%")
+                                                                       .onChanged (fn [new-value]
+                                                                                  (set! (.-text weight-controller)
+                                                                                        (str new-value))))
+                                                                      (comp/mongol-text-block
+                                                                       {:text (str "Current Weight: "
+                                                                                  (int (* current-weight 100))
+                                                                                  "%")
+                                                                        :style (m/TextStyle
+                                                                               .fontSize (tokens/font-size :s)
+                                                                               .color (tokens/color :text-weak))})])))))
+                                                  perspectives))))
+                            .actions
+                            [(m/TextButton
+                              .onPressed (fn []
+                                         (m/Navigator.pop dialog-ctx))
+                              .child (m/Text "Cancel"))
+                             (m/TextButton
+                              .onPressed (fn []
+                                         ;; Save weights
+                                         (let [updates (atom [])]
+                                           (doseq [p perspectives]
+                                             (let [p-id (.-id p)
+                                                   weight-controller (get @weight-controllers p-id)
+                                                   new-weight (double (dart-core/double.parse (.-text weight-controller)))
+                                                   old-weight (.-weight p)
+                                                   updated-at (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+                                                   old-history (.-weightHistory p)]
+                                               (when (not= new-weight old-weight)
+                                                 (let [new-history (update-weight-history old-history new-weight updated-at)]
+                                                   (swap! updates conj
+                                                          {:id p-id
+                                                           :weight new-weight
+                                                           :history new-history
+                                                           :updated-at updated-at})))))
+                                           
+                                           ;; Batch update
+                                           (-> (dart-core/Future.wait
+                                                (vec (map
+                                                      (fn [update]
+                                                        (-> (perspective-db/update-weight! dao
+                                                                                           (:id update)
+                                                                                           (:weight update)
+                                                                                           (:updated-at update))
+                                                            (.then (fn [_]
+                                                                    (perspective-db/update-weight-history! dao
+                                                                                                           (:id update)
+                                                                                                           (:history update)
+                                                                                                           (:updated-at update))))))
+                                                      @updates)))
+                                               (.then (fn [_]
+                                                       (m/Navigator.pop dialog-ctx)
+                                                       (toast/show-success-toast ctx
+                                                                                (str "Updated weights for "
+                                                                                     (count @updates)
+                                                                                     " Perspectives"))))
+                                               (.catchError (fn [error]
+                                                            (dart-core/print (str "Error updating weights: " error))
+                                                            (toast/show-error-toast ctx "Failed to update weights"))))))
+                              .child (m/Text "Save"))]))))
+      (.catchError (fn [error]
+                   (dart-core/print (str "Error loading perspectives: " error))
+                   (toast/show-error-toast ctx "Failed to load Perspectives")))))))
+
+(defn generate-next-period-forecast!
+  "Generate next period Forecast
+  
+  Parameters:
+  - ctx: context
+  - db: AppDatabase
+  - dao: DaoBridge"
+  [ctx db _dao]
+  (toast/show-info-toast ctx "Generating next period Forecast...")
+  (-> (forecast-gen/regenerate! db
+                                {:entity :task
+                                 :filters [{:field :completed :op := :value false}]
+                                 :order-by [{:field :created-at :dir :asc}]
+                                 :limit 50}
+                                7)  ; Generate Forecast for next 7 days
+      (.then (fn [_]
+              (toast/show-success-toast ctx "Next period Forecast generated")))
+      (.catchError (fn [error]
+                   (dart-core/print (str "Error generating forecast: " error))
+                   (toast/show-error-toast ctx "Failed to generate Forecast")))))
+
+;; ============================================================================
+;; Main Screen
+;; ============================================================================
+
+(defn review-screen [_params]
+  (let [;; State
+        selected-period (atom :week)  ; Default weekly Review
+        review-data (atom nil)
+        loading (atom true)
+
+        ;; History comparison (from Reviews table)
+        reviews-history (atom [])
+        history-loading (atom false)
+        
+        ;; DAO
+        dao (app-state/get-dao)
+        db (app-state/get-db)
+        ctx {:db db :dao dao}]
+    
+    ;; Load Review data + historical Reviews
+    (letfn [(load-review-data []
+              (reset! loading true)
+              (-> (review-aggregate/aggregate-review-data! dao @selected-period)
+                  (.then (fn [data]
+                          (reset! review-data data)
+                          (reset! loading false)))
+                  (.catchError (fn [error]
+                               (dart-core/print (str "Error loading review data: " error))
+                               (reset! loading false)
+                               (toast/show-error-toast ctx "Failed to load Review data")))))
+
+            (load-review-history []
+              (reset! history-loading true)
+              (-> (review-db/watch-all-reviews dao)
+                  (.first)
+                  (.then (fn [rows]
+                          (let [items (->> (or rows [])
+                                           (map review-row->map)
+                                           vec)]
+                            (reset! reviews-history items)
+                            (reset! history-loading false))))
+                  (.catchError (fn [error]
+                               (dart-core/print (str "Error loading review history: " error))
+                               (reset! history-loading false)))))]
+      
+      ;; Initial load
+      (load-review-data)
+      (load-review-history)
+      
+      (f/widget
+       :context ctx
+       :bind {:selected-period selected-period
+              :review-data review-data
+              :loading loading
+              :reviews-history reviews-history
+              :history-loading history-loading}
+       :watch [_period selected-period]
+       
+       (m/Scaffold
+        .appBar (m/AppBar
+                 .title (comp/mongol-text-block
+                        {:text "Review"}))
+        .body (cond
+                @loading
+                (m/Center
+                 .child (m/CircularProgressIndicator))
+                
+                (nil? @review-data)
+                (m/Center
+                 .child (comp/mongol-text-block
+                        {:text "No data yet"
+                         :style (m/TextStyle
+                                .color (tokens/color :text-weak))}))
+                
+                :else
+                (m/ListView
+                 .children
+                 [(m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .child (period-selector
+                          {:selected-period @selected-period
+                           :on-period-changed (fn [period]
+                                              (reset! selected-period period)
+                                              (load-review-data))}))
+                  
+                  (overview-section
+                   {:overview-data @review-data})
+
+                  (auto-suggestions-section
+                   {:review-data @review-data})
+
+                  (history-compare-section
+                   {:selected-period @selected-period
+                    :reviews-history @reviews-history
+                    :history-loading @history-loading})
+                  
+                  (perspective-review-section
+                   {:perspectives-data (:perspectives @review-data)
+                    :on-perspective-tap (fn [perspective-id]
+                                         ;; TODO: Navigate to Perspective detail Review
+                                         (toast/show-info-toast ctx
+                                                               (str "View Perspective: " perspective-id)))})
+                  
+                  (action-review-section
+                   {:actions-data @review-data})
+                  
+                  (next-actions-section
+                   {:on-adjust-perspectives (fn []
+                                             (show-perspective-weight-dialog ctx dao db))
+                    :on-generate-forecast (fn []
+                                           (generate-next-period-forecast! ctx db dao))
+                    :on-enter-focus (fn []
+                                     (nav/navigate! :focus))})
+                  
+                  (m/SizedBox .height (tokens/space :xl))])))))))

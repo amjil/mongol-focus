@@ -1,0 +1,61 @@
+(ns minii-focus.core.dao.perspective
+  "Perspective Query System Wrapper
+  
+  Perspective = A set of composable query constraints
+  
+  It answers:
+  \"What perspective am I currently viewing Task / Forecast from?\"
+  
+  Usage example:
+  (query-by-perspective!
+   db
+   {:entity :task
+    :filters [{:field :status :op := :value 1}
+              {:field :priority :op :>= :value 2}]
+    :order-by [{:field :due-at :dir :asc}]
+    :limit 20})"
+  (:require
+   ["package:cljd_mongol_focus/db/bridge/perspective_query_bridge.dart" :as bridge]))
+
+(defn query-by-perspective!
+  "Query entities by Perspective
+  
+  Parameters:
+  - db: AppDatabase instance
+  - perspective: Perspective map
+    {:entity :task
+     :filters [{:field :status :op := :value 1}
+               {:field :priority :op :>= :value 2}]
+     :order-by [{:field :due-at :dir :asc}]
+     :limit 20}
+  
+  Returns: Future<List<map>>
+  
+  Notes:
+  - cljd uses kebab-case (e.g., :due-at), Dart automatically converts to camelCase (dueAt)
+  - Operators: =, !=, <, <=, >, >=, like, in, between
+  - between operator's value should be a vector with two elements: [start, end]
+  - Sort direction: :asc or :desc"
+  [db perspective]
+  (let [bridge-instance (new bridge/PerspectiveQueryBridge db)
+        ;; Convert perspective map to Dart format
+        dart-perspective (cond-> {:entity (name (:entity perspective))}
+                            (:filters perspective)
+                            (assoc :filters
+                                   (mapv (fn [f]
+                                           {:field (name (:field f))
+                                            :op (name (:op f))
+                                            :value (:value f)})
+                                         (:filters perspective)))
+                            
+                            (:order-by perspective)
+                            (assoc :orderBy
+                                   (mapv (fn [o]
+                                           {:field (name (:field o))
+                                            :dir (name (:dir o))})
+                                         (:order-by perspective)))
+                            
+                            (:limit perspective)
+                            (assoc :limit (:limit perspective)))]
+    (.queryByPerspective bridge-instance dart-perspective)))
+

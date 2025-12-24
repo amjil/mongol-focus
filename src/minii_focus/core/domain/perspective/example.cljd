@@ -1,0 +1,50 @@
+(ns minii-focus.core.domain.perspective.example
+  "Perspective Preset Usage Examples
+  
+  Demonstrates how to use the Preset system to query tasks.
+  
+  Usage flow:
+  1. Get Preset from presets
+  2. Compile Preset using compile (parse time placeholders)
+  3. Execute query using query-by-perspective!"
+  (:require
+   [minii-focus.core.domain.perspective.presets :as presets]
+   [minii-focus.core.domain.perspective.compile :as compile]
+   [minii-focus.core.dao.perspective :as perspective]))
+
+(defn load-today!
+  "Load today's tasks
+  
+  Parameters:
+  - db: AppDatabase instance
+  
+  Returns: Future<List<map>>"
+  [db]
+  (-> (presets/get-preset :today)
+      compile/compile-perspective
+      (perspective/query-by-perspective! db)))
+
+(defn load-week!
+  "Load this week's tasks
+  
+  Parameters:
+  - db: AppDatabase instance
+  
+  Returns: Future<List<map>>"
+  [db]
+  (-> (presets/get-preset :week)
+      compile/compile-perspective
+      (perspective/query-by-perspective! db)))
+
+(defn load-overdue!
+  "Load overdue tasks
+  
+  Parameters:
+  - db: AppDatabase instance
+  
+  Returns: Future<List<map>>"
+  [db]
+  (-> (presets/get-preset :overdue)
+      compile/compile-perspective
+      (perspective/query-by-perspective! db)))
+

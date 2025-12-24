@@ -1,0 +1,75 @@
+(ns minii-focus.core.db.review
+  "Review DAO Wrapper
+  
+  Provides ClojureDart API for Review, hiding Drift details."
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/review_bridge.dart" :as review-bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+
+(defn review-companion
+  "Build Review Companion object
+  
+  Parameters:
+  - review-map: {:id ... :period-start ... :period-end ... :expected-count ... :actual-count ... :expected-duration ... :actual-duration ... :mood-score ... :focus-score ... :created-at ...}
+  
+  Returns: ReviewsCompanion object"
+  [{:keys [id period-start period-end
+           expected-count actual-count
+           expected-duration actual-duration
+           mood-score focus-score
+           created-at]}]
+  (bridge/dart-new
+   app-db/ReviewsCompanion
+   {:id id
+    :period-start period-start
+    :period-end period-end
+    :expected-count expected-count
+    :actual-count actual-count
+    :expected-duration expected-duration
+    :actual-duration actual-duration
+    :mood-score mood-score
+    :focus-score focus-score
+    :created-at created-at}))
+
+(defn insert-review!
+  "Insert new Review
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - review-map: Review map (see review-companion)
+  
+  Returns: Future<void>"
+  [dao-bridge review-map]
+  (let [companion (review-companion review-map)]
+    (bridge/dart-call
+     review-bridge/insertReview
+     dao-bridge
+     companion)))
+
+(defn get-review
+  "Get Review
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - review-id: string
+  
+  Returns: Future<Review?>"
+  [dao-bridge review-id]
+  (bridge/dart-call
+   review-bridge/getReview
+   dao-bridge
+   review-id))
+
+(defn watch-all-reviews
+  "Watch all Reviews
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  
+  Returns: Stream<List<Review>>"
+  [dao-bridge]
+  (bridge/dart-call
+   review-bridge/watchAllReviews
+   dao-bridge))
+

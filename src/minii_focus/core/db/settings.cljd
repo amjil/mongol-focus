@@ -1,0 +1,76 @@
+(ns minii-focus.core.db.settings
+  "Settings DAO Wrapper
+  
+  Provides ClojureDart API for Settings, hiding Drift details."
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/settings_bridge.dart" :as settings-bridge]))
+
+(defn get-value
+  "Get setting value
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - key: string
+  
+  Returns: Future<String?>"
+  [dao-bridge key]
+  (bridge/dart-call
+   settings-bridge/getSettingValue
+   dao-bridge
+   key))
+
+(defn set-value!
+  "Set value (insert or update)
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - key: string
+  - value: string (JSON format)
+  
+  Returns: Future<void>"
+  [dao-bridge key value]
+  (bridge/dart-call
+   settings-bridge/setSettingValue
+   dao-bridge
+   key
+   value))
+
+(defn delete-setting!
+  "Delete setting
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - key: string
+  
+  Returns: Future<void>"
+  [dao-bridge key]
+  (bridge/dart-call
+   settings-bridge/deleteSetting
+   dao-bridge
+   key))
+
+(defn watch-all
+  "Query all settings (returns Stream)
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  
+  Returns: Stream<List<Setting>>"
+  [dao-bridge]
+  (bridge/dart-call
+   settings-bridge/watchAllSettings
+   dao-bridge))
+
+(defn get-all
+  "Query all settings (one-time query)
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  
+  Returns: Future<List<Setting>>"
+  [dao-bridge]
+  (bridge/dart-call
+   settings-bridge/getAllSettings
+   dao-bridge))
+

@@ -1,0 +1,424 @@
+(ns minii-focus.core.domain.review.aggregate
+  "Review Data Aggregation Module
+  
+  Review is a derived view, not stored in a table, all from queries + aggregation.
+  
+  Data sources:
+  - tasks
+  - forecast_items (forecasts)
+  - timeline_events
+  - perspectives
+  
+  Output:
+  - Overview data (completion summary, time distribution)
+  - Perspective Review data (aggregated by Perspective)
+  - Action Review data (key tasks, postponed ≥2 times, abandoned)"
+  (:require
+   ["dart:async" :as async]
+   ["dart:convert" :as dart-convert]
+   ["dart:core" :as dart-core]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.forecast :as forecast-db]
+   [minii-focus.core.db.timeline :as timeline-db]
+   [minii-focus.core.db.perspective :as perspective-db]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn parse-json
+  "Parse JSON string
+  
+  Parameters:
+  - json-str: string? (nullable)
+  
+  Returns: Parsed data (usually vector or map)"
+  [json-str]
+  (if json-str
+    (try
+      (dart-convert/jsonDecode json-str)
+      (catch Exception _
+        []))
+    []))
+
+(defn task->map
+  "Convert Dart Task object to Clojure map"
+  [task]
+  {:id (.-id task)
+   :title (.-title task)
+   :project-id (.-projectId task)
+   :perspectives (parse-json (.-perspectives task))
+   :completed (.-completed task)
+   :created-at (.-createdAt task)
+   :due-at (.-dueAt task)
+   :defer-at (.-deferAt task)})
+
+(defn forecast->map
+  "Convert Dart Forecast object to Clojure map"
+  [forecast]
+  {:id (.-id forecast)
+   :task-id (.-taskId forecast)
+   :scheduled-date (.-scheduledDate forecast)
+   :done (.-done forecast)
+   :skipped (.-skipped forecast)
+   :confidence (.-confidence forecast)
+   :source (.-source forecast)
+   :created-at (.-createdAt forecast)})
+
+(defn perspective->map
+  "Convert Dart Perspective object to Clojure map"
+  [perspective]
+  {:id (.-id perspective)
+   :title (.-title perspective)
+   :weight (.-weight perspective)
+   :weight-history (parse-json (.-weightHistory perspective))
+   :created-at (.-createdAt perspective)
+   :updated-at (.-updatedAt perspective)})
+
+(defn timeline-event->map
+  "Convert Dart TimelineEvent object to Clojure map"
+  [event]
+  {:id (.-id event)
+   :timestamp (.-timestamp event)
+   :type (.-type event)
+   :entity-type (.-entityType event)
+   :entity-id (.-entityId event)
+   :title (.-title event)
+   :duration (or (.-duration event) 0)
+   :perspectives (parse-json (.-perspectives event))})
+
+;; ============================================================================
+;; Time Boundary Calculation
+;; ============================================================================
+
+(defn start-of-week
+  "Calculate start time of the week containing the specified date (Monday 00:00:00)
+  
+  Parameters:
+  - date: DateTime
+  
+  Returns: DateTime"
+  [date]
+  (let [weekday (.weekday date)  ; 1=Monday, 7=Sunday
+        days-to-monday (mod (- weekday 1) 7)]
+    (.subtract date (dart-core/Duration :days days-to-monday))))
+
+(defn end-of-week
+  "Calculate end time of the week containing the specified date (Sunday 23:59:59)
+  
+  Parameters:
+  - date: DateTime
+  
+  Returns: DateTime"
+  [date]
+  (let [weekday (.weekday date)
+        days-to-sunday (- 7 weekday)]
+    (-> date
+        (.add (dart-core/Duration :days days-to-sunday))
+        (.add (dart-core/Duration :hours 23))
+        (.add (dart-core/Duration :minutes 59))
+        (.add (dart-core/Duration :seconds 59)))))
+
+(defn start-of-month
+  "Calculate start time of the month containing the specified date (1st 00:00:00)
+  
+  Parameters:
+  - date: DateTime
+  
+  Returns: DateTime"
+  [date]
+  (dart-core/DateTime (.year date) (.month date) 1))
+
+(defn end-of-month
+  "Calculate end time of the month containing the specified date (last day 23:59:59)
+  
+  Parameters:
+  - date: DateTime
+  
+  Returns: DateTime"
+  [date]
+  (let [next-month (if (= (.month date) 12)
+                     (dart-core/DateTime (+ (.year date) 1) 1 1)
+                     (dart-core/DateTime (.year date) (+ (.month date) 1) 1))]
+    (.subtract next-month (dart-core/Duration :seconds 1))))
+
+(defn get-period-boundaries
+  "Get period boundaries
+  
+  Parameters:
+  - period-type: :day | :week | :month
+  - selected-date: DateTime (optional, defaults to today)
+  
+  Returns: {:start DateTime :end DateTime}"
+  [period-type & [selected-date]]
+  (let [date (or selected-date (dart-core/DateTime.now))
+        base-date (dart-core/DateTime (.year date) (.month date) (.day date))]
+    (case period-type
+      :day
+      {:start base-date
+       :end (-> base-date
+                (.add (dart-core/Duration :hours 23))
+                (.add (dart-core/Duration :minutes 59))
+                (.add (dart-core/Duration :seconds 59)))}
+      
+      :week
+      {:start (start-of-week base-date)
+       :end (end-of-week base-date)}
+      
+      :month
+      {:start (start-of-month base-date)
+       :end (end-of-month base-date)})))
+
+;; ============================================================================
+;; Data Aggregation
+;; ============================================================================
+
+(defn aggregate-by-perspective
+  "Aggregate tasks and Forecast by Perspective
+  
+  Parameters:
+  - tasks: List<Task>
+  - forecasts: List<Forecast>
+  - timeline-events: List<TimelineEvent>
+  - perspectives: List<Perspective>
+  - start-ts: int (timestamp in seconds)
+  - end-ts: int (timestamp in seconds)
+  
+  Returns: map, key is perspective-id, value is aggregated data"
+  [tasks forecasts timeline-events perspectives start-ts end-ts]
+  (let [tasks-map (map task->map tasks)
+        forecasts-map (map forecast->map forecasts)
+        events-map (map timeline-event->map timeline-events)
+        perspectives-map (map perspective->map perspectives)
+        
+        ;; Initialize aggregation data for each Perspective
+        perspective-stats (reduce
+                           (fn [acc p]
+                             (assoc acc (:id p)
+                                    {:perspective p
+                                     :task-count 0
+                                     :done-count 0
+                                     :forecast-count 0
+                                     :forecast-done-count 0
+                                     :focus-minutes 0}))
+                           {}
+                           perspectives-map)
+        
+        ;; Aggregate tasks
+        perspective-stats-with-tasks
+        (reduce
+         (fn [acc task]
+           (let [task-perspectives (:perspectives task)
+                 completed? (:completed task)
+                 completed-at (when completed? (:created-at task))]
+             (if (and completed-at
+                      (>= completed-at start-ts)
+                      (<= completed-at end-ts))
+               (reduce
+                (fn [acc2 p-id]
+                  (update-in acc2 [p-id :done-count] (fnil inc 0)))
+                acc
+                task-perspectives)
+               acc)))
+         perspective-stats
+         tasks-map)
+        
+        ;; Aggregate Forecast
+        perspective-stats-with-forecasts
+        (reduce
+         (fn [acc forecast]
+           (let [task-id (:task-id forecast)
+                 task (first (filter #(= (:id %) task-id) tasks-map))
+                 task-perspectives (if task (:perspectives task) [])
+                 scheduled-date (:scheduled-date forecast)
+                 date-ts (* scheduled-date 86400)]  ; yyyyMMdd -> timestamp in seconds (approximate)
+             (if (and (>= date-ts start-ts)
+                      (<= date-ts end-ts))
+               (reduce
+                (fn [acc2 p-id]
+                  (-> acc2
+                      (update-in [p-id :forecast-count] (fnil inc 0))
+                      (update-in [p-id :forecast-done-count] (fnil + 0)
+                                 (if (:done forecast) 1 0))))
+                acc
+                task-perspectives)
+               acc)))
+         perspective-stats-with-tasks
+         forecasts-map)
+        
+        ;; Aggregate Timeline Events (Focus duration)
+        perspective-stats-final
+        (reduce
+         (fn [acc event]
+           (let [event-ts (:timestamp event)
+                 event-perspectives (:perspectives event)
+                 duration (:duration event)]
+             (if (and (>= event-ts start-ts)
+                      (<= event-ts end-ts)
+                      (> duration 0))
+               (reduce
+                (fn [acc2 p-id]
+                  (update-in acc2 [p-id :focus-minutes] (fnil + 0) duration))
+                acc
+                event-perspectives)
+               acc)))
+         perspective-stats-with-forecasts
+         events-map)]
+    perspective-stats-final))
+
+(defn get-action-tasks
+  "Get tasks requiring reflection
+  
+  Parameters:
+  - tasks: List<Task>
+  - start-ts: int (timestamp in seconds)
+  - end-ts: int (timestamp in seconds)
+  
+  Returns: {:completed [...] :postponed [...] :abandoned [...]}"
+  [tasks start-ts end-ts]
+  (let [tasks-map (map task->map tasks)
+        completed-tasks (filter
+                         (fn [task]
+                           (and (:completed task)
+                                (>= (:created-at task) start-ts)
+                                (<= (:created-at task) end-ts)))
+                         tasks-map)
+        ;; TODO: Need to track postpone_count, current database doesn't have this field
+        ;; Temporarily return empty list
+        postponed-tasks []
+        ;; TODO: Need to track abandoned status, current database doesn't have this field
+        ;; Temporarily return empty list
+        abandoned-tasks []]
+    {:completed completed-tasks
+     :postponed postponed-tasks
+     :abandoned abandoned-tasks}))
+
+;; ============================================================================
+;; Main Query Function
+;; ============================================================================
+
+(defn aggregate-review-data!
+  "Aggregate Review data
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - period-type: :day | :week | :month
+  - selected-date: DateTime? (optional)
+  
+  Returns: Future<map>
+  
+  Return format:
+  {:overview {:task-completed N
+              :forecast-completed N
+              :forecast-skipped N
+              :postponed-count N
+              :abandoned-count N
+              :perspective-distribution {...}}
+   :perspectives [{:perspective {...}
+                   :task-count N
+                   :done-count N
+                   :forecast-count N
+                   :forecast-done-count N
+                   :focus-minutes N}]
+   :actions {:completed [...] :postponed [...] :abandoned [...]}}"
+  [dao period-type & [selected-date]]
+  (let [{:keys [start end]} (get-period-boundaries period-type selected-date)
+        start-ts (int (/ (.millisecondsSinceEpoch start) 1000))
+        end-ts (int (/ (.millisecondsSinceEpoch end) 1000))
+        
+        ;; Query all data
+        ;; Note: watch-all-tasks and watch-all return Stream, need to convert to Future first
+        tasks-promise (-> (task-db/watch-all-tasks dao)
+                          (.then (fn [tasks]
+                                   (if (seq? tasks)
+                                     (if (vector? tasks)
+                                       (first tasks)
+                                       tasks)
+                                     tasks))))
+        
+        ;; Forecast query: need to query forecasts for all dates in the period
+        ;; Simplified: query all forecasts, then filter in memory
+        ;; TODO: Can be optimized to database layer query in the future
+        start-yyyymmdd (+ (* (.year start) 10000)
+                          (* (.month start) 100)
+                          (.day start))
+        end-yyyymmdd (+ (* (.year end) 10000)
+                        (* (.month end) 100)
+                        (.day end))
+        forecasts-promise (-> (forecast-db/watch-by-date dao start-yyyymmdd)
+                              (.then (fn [forecasts]
+                                       (let [forecasts-list (if (seq? forecasts)
+                                                             (if (vector? forecasts)
+                                                               (first forecasts)
+                                                               forecasts)
+                                                             forecasts)]
+                                         (filter
+                                          (fn [f]
+                                            (let [scheduled-date (.-scheduledDate f)]
+                                              (and (>= scheduled-date start-yyyymmdd)
+                                                   (<= scheduled-date end-yyyymmdd))))
+                                          forecasts-list)))))
+        
+        timeline-promise (timeline-db/query-range dao start-ts end-ts)
+        perspectives-promise (-> (perspective-db/watch-all dao)
+                                  (.then (fn [perspectives-stream]
+                                           ;; Stream needs to be converted to List
+                                           (let [completer (async/Completer.)]
+                                            (.listen perspectives-stream
+                                                     (fn [perspectives-list]
+                                                       (if (not (.isCompleted completer))
+                                                         (.complete completer
+                                                                    (if (seq? perspectives-list)
+                                                                      (if (vector? perspectives-list)
+                                                                        (first perspectives-list)
+                                                                        perspectives-list)
+                                                                      perspectives-list))
+                                                         nil))
+                                                     :onError (fn [error]
+                                                               (.completeError completer error)))
+                                             (.future completer)))))]
+    
+    (-> (dart-core/Future.wait [tasks-promise
+                                 forecasts-promise
+                                 timeline-promise
+                                 perspectives-promise])
+        (.then (fn [[tasks forecasts timeline-events perspectives]]
+                 (let [tasks-list (if (seq? tasks) tasks [])
+                       forecasts-list (if (seq? forecasts) forecasts [])
+                       events-list (if (seq? timeline-events) timeline-events [])
+                       perspectives-list (if (seq? perspectives) perspectives [])
+                       
+                       ;; Aggregate data
+                       perspective-stats (aggregate-by-perspective
+                                           tasks-list
+                                           forecasts-list
+                                           events-list
+                                           perspectives-list
+                                           start-ts
+                                           end-ts)
+                       
+                       ;; Overview
+                       total-completed (count (filter
+                                               (fn [task]
+                                                 (and (:completed task)
+                                                      (>= (:created-at task) start-ts)
+                                                      (<= (:created-at task) end-ts)))
+                                               (map task->map tasks-list)))
+                       total-forecast-done (count (filter :done (map forecast->map forecasts-list)))
+                       total-forecast-skipped (count (filter :skipped (map forecast->map forecasts-list)))
+                       
+                       ;; Action Review
+                       actions (get-action-tasks tasks-list start-ts end-ts)]
+                   
+                   {:overview {:task-completed total-completed
+                               :forecast-completed total-forecast-done
+                               :forecast-skipped total-forecast-skipped
+                               :postponed-count (count (:postponed actions))
+                               :abandoned-count (count (:abandoned actions))
+                               :perspective-distribution perspective-stats}
+                    :perspectives (vec (vals perspective-stats))
+                    :actions actions
+                    :period {:type period-type
+                             :start start-ts
+                             :end end-ts}}))))))
+

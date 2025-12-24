@@ -1,0 +1,71 @@
+(ns minii-focus.core.utils.time
+  "Time Utility Functions
+  
+  Provides timestamp conversion, date formatting, etc.
+  
+  Timestamp convention: Timestamp in seconds (Unix timestamp)"
+  (:require
+   ["dart:core" :as dart-core]))
+
+(defn ts->yyyymmdd
+  "Convert timestamp to yyyyMMdd format integer
+  
+  Parameters:
+  - ts: int (timestamp in seconds)
+  
+  Returns: int (yyyyMMdd, e.g., 20250101)
+  
+  Example:
+  (ts->yyyymmdd 1713427200) => 20240419"
+  [ts]
+  (let [date-time (dart-core/DateTime.fromMillisecondsSinceEpoch ts)
+        year (.year date-time)
+        month (.month date-time)
+        day (.day date-time)]
+    (+ (* year 10000)
+       (* month 100)
+       day)))
+
+(defn yyyymmdd->ts
+  "Convert yyyyMMdd format integer to timestamp (in seconds)
+  
+  Parameters:
+  - yyyymmdd: int (yyyyMMdd, e.g., 20250101)
+  
+  Returns: int (timestamp in seconds)
+  
+  Example:
+  (yyyymmdd->ts 20240419) => 1713427200"
+  [yyyymmdd]
+  (let [year (int (/ yyyymmdd 10000))
+        month-day (mod yyyymmdd 10000)
+        month (int (/ month-day 100))
+        day (mod month-day 100)
+        date-time (dart-core/DateTime year month day)]
+    (int (.secondsSinceEpoch date-time))))
+
+(defn yyyymmdd-add-days
+  "Add specified number of days to yyyyMMdd date
+  
+  Parameters:
+  - yyyymmdd: int (yyyyMMdd, e.g., 20250101)
+  - days: int (number of days to add)
+  
+  Returns: int (new yyyyMMdd)
+  
+  Example:
+  (yyyymmdd-add-days 20250101 7) => 20250108"
+  [yyyymmdd days]
+  (let [year (int (/ yyyymmdd 10000))
+        month-day (mod yyyymmdd 10000)
+        month (int (/ month-day 100))
+        day (mod month-day 100)
+        date-time (dart-core/DateTime year month day)
+        new-date-time (.add date-time (dart-core/Duration :days days))
+        new-year (.year new-date-time)
+        new-month (.month new-date-time)
+        new-day (.day new-date-time)]
+    (+ (* new-year 10000)
+       (* new-month 100)
+       new-day)))
+

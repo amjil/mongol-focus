@@ -1,0 +1,40 @@
+(ns minii-focus.core.components.focus
+  "Focus Component Aggregation Export
+  
+  Notes:
+  - `core.cljd` requires `minii-focus.core.components.focus`, but the file was missing causing cljd compilation failure.
+  - To avoid circular dependencies: `focus_depth.cljd` no longer requires `components.core`, here we only aggregate and provide focus-related components externally."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.components.focus-depth :as focus-depth]))
+
+(defn focus-container
+  "Focus container: Provides unified background/rounded corners/padding wrapper.
+  
+  Parameters:
+  - child: Widget
+  - padding: EdgeInsets? (optional)
+  - color: Color? (optional)
+  
+  Returns: Widget"
+  [& {:keys [child padding color]
+      :or {padding nil color nil}}]
+  (m/Container
+   .padding (or padding (m/EdgeInsets.all (tokens/space :m)))
+   .decoration (m/BoxDecoration
+                .color (or color (tokens/color :bg-focus))
+                .borderRadius (m/BorderRadius.circular (tokens/space :s)))
+   .child child))
+
+(defn focus-depth-bar
+  "Export focus-depth-bar (see `focus_depth.cljd`)"
+  [& {:as opts}]
+  (apply focus-depth/focus-depth-bar (apply concat opts)))
+
+(defn focus-depth-chart
+  "Export focus-depth-chart (see `focus_depth.cljd`)"
+  [& {:as opts}]
+  (apply focus-depth/focus-depth-chart (apply concat opts)))
+
+

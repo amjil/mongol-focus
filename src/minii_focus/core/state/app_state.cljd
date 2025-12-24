@@ -1,0 +1,43 @@
+(ns minii-focus.core.state.app-state
+  "Application State Management
+   
+   Manages global application state, including database connection and DAO Bridge."
+  (:require
+   ["package:cljd_mongol_focus/db/app_database.dart" :as db]
+   ["package:cljd_mongol_focus/db/bridge/dao_bridge.dart" :as dao-bridge]))
+
+(defonce app-db (atom nil))
+(defonce dao (atom nil))
+
+(defn init-db!
+  "Initialize database
+   
+   Returns: Future<AppDatabase>"
+  []
+  (let [db-instance (db/initAppDatabase)]
+    (reset! app-db db-instance)
+    (reset! dao (dao-bridge/DaoBridge. db-instance))
+    db-instance))
+
+(defn get-db
+  "Get database instance
+   
+   If not initialized, initialize first"
+  []
+  (if @app-db
+    @app-db
+    (do
+      (init-db!)
+      @app-db)))
+
+(defn get-dao
+  "Get DAO Bridge instance
+   
+   If not initialized, initialize database first"
+  []
+  (if @dao
+    @dao
+    (do
+      (init-db!)
+      @dao)))
+

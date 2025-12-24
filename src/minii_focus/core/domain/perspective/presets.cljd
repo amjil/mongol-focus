@@ -1,0 +1,66 @@
+(ns minii-focus.core.domain.perspective.presets
+  "Perspective Preset Registry (Deprecated)
+  
+  ⚠️ Note: This file is deprecated, please use minii-focus.core.domain.perspective.builtins instead.
+  
+  This file is kept for backward compatibility, but migration to the new Perspective Engine is recommended.
+  
+  The new Perspective Engine uses:
+  - minii-focus.core.domain.perspective.builtins - Built-in Perspectives
+  - minii-focus.core.domain.perspective.engine - Execution engine
+  - minii-focus.core.domain.perspective.core - Core data structures
+  
+  Usage example (new way):
+  (require '[minii-focus.core.domain.perspective.builtins :as builtins]
+           '[minii-focus.core.domain.perspective.engine :as engine])
+  
+  (let [perspective (builtins/get-builtin \"inbox\")
+        dao (app-state/get-dao)]
+    (-> (engine/run-perspective dao perspective)
+        (.then (fn [result]
+                ;; Use result to render UI
+                ))))"
+  ;; Deprecated, no longer need to reference builtins
+  )
+
+(def presets
+  "Preset Registry (Deprecated)
+  
+  Kept for backward compatibility, but recommend using builtins/get-builtin"
+  {:today {:id :today
+           :title "Today"
+           :entity :task
+           :resolve-time :today
+           :filters [{:field :status :op := :value :active}
+                     {:field :due-at :op :<= :value :today}]
+           :order-by [{:field :priority :dir :desc}]
+           :limit 20}
+
+   :week {:id :week
+          :title "This Week"
+          :entity :task
+          :resolve-time :week
+          :filters [{:field :status :op := :value :active}
+                    {:field :due-at :op :between :value [:week-start :week-end]}]
+          :order-by [{:field :due-at :dir :asc}]}
+
+   :overdue {:id :overdue
+             :title "Overdue"
+             :entity :task
+             :resolve-time :today
+             :filters [{:field :status :op := :value :active}
+                       {:field :due-at :op :< :value :today}]
+             :order-by [{:field :due-at :dir :asc}]}})
+
+(defn get-preset
+  "Get Preset by ID (Deprecated)
+  
+  ⚠️ Recommend using builtins/get-builtin instead
+  
+  Parameters:
+  - id: Preset ID (keyword), e.g. :today, :week, :overdue
+  
+  Returns: Preset map, or nil if not found"
+  [id]
+  (get presets id))
+

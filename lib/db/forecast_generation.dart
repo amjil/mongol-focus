@@ -14,10 +14,10 @@ Future<void> regenerateForecastFromPerspective({
     final today = DateTime.now();
     final baseDate = DateTime(today.year, today.month, today.day);
 
-    // 1️⃣ 查询 Task
+    // 1️⃣ Query Tasks
     final tasks = await db.taskDao.queryByPerspective(perspective);
 
-    // 2️⃣ 清空旧的 auto forecast
+    // 2️⃣ Clear old auto forecast
     await (db.delete(db.forecasts)
           ..where((f) =>
               f.source.equals(0) &
@@ -26,7 +26,7 @@ Future<void> regenerateForecastFromPerspective({
 
     if (tasks.isEmpty) return;
 
-    // 3️⃣ 计算权重
+    // 3️⃣ Calculate weights
     final weighted = <String, double>{};
     double total = 0;
 
@@ -43,7 +43,7 @@ Future<void> regenerateForecastFromPerspective({
       total += weight;
     }
 
-    // 避免全零导致除零错误，均分权重
+    // Avoid division by zero when all weights are zero, distribute evenly
     if (total == 0) {
       for (final entry in weighted.keys) {
         weighted[entry] = 1;
@@ -51,7 +51,7 @@ Future<void> regenerateForecastFromPerspective({
       total = weighted.length.toDouble();
     }
 
-    // 4️⃣ 分布到日期
+    // 4️⃣ Distribute to dates
     for (int i = 0; i < days; i++) {
       final date = baseDate.add(Duration(days: i));
 
@@ -72,7 +72,7 @@ Future<void> regenerateForecastFromPerspective({
       }
     }
 
-    // 5️⃣ 写 Timeline
+    // 5️⃣ Write Timeline
     await db.timelineDao.insertEvent(
       TimelineEventsCompanion.insert(
         id: const Uuid().v4(),

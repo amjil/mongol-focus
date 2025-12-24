@@ -1,4 +1,4 @@
-(ns minii-focus.components.layout
+(ns minii-focus.core.components.layout
   (:require
    ["package:flutter/material.dart" :as m]
    [cljd.flutter :as f]))

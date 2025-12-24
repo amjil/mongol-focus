@@ -1,4 +1,4 @@
-(ns minii-focus.components.text
+(ns minii-focus.core.components.text
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mongol]

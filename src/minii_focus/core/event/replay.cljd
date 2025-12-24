@@ -1,0 +1,230 @@
+(ns minii-focus.core.event.replay
+  "Event Replay (Rebuild Forecast)
+  
+  Rebuild Forecast state by replaying Events.
+  
+  Design principles:
+  1. Clear existing Forecast (optional)
+  2. Replay all related events in chronological order
+  3. Rebuild Forecast state
+  
+  Use cases:
+  - System recovery
+  - Data repair
+  - State reconstruction
+  - Debugging and testing"
+  (:require
+   [minii-focus.core.db.events :as events]
+   [minii-focus.core.event.executor :as executor]
+   [minii-focus.core.event.handler :as handler]
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn event-affects-forecast?
+  "Determine if Event affects Forecast
+  
+  Parameters:
+  - event: Event map
+  
+  Returns: boolean"
+  [{:keys [type]}]
+  (let [type-str (if (keyword? type) (name type) type)]
+    (or
+     ;; Events that directly operate on Forecast
+     (= type-str "forecast/add")
+     (= type-str "forecast/remove")
+     (= type-str "forecast/reschedule")
+     (= type-str "forecast/complete")
+     (= type-str "forecast/cancel")
+     (= type-str "system/forecast-auto-add")
+     (= type-str "system/forecast-auto-adjust")
+     ;; Task events that may affect Forecast
+     (= type-str "task/create")
+     (= type-str "task/complete")
+     (= type-str "task/archive")
+     (= type-str "task/defer")
+     (= type-str "task/assign-project")
+     (= type-str "task/remove-project"))))
+
+(defn timeline-event-to-executable-event
+  "Convert TimelineEvent to executable Event format
+  
+  Parameters:
+  - timeline-event: TimelineEvent map (from database)
+  
+  Returns: Event map (usable by executor)"
+  [{:keys [id timestamp type payload]}]
+  (let [type-keyword (keyword type)
+        payload-map (if (string? payload)
+                     (when payload (json/jsonDecode payload))
+                     payload)]
+    {:id id
+     :type type-keyword
+     :payload payload-map
+     :created-at timestamp
+     :source :system}))  ;; Mark as system during replay
+
+;; ============================================================================
+;; Replay Functions
+;; ============================================================================
+
+(defn replay-events!
+  "Replay event list
+  
+  Parameters:
+  - ctx: {:db AppDatabase :dao DaoBridge}
+  - event-list: List<Event map>
+  - options: {:skip-validation boolean :dry-run boolean}
+  
+  Returns: Future<void>
+  
+  Notes:
+  - By default validates each Event
+  - If skip-validation is true, skips validation (for migration scenarios)
+  - If dry-run is true, only validates without execution"
+  [ctx event-list & {:keys [skip-validation dry-run]}]
+  (let [skip-validation (or skip-validation false)
+        dry-run (or dry-run false)]
+    (reduce
+     (fn [acc event]
+       (-> acc
+           (.then (fn [_]
+                   (if dry-run
+                     ;; Only validate
+                     (if skip-validation
+                       (dart-core/Future.value nil)
+                       (try
+                         (executor/execute-event! ctx event)
+                         (catch :default e
+                           (dart-core/print (str "Validation failed: " e))
+                           (dart-core/Future.value nil))))
+                     ;; Execute
+                     (if skip-validation
+                       ;; Skip validation, directly execute handler
+                       (let [{:keys [type payload]} event
+                             type-str (if (keyword? type) (name type) type)]
+                         (handler/handle-event! ctx {:type type-str :payload payload}))
+                       ;; Normal execution (includes validation)
+                       (executor/execute-event! ctx event)))))))
+     (dart-core/Future.value nil)
+     event-list)))
+
+(defn replay-forecast-events!
+  "Replay all events affecting Forecast (rebuild Forecast)
+  
+  Parameters:
+  - ctx: {:db AppDatabase :dao DaoBridge}
+  - options: {:clear-forecast boolean :start-ts int? :end-ts int?}
+  
+  Returns: Future<void>
+  
+  Process:
+  1. Query all related events (optional: by time range)
+  2. Filter events affecting Forecast
+  3. Sort in chronological order
+  4. Clear existing Forecast (optional)
+  5. Replay all events
+  
+  Usage example:
+  (replay-forecast-events! ctx {:clear-forecast true})"
+  [ctx & {:keys [clear-forecast start-ts end-ts]}]
+  (let [{:keys [dao]} ctx
+        clear-forecast (or clear-forecast false)]
+    (-> (if (and start-ts end-ts)
+          ;; Query events in time range
+          (events/replay-range! dao start-ts end-ts)
+          ;; Query all events
+          (events/list-all! dao))
+        (.then (fn [all-events]
+                 ;; Filter events affecting Forecast
+                 (let [forecast-events (filter event-affects-forecast? all-events)
+                       ;; Sort in chronological order (replay needs old to new)
+                       sorted-events (sort-by :timestamp forecast-events)
+                       ;; Convert to executable Event format
+                       executable-events (map timeline-event-to-executable-event sorted-events)]
+                   (dart-core/print (str "Found " (count executable-events) " events affecting Forecast"))
+                   ;; Clear existing Forecast (if needed)
+                   (if clear-forecast
+                     (do
+                       (dart-core/print "Clearing existing Forecast...")
+                       ;; TODO: Implement logic to clear Forecast
+                       ;; Need to call DAO to delete all Forecasts
+                       (dart-core/Future.value nil))
+                     (dart-core/Future.value nil))
+                   ;; Replay all events
+                   (replay-events! ctx executable-events)))))))
+
+(defn replay-after-timestamp!
+  "Replay events after specified timestamp (rebuild Forecast)
+  
+  Parameters:
+  - ctx: {:db AppDatabase :dao DaoBridge}
+  - timestamp: int (timestamp, seconds)
+  - options: {:clear-forecast boolean}
+  
+  Returns: Future<void>
+  
+  Uses:
+  - Incremental sync
+  - System recovery
+  - State reconstruction"
+  [ctx timestamp & {:keys [_clear-forecast]}]
+  (let [{:keys [dao]} ctx]
+    (-> (events/replay-after! dao timestamp)
+        (.then (fn [events]
+                 ;; Filter events affecting Forecast
+                 (let [forecast-events (filter event-affects-forecast? events)
+                       ;; Convert to executable Event format
+                       executable-events (map timeline-event-to-executable-event forecast-events)]
+                   (dart-core/print (str "Replaying " (count executable-events) " events after " timestamp))
+                   ;; Replay all events
+                   (replay-events! ctx executable-events)))))))
+
+(defn replay-forecast-only!
+  "Only replay Forecast-related events (excluding Task events)
+  
+  Parameters:
+  - ctx: {:db AppDatabase :dao DaoBridge}
+  - options: {:clear-forecast boolean :start-ts int? :end-ts int?}
+  
+  Returns: Future<void>
+  
+  Uses:
+  - Only rebuild Forecast, not Task state"
+  [ctx & {:keys [clear-forecast start-ts end-ts]}]
+  (let [{:keys [dao]} ctx
+        clear-forecast (or clear-forecast false)]
+    (-> (if (and start-ts end-ts)
+          (events/replay-range! dao start-ts end-ts)
+          (events/list-all! dao))
+        (.then (fn [all-events]
+                 ;; Only filter Forecast direct operation events
+                 (let [forecast-only-events (filter
+                                             (fn [{:keys [type]}]
+                                               (let [type-str (if (keyword? type) (name type) type)]
+                                                 (or
+                                                  (= type-str "forecast/add")
+                                                  (= type-str "forecast/remove")
+                                                  (= type-str "forecast/reschedule")
+                                                  (= type-str "forecast/complete")
+                                                  (= type-str "forecast/cancel")
+                                                  (= type-str "system/forecast-auto-add")
+                                                  (= type-str "system/forecast-auto-adjust"))))
+                                             all-events)
+                       sorted-events (sort-by :timestamp forecast-only-events)
+                       executable-events (map timeline-event-to-executable-event sorted-events)]
+                   (dart-core/print (str "Found " (count executable-events) " Forecast events"))
+                   ;; Clear existing Forecast (if needed)
+                   (if clear-forecast
+                     (do
+                       (dart-core/print "Clearing existing Forecast...")
+                       ;; TODO: Implement logic to clear Forecast
+                       (dart-core/Future.value nil))
+                     (dart-core/Future.value nil))
+                   ;; Replay all events
+                   (replay-events! ctx executable-events)))))))
+

@@ -1,0 +1,13 @@
+(ns minii-focus.screens.perspective-detail
+  (:require
+    ["package:flutter/material.dart" :as m]
+    [cljd.flutter :as f]))
+
+(defn perspective-detail-screen [params]
+  (f/widget
+   (m/Scaffold
+    .appBar (m/AppBar
+             .title (m/Text "Perspective Detail"))
+    .body (m/Center
+           .child (m/Text (str "Perspective Detail Page - ID: " (get params :id)))))))
+

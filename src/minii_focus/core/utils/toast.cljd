@@ -1,10 +1,9 @@
-(ns minii-focus.utils.toast
+(ns minii-focus.core.utils.toast
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter_styled_toast/flutter_styled_toast.dart" :as styled-toast]
-   ["dart:core" :as dart-core]
-   [minii-focus.states.app-state :as state]))
+   ["dart:core" :as dart-core]))
 
 ;; Toast helper methods, reference mgl-notes-app
 
@@ -74,8 +73,8 @@
 (defn- get-global-context
   "Try to get BuildContext from global navigator key"
   []
-  (when-let [navigator-state (.-currentState state/navigator-key)]
-    (.-context navigator-state)))
+  ;; TODO: If global navigation key is needed in the future, implement here
+  nil)
 
 (defn- show-toast-global-impl
   "Generic implementation for showing toast with global context"

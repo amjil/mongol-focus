@@ -1,0 +1,15 @@
+(ns minii-focus.core.domain.review.rules.util
+  "Rule Utility Functions
+  
+  Provides common utility functions needed for calibration rules.")
+
+(defn clamp
+  "Clamp value within [min-v, max-v] range"
+  [v min-v max-v]
+  (-> v (max min-v) (min max-v)))
+
+(defn scale
+  "Scale value by ratio"
+  [v ratio]
+  (* v ratio))
+

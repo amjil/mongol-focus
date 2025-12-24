@@ -1,0 +1,31 @@
+(ns minii-focus.core.domain.forecast.generator
+  "Forecast Draft Generator
+  
+  Generate Forecast Draft list that can be directly inserted into database based on calibrated Forecast data.")
+
+(defn generate-forecast-drafts
+  "Generate Forecast Draft list
+  
+  Parameters:
+  - calibrated: [CalibratedForecast ...]
+  - period: int (period identifier, e.g., yyyyMMdd)
+  
+  Returns: [{:perspective-id ... :type ... :status ... :generated-by ... :source-review ... :confidence ...} ...]
+  
+  Notes:
+  - Perspectives with frozen? = true do not generate Draft
+  - Each forecast-count generates corresponding number of Drafts"
+  [calibrated period]
+  (mapcat
+   (fn [{:keys [perspective-id forecast-count forecast-type frozen?]}]
+     (if frozen?
+       []
+       (for [_ (range forecast-count)]
+         {:perspective-id perspective-id
+          :type forecast-type
+          :status :draft
+          :generated-by :auto-review
+          :source-review period
+          :confidence 0.6})))
+   calibrated))
+

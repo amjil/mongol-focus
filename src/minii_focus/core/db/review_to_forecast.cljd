@@ -1,0 +1,35 @@
+(ns minii-focus.core.db.review-to-forecast
+  "Review → Forecast Transaction Layer Wrapper
+  
+  Provides ClojureDart API for Review → Forecast, hiding Drift details.
+  
+  This is the database entry point for the review->forecast! function."
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/review_to_forecast_bridge.dart" :as review-to-forecast-bridge]))
+
+(defn apply-review-to-forecast!
+  "Apply Review → Forecast calibration results to database
+  
+  Parameters:
+  - db: AppDatabase instance
+  - forecast-drafts: [Forecast Draft map ...]
+     Format: [{:perspective-id \"health\"
+               :type :deep
+               :generated-by :auto-review
+               :source-review \"2025-W03\"
+               :confidence 0.6}
+              ...]
+  
+  Returns: Future<void>
+  
+  Notes:
+  - This is a transaction operation, ensuring atomicity
+  - Automatically cleans up old auto-review drafts
+  - Only inserts new drafts, does not activate"
+  [db forecast-drafts]
+  (bridge/dart-call
+   review-to-forecast-bridge/applyReviewToForecast
+   db
+   forecast-drafts))
+

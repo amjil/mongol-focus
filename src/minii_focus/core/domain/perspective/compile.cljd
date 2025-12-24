@@ -1,0 +1,87 @@
+(ns minii-focus.core.domain.perspective.compile
+  "Preset → Executable Perspective Compiler
+  
+  Compiles Presets containing time placeholders into executable Perspectives.
+  
+  Time placeholders:
+  - :today -> Today's date
+  - :week-start -> This week's start date
+  - :week-end -> This week's end date
+  
+  Usage example:
+  (compile-perspective
+   {:id :today
+    :resolve-time :today
+    :filters [{:field :due-at :op :<= :value :today}]})
+  =>
+  {:id :today
+   :filters [{:field :due-at :op :<= :value #inst \"...\"}]}"
+  (:require [minii-focus.core.domain.perspective.time :as t]))
+
+(defn resolve-value
+  "Resolve time placeholders in a single value
+  
+  Parameters:
+  - v: Value (may be keyword, vector, or other)
+  - time-map: Time mapping table {:today js/Date, :week-start js/Date, :week-end js/Date}
+  
+  Returns: Resolved value"
+  [v time-map]
+  (cond
+    (= v :today) (:today time-map)
+    (= v :week-start) (:week-start time-map)
+    (= v :week-end) (:week-end time-map)
+    :else v))
+
+(defn compile-filter
+  "Compile a single filter, resolving time placeholders
+  
+  Parameters:
+  - f: filter map {:field :due-at :op :<= :value :today}
+  - time-map: Time mapping table
+  
+  Returns: Compiled filter map"
+  [f time-map]
+  (let [v (:value f)]
+    (cond
+      (vector? v)
+      (assoc f :value (mapv #(resolve-value % time-map) v))
+
+      (keyword? v)
+      (assoc f :value (resolve-value v time-map))
+
+      :else f)))
+
+(defn compile-perspective
+  "Compile Preset into executable Perspective
+  
+  Parameters:
+  - preset: Preset map
+    {:id :today
+     :title \"Today\"
+     :entity :task
+     :resolve-time :today
+     :filters [{:field :due-at :op :<= :value :today}]
+     :order-by [{:field :priority :dir :desc}]
+     :limit 20}
+  
+  Returns: Compiled Perspective map (with :resolve-time removed)
+  
+  Note:
+  - Will calculate corresponding time range based on :resolve-time value
+  - Currently supports :today and :week"
+  [preset]
+  (let [resolve-time (:resolve-time preset)
+        time-map (cond
+                   (= resolve-time :today)
+                   {:today (t/today)}
+
+                   (= resolve-time :week)
+                   (merge {:today (t/today)} (t/week-range))
+
+                   :else
+                   {:today (t/today)})]
+    (-> preset
+        (update :filters #(mapv (fn [f] (compile-filter f time-map)) %))
+        (dissoc :resolve-time))))
+

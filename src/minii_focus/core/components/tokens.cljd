@@ -1,4 +1,4 @@
-(ns minii-focus.components.tokens
+(ns minii-focus.core.components.tokens
   (:require
    ["package:flutter/material.dart" :as m]))
 

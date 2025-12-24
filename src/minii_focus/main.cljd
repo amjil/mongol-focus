@@ -1,7 +1,6 @@
 (ns minii-focus.main
   (:require
    ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
@@ -9,7 +8,16 @@
    [virtual-keyboard.keyboard-candidates :as kc]
    [virtual-keyboard.zip-utils :as zip-utils]
    [virtual-keyboard.fst-reader :as fst-reader]
-   [minii-focus.components.core :as comp]))
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.sync.daily-sync :as daily-sync]
+   [minii-focus.screens.inbox :as inbox]
+   [minii-focus.screens.focus :as focus]
+   [minii-focus.screens.timeline :as timeline]
+   [minii-focus.screens.forecast :as forecast]
+   [minii-focus.screens.review :as review]
+   [minii-focus.screens.project :as project]
+   [minii-focus.screens.perspective :as perspective]
+   [minii-focus.screens.today :as today]))
 
 ;; Initialize application
 (defn init-app! []
@@ -20,7 +28,18 @@
   (zip-utils/read-json-from-asset-zip kc/next "assets/next.zip")
   (fst-reader/ensure-loaded)
   
-  )
+  ;; Initialize database
+  (-> (app-state/init-db!)
+      (.then (fn [db]
+              (dart-core/print "Database initialized successfully")
+              ;; Check and sync daily data
+              (-> (daily-sync/check-and-sync-daily! db)
+                  (.then (fn [_]
+                          (dart-core/print "Daily sync check completed")))
+                  (.catchError (fn [error]
+                               (dart-core/print (str "Daily sync error: " error)))))))
+      (.catchError (fn [error]
+                    (dart-core/print (str "Database initialization error: " error))))))
 
 (defn main []
   ;; Ensure Flutter binding is initialized
@@ -37,7 +56,26 @@
                        :keyboard/font-size 18
                        :keyboard/key-container-color m/Colors.grey.shade500
                        :keyboard/mongol-font-family "OnonSoninSans"})
-          ]
+          current-index (atom 0)
+          pages [(today/today-screen nil)
+                 (inbox/inbox-screen nil)
+                 (focus/focus-screen nil)
+                 (timeline/timeline-screen nil)
+                 (forecast/forecast-screen nil)
+                 (review/review-screen nil)
+                 (project/project-screen nil)
+                 (perspective/perspective-screen nil)]
+          bottom-items [{:title "Today" :icon m/Icons.today :idx 0}
+                       {:title "Inbox" :icon m/Icons.inbox :idx 1}
+                       {:title "Focus" :icon m/Icons.timer :idx 2}
+                       {:title "Timeline" :icon m/Icons.timeline :idx 3}
+                       {:title "Forecast" :icon m/Icons.calendar_today :idx 4}
+                       {:title "Review" :icon m/Icons.feedback :idx 5}
+                       {:title "Project" :icon m/Icons.folder :idx 6}
+                       {:title "Perspective" :icon m/Icons.explore :idx 7}]
+          set-page! (fn [idx]
+                     (reset! current-index idx))]
+    :watch [_tab current-index]
     :bind {:info info}
 
     (m/MaterialApp
@@ -49,8 +87,15 @@
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
      .home (m/Scaffold
-            
-            .body (m/Center
-                   .child (comp/mongol-text-block
-                           {:text "Hello, World!"}))
-            )))))
+            .body (m/IndexedStack
+                   .index @current-index
+                   .children pages)
+            .bottomNavigationBar (m/BottomNavigationBar
+                                 .type m/BottomNavigationBarType.fixed
+                                 .currentIndex (min @current-index (dec (count bottom-items)))
+                                 .onTap set-page!
+                                 .items (into []
+                                             (for [{:keys [title icon]} bottom-items]
+                                               (m/BottomNavigationBarItem
+                                                .icon (m/Icon icon)
+                                                .label title)))))))))

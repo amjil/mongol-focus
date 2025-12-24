@@ -1,0 +1,73 @@
+(ns minii-focus.core.db.timeline
+  "Timeline Event DAO Wrapper
+  
+  Provides ClojureDart API for Timeline Event, hiding Drift details.
+  
+  Usage example:
+  (timeline/insert-event! dao-bridge {:id \"...\" :timestamp 1234567890 ...})"
+  (:require
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/bridge/timeline_bridge.dart" :as timeline-bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+
+(defn timeline-event-companion
+  "Build TimelineEventsCompanion
+  
+  Parameters:
+  - id: string
+  - timestamp: int (timestamp in seconds)
+  - type: string (task/create / task/complete / forecast/add ...)
+  - entity-type: string (task / forecast / focus / project / perspective)
+  - entity-id: string (nullable)
+  - title: string
+  - duration: int (nullable, minutes)
+  - perspectives: string (nullable, JSON)
+  - payload: string (nullable, JSON)
+  
+  ⚠️ Companion building must be centralized, only change here when schema changes"
+  [{:keys [id timestamp type entity-type entity-id title duration perspectives payload]}]
+  (bridge/dart-new
+   app-db/TimelineEventsCompanion
+   {:id id
+    :timestamp timestamp
+    :type type
+    :entity-type entity-type
+    :entity-id entity-id
+    :title title
+    :duration duration
+    :perspectives perspectives
+    :payload payload}))
+
+(defn insert-event!
+  "Insert Timeline Event
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - event-map: {:id ... :timestamp ... :type ... etc}
+  
+  Returns: Future<void>"
+  [dao-bridge event-map]
+  (let [companion (timeline-event-companion event-map)]
+    (bridge/dart-call
+     timeline-bridge/insertTimelineEvent
+     dao-bridge
+     companion)))
+
+(defn query-range
+  "Query Timeline Events in time range
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - start-ts: int (timestamp, seconds)
+  - end-ts: int (timestamp, seconds)
+  
+  Returns: Future<List<TimelineEvent>>
+  
+  Note: Returned Dart TimelineEvent objects need to be converted to Clojure maps"
+  [dao-bridge start-ts end-ts]
+  (bridge/dart-call
+   timeline-bridge/queryTimelineRange
+   dao-bridge
+   start-ts
+   end-ts))
+

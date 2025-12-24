@@ -1,0 +1,199 @@
+(ns minii-focus.screens.today
+;;   "Today / Now page
+  
+;;   Positioning: Today = Buffer page for Forecast + Focus
+;;   - Display today's Forecast list
+;;   - A prominent 'Start Focus' button
+;;   - No review, no analysis
+;;   - This is a page to reduce startup cost"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.forecast :as forecast]
+   [minii-focus.core.db.task :as task]
+   [minii-focus.core.utils.time :as time]
+   [minii-focus.core.utils.toast :as toast]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn format-date [yyyymmdd]
+  (let [year (int (/ yyyymmdd 10000))
+        month-day (mod yyyymmdd 10000)
+        month (int (/ month-day 100))
+        day (mod month-day 100)]
+    (str year "-" month "-" day)))
+
+(defn load-task-title
+  "Load task title"
+  [dao task-id]
+  (-> (task/get-by-id dao task-id)
+      (.then (fn [task-obj]
+              (if task-obj
+                (.-title task-obj)
+                (str "Task: " task-id))))
+      (.catchError (fn [error]
+                   (dart-core/print (str "Error loading task title: " error))
+                   (str "Task: " task-id)))))
+
+;; ============================================================================
+;; Forecast Item Component
+;; ============================================================================
+
+(defn forecast-item
+  "Forecast item component"
+  [{:keys [forecast-item task-title on-tap]}]
+  (m/Card
+   .margin (m/EdgeInsets.symmetric
+           :vertical (tokens/space :xs)
+           :horizontal (tokens/space :m))
+   .child (m/InkWell
+          .onTap (when on-tap (fn [] (on-tap forecast-item)))
+          .child (m/Padding
+                 .padding (m/EdgeInsets.all (tokens/space :m))
+                 .child (m/Row
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/Checkbox
+                         .value (.-done forecast-item)
+                         .onChanged (fn [_] nil))
+                         (m/SizedBox .width (tokens/space :m))
+                         (m/Expanded
+                          .child (comp/mongol-text-block
+                                 {:text task-title
+                                  :style (m/TextStyle
+                                         .fontSize (tokens/font-size :m)
+                                         .decoration (when (.-done forecast-item)
+                                                     m/TextDecoration.lineThrough)
+                                         .color (if (.-done forecast-item)
+                                                (tokens/color :text-weak)
+                                                (tokens/color :text-main)))}))
+                         (when (.-done forecast-item)
+                           (m/Icon
+                            m/Icons.check_circle
+                            .size 20
+                            .color m/Colors.green))])))))
+
+;; ============================================================================
+;; Main Screen
+;; ============================================================================
+
+(defn today-screen [_params]
+  (let [forecasts-list (atom [])
+        task-titles-map (atom {})
+        loading (atom false)
+        dao (app-state/get-dao)
+        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+    ;; Load forecasts for today
+    (reset! loading true)
+    (-> (forecast/watch-by-date dao today-yyyymmdd)
+        (.first)
+        (.then (fn [result]
+                 (let [forecasts (or result [])
+                       task-ids (distinct (map #(.-taskId %) forecasts))]
+                   (reset! forecasts-list forecasts)
+                   ;; Load task titles
+                   (-> (dart-core/Future.wait
+                        (vec (map (fn [task-id]
+                                    (-> (load-task-title dao task-id)
+                                        (.then (fn [title]
+                                                 (swap! task-titles-map assoc task-id title)))))
+                                  task-ids)))
+                       (.then (fn [_]
+                                (reset! loading false)))
+                       (.catchError (fn [error]
+                                      (dart-core/print (str "Error loading task titles: " error))
+                                      (reset! loading false)))))))
+        (.catchError (fn [error]
+                       (dart-core/print (str "Error loading forecasts: " error))
+                       (reset! loading false))))
+
+    (f/widget
+     :context ctx
+     :bind {:forecasts forecasts-list
+            :task-titles task-titles-map
+            :loading loading}
+
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                       {:text "Today"}))
+      .body (comp/mongol-column-layout
+             {:main-column
+              (m/Column
+               .mainAxisSize m/MainAxisSize.max
+               .crossAxisAlignment m/CrossAxisAlignment.stretch
+               .children
+               [;; 1️⃣ Top: Date display
+                (m/Container
+                 .padding (m/EdgeInsets.all (tokens/space :l))
+                 .color (tokens/color :bg-focus)
+                 .child (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(comp/mongol-text-block
+                           {:text (format-date today-yyyymmdd)
+                            :style (m/TextStyle
+                                    .fontSize (tokens/font-size :xl)
+                                    .fontWeight m/FontWeight.bold)})
+                          (m/SizedBox .height (tokens/space :s))
+                          (comp/mongol-text-block
+                           {:text (str (count @forecasts-list) " forecasts")
+                            :style (m/TextStyle
+                                    .fontSize (tokens/font-size :s)
+                                    .color (tokens/color :text-weak))})]))
+
+                ;; 2️⃣ Prominent 'Start Focus' button
+                (m/Container
+                 .padding (m/EdgeInsets.all (tokens/space :m))
+                 .child (m/ElevatedButton
+                         .onPressed (fn []
+                                      ;; TODO: Navigate to Focus page and start Focus
+                                      (toast/show-success-toast ctx "Start Focus"))
+                         .style (m/ButtonStyle
+                                 .padding (m/MaterialStateProperty.all
+                                           (m/EdgeInsets.symmetric
+                                            :vertical (tokens/space :l)
+                                            :horizontal (tokens/space :xl)))
+                                 .backgroundColor (m/MaterialStateProperty.all
+                                                   (tokens/color :accent)))
+                         .child (comp/mongol-text-block
+                                 {:text "Start Focus"
+                                  :style (m/TextStyle
+                                          .fontSize (tokens/font-size :l)
+                                          .fontWeight m/FontWeight.bold
+                                          .color m/Colors.white)})))
+
+                ;; 3️⃣ Today's Forecast list
+                (m/Expanded
+                 .child (cond
+                          @loading
+                          (m/Center
+                           .child (m/CircularProgressIndicator))
+
+                          (empty? @forecasts-list)
+                          (m/Center
+                           .child (comp/mongol-text-block
+                                   {:text "No forecasts for today"
+                                    :style (m/TextStyle
+                                            .color (tokens/color :text-weak))}))
+
+                          :else
+                          (m/ListView
+                           .children
+                           (vec (map (fn [forecast-item]
+                                       (let [task-id (.-taskId forecast-item)
+                                             task-title (get @task-titles-map task-id (str "Task: " task-id))]
+                                         (forecast-item
+                                          {:forecast-item forecast-item
+                                           :task-title task-title
+                                           :on-tap (fn [item]
+                                                     ;; TODO: Can open Forecast Detail or Task Detail
+                                                     (dart-core/print (str "Tap forecast: " (.-id item))))})))
+                                     @forecasts-list)))))])})))))
+

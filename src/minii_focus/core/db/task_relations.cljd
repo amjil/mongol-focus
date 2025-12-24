@@ -1,0 +1,102 @@
+(ns minii-focus.core.db.task-relations
+  "Task Relations Management
+  
+  Uses Settings table to store task relations:
+  - Task relations: key = 'task_relations:{task-id}', value = JSON object
+    Format: {\"blocked-by\": [\"task-id1\", \"task-id2\"], \"blocks\": [\"task-id3\"], \"related-to\": [\"task-id4\"]}"
+  (:require
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]
+   [minii-focus.core.db.settings :as settings]))
+
+(defn get-task-relations
+  "Get task relations
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-id: string
+  
+  Returns: Future<map> {:blocked-by [] :blocks [] :related-to []}"
+  [dao task-id]
+  (let [relations-key (str "task_relations:" task-id)]
+    (-> (settings/get-value dao relations-key)
+        (.then (fn [relations-json]
+                (if relations-json
+                  (try
+                    (let [relations (json/jsonDecode relations-json)]
+                      (dart-core/Future.value relations))
+                    (catch Exception _
+                      (dart-core/Future.value {:blocked-by [] :blocks [] :related-to []})))
+                  (dart-core/Future.value {:blocked-by [] :blocks [] :related-to []}))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading task relations: " error))
+                     (dart-core/Future.value {:blocked-by [] :blocks [] :related-to []}))))))
+
+(defn set-task-relations!
+  "Set task relations
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-id: string
+  - relations: map {:blocked-by [] :blocks [] :related-to []}
+  
+  Returns: Future<void>"
+  [dao task-id relations]
+  (let [relations-key (str "task_relations:" task-id)
+        relations-json (json/jsonEncode relations)]
+    (settings/set-value! dao relations-key relations-json)))
+
+(defn add-relation!
+  "Add task relation
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-id: string
+  - relation-type: :blocked-by | :blocks | :related-to
+  - related-task-id: string
+  
+  Returns: Future<void>"
+  [dao task-id relation-type related-task-id]
+  (-> (get-task-relations dao task-id)
+      (.then (fn [current-relations]
+              (let [current-list (get current-relations relation-type [])
+                    new-list (if (some #(= % related-task-id) current-list)
+                              current-list  ; Already exists
+                              (conj current-list related-task-id))
+                    new-relations (assoc current-relations relation-type new-list)]
+                (set-task-relations! dao task-id new-relations))))))
+
+(defn remove-relation!
+  "Remove task relation
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-id: string
+  - relation-type: :blocked-by | :blocks | :related-to
+  - related-task-id: string
+  
+  Returns: Future<void>"
+  [dao task-id relation-type related-task-id]
+  (-> (get-task-relations dao task-id)
+      (.then (fn [current-relations]
+              (let [current-list (get current-relations relation-type [])
+                    new-list (filter #(not= % related-task-id) current-list)
+                    new-relations (assoc current-relations relation-type (vec new-list))]
+                (set-task-relations! dao task-id new-relations))))))
+
+(defn get-related-tasks
+  "Get all related task IDs
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - task-id: string
+  
+  Returns: Future<set> (set of all related task IDs)"
+  [dao task-id]
+  (-> (get-task-relations dao task-id)
+      (.then (fn [relations]
+              (let [all-related (concat (:blocked-by relations)
+                                        (:blocks relations)
+                                        (:related-to relations))]
+                (dart-core/Future.value (set all-related)))))))
+

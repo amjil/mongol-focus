@@ -1,0 +1,156 @@
+(ns minii-focus.core.db.project-template
+  "Project Template Management
+  
+  Uses Settings table to store project templates
+  key format: project_template:{template-id}
+  value: Template data in JSON format"
+  (:require
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]
+   [minii-focus.core.db.settings :as settings]
+   [minii-focus.core.db.project :as project-db]
+   [minii-focus.core.db.task :as task-db]))
+
+(defn generate-template-id
+  "Generate template ID"
+  []
+  (str "template-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))))
+
+(defn save-project-as-template!
+  "Save project as template
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - project-id: string
+  - template-name: string (template name)
+  
+  Returns: Future<string> (template ID)"
+  [dao project-id template-name]
+  (let [template-id (generate-template-id)
+        template-key (str "project_template:" template-id)]
+    ;; Get project information
+    (-> (project-db/get-by-id dao project-id)
+        (.then (fn [project]
+                (if project
+                  ;; Get project tasks
+                  (-> (project-db/get-project-tasks dao project-id)
+                      (.then (fn [tasks]
+                              ;; Build template data
+                              (let [template-data {:id template-id
+                                                   :name template-name
+                                                   :title (.-title project)
+                                                   :notes (.-notes project)
+                                                   :tasks (map (fn [task]
+                                                                {:title (.-title task)
+                                                                 :priority (.-priority task)})
+                                                              tasks)}
+                                    template-json (json/jsonEncode template-data)]
+                                ;; Save to Settings
+                                (-> (settings/set-value! dao template-key template-json)
+                                    (.then (fn [_] template-id))
+                                    (.catchError (fn [error]
+                                                 (dart-core/print (str "Error saving template: " error))
+                                                 (dart-core/Future.error error))))))
+                      (.catchError (fn [error]
+                                   (dart-core/print (str "Error loading tasks: " error))
+                                   (dart-core/Future.error error)))))
+                  (dart-core/Future.error (dart-core/Exception. "Project not found"))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading project: " error))
+                     (dart-core/Future.error error)))))))
+
+(defn get-all-templates
+  "Get all project templates
+  
+  Parameters:
+  - dao: DaoBridge instance
+  
+  Returns: Future<List<map>> (template list)"
+  [dao]
+  (-> (settings/get-all dao)
+      (.then (fn [all-settings]
+              (let [template-settings (filter (fn [setting]
+                                                (let [key (.-key setting)]
+                                                  (and key (.startsWith key "project_template:"))))
+                                              all-settings)
+                    templates (map (fn [setting]
+                                    (try
+                                      (let [template-data (json/jsonDecode (.-value setting))]
+                                        template-data)
+                                      (catch Exception _
+                                        nil)))
+                                  template-settings)]
+                (vec (filter some? templates)))))
+      (.catchError (fn [error]
+                   (dart-core/print (str "Error loading templates: " error))
+                   []))))
+
+(defn create-project-from-template!
+  "Create project from template
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - template-id: string
+  - project-name: string (new project name, optional, defaults to template name)
+  
+  Returns: Future<string> (new project ID)"
+  [dao template-id & [project-name]]
+  (let [template-key (str "project_template:" template-id)]
+    (-> (settings/get-value dao template-key)
+        (.then (fn [template-json]
+                (if template-json
+                  (let [template-data (json/jsonDecode template-json)
+                        new-project-id (str "project-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
+                        new-project-name (or project-name (:name template-data) (:title template-data))
+                        now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+                        project-data {:id new-project-id
+                                     :title new-project-name
+                                     :created-at now
+                                     :review-at nil
+                                     :completed false
+                                     :status "active"
+                                     :notes (:notes template-data)}]
+                    ;; Create project
+                    (-> (project-db/insert-project! dao project-data)
+                        (.then (fn [_]
+                                ;; Create initial tasks
+                                (let [tasks (:tasks template-data)
+                                      task-promises (map (fn [task-data]
+                                                           (let [task-id (str "task-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) "-" (rand-int 10000))
+                                                                 task-map {:id task-id
+                                                                           :title (:title task-data)
+                                                                           :project-id new-project-id
+                                                                           :perspectives nil
+                                                                           :completed false
+                                                                           :created-at now
+                                                                           :priority (or (:priority task-data) 3)
+                                                                           :postpone-count 0
+                                                                           :abandoned false}]
+                                                             (task-db/insert-task! dao task-map)))
+                                                         tasks)]
+                                  (if (seq tasks)
+                                    (-> (dart-core/Future.wait (vec task-promises))
+                                        (.then (fn [_] new-project-id))
+                                        (.catchError (fn [error]
+                                                     (dart-core/print (str "Error creating tasks: " error))
+                                                     (dart-core/Future.value new-project-id))))
+                                    (dart-core/Future.value new-project-id))))
+                        (.catchError (fn [error]
+                                     (dart-core/print (str "Error creating project: " error))
+                                     (dart-core/Future.error error))))))
+                  (dart-core/Future.error (dart-core/Exception. "Template not found")))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading template: " error))
+                     (dart-core/Future.error error))))))
+
+(defn delete-template!
+  "Delete template
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - template-id: string
+  
+  Returns: Future<void>"
+  [dao template-id]
+  (let [template-key (str "project_template:" template-id)]
+    (settings/delete-setting! dao template-key)))

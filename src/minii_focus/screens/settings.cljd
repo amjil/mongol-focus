@@ -1,0 +1,417 @@
+(ns minii-focus.screens.settings
+  "Settings page
+  
+  Features:
+  - Forecast related settings
+  - App information
+  - Data management"
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]
+   ["package:share_plus/share_plus.dart" :as share]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.settings :as settings-db]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.project :as project-db]
+   [minii-focus.core.db.forecast :as forecast-db]
+   [minii-focus.core.db.perspective :as perspective-db]
+   [minii-focus.core.db.review :as review-db]
+   [minii-focus.core.db.timeline :as timeline-db]
+   [minii-focus.core.utils.toast :as toast]))
+
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(defn get-forecast-tuning-value
+  "Get Forecast tuning parameter value
+  
+  Parameters:
+  - dao: DaoBridge
+  - key: string
+  
+  Returns: Future<double?>"
+  [dao key]
+  (let [default-value (case key
+                        "daily_capacity" 3.0
+                        "forecast_weight_factor" 1.0
+                        "confidence_decay" 1.0
+                        0.0)]
+    (-> (settings-db/get-value dao key)
+        (.then (fn [value-str]
+                (if value-str
+                  (dart-core/double.parseDouble value-str)
+                  default-value)))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error getting setting " key ": " error))
+                     default-value)))))
+
+(defn set-forecast-tuning-value
+  "Set Forecast tuning parameter value
+  
+  Parameters:
+  - dao: DaoBridge
+  - key: string
+  - value: double
+  
+  Returns: Future<void>"
+  [dao key value]
+  (settings-db/set-value! dao key (str value)))
+
+;; ============================================================================
+;; UI Components
+;; ============================================================================
+
+(defn forecast-settings-section
+  "Forecast settings section"
+  [{:keys [dao on-updated]}]
+  (let [daily-capacity (atom 3.0)
+        weight-factor (atom 1.0)
+        loading (atom false)]
+    ;; Load current settings
+    (reset! loading true)
+    (-> (get-forecast-tuning-value dao "daily_capacity")
+        (.then (fn [value]
+                (when value
+                  (reset! daily-capacity value))
+                (-> (get-forecast-tuning-value dao "forecast_weight_factor")
+                    (.then (fn [value2]
+                            (when value2
+                              (reset! weight-factor value2))
+                            (reset! loading false)))
+                    (.catchError (fn [error]
+                                 (dart-core/print (str "Error loading weight factor: " error))
+                                 (reset! loading false))))))
+        (.catchError (fn [error]
+                     (dart-core/print (str "Error loading daily capacity: " error))
+                     (reset! loading false))))
+    
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [                    (comp/mongol-text-block
+                     {:text "Forecast Settings"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :l)
+                             .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height (tokens/space :m))
+                    
+                    ;; Daily capacity
+                    (comp/mongol-text-block
+                     {:text "Daily Capacity (Recommended: 3-8)"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :m)
+                             .fontWeight m/FontWeight.w500)})
+                    (m/SizedBox .height (tokens/space :s))
+                    (m/Slider
+                     .value @daily-capacity
+                     .min 1.0
+                     .max 10.0
+                     .divisions 90
+                     .label (str (int @daily-capacity))
+                     .onChanged (fn [new-value]
+                                (reset! daily-capacity new-value)))
+                    (comp/mongol-text-block
+                     {:text (str "Current value: " (int @daily-capacity))
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :s)
+                             .color (tokens/color :text-weak))})
+                    (m/SizedBox .height (tokens/space :m))
+                    
+                    ;; Weight factor
+                    (comp/mongol-text-block
+                     {:text "Forecast Weight Factor (Recommended: 0.5-2.0)"
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :m)
+                             .fontWeight m/FontWeight.w500)})
+                    (m/SizedBox .height (tokens/space :s))
+                    (m/Slider
+                     .value @weight-factor
+                     .min 0.5
+                     .max 2.0
+                     .divisions 150
+                     .label (str (.toStringAsFixed @weight-factor 2))
+                     .onChanged (fn [new-value]
+                                (reset! weight-factor new-value)))
+                    (comp/mongol-text-block
+                     {:text (str "Current value: " (.toStringAsFixed @weight-factor 2))
+                      :style (m/TextStyle
+                             .fontSize (tokens/font-size :s)
+                             .color (tokens/color :text-weak))})
+                    (m/SizedBox .height (tokens/space :m))
+                    
+                    ;; Save button
+                    (m/ElevatedButton
+                     .onPressed (fn []
+                                 (reset! loading true)
+                                 (-> (dart-core/Future.wait
+                                      [(set-forecast-tuning-value dao "daily_capacity" @daily-capacity)
+                                       (set-forecast-tuning-value dao "forecast_weight_factor" @weight-factor)])
+                                     (.then (fn [_]
+                                             (reset! loading false)
+                                             (toast/show-success-toast nil "Settings saved")
+                                             (when on-updated (on-updated))))
+                                     (.catchError (fn [error]
+                                                  (dart-core/print (str "Error saving settings: " error))
+                                                  (reset! loading false)
+                                                  (toast/show-error-toast nil "Failed to save settings")))))
+                     .child (comp/mongol-text-block
+                            {:text (if @loading "Saving..." "Save Settings")
+                             :style (m/TextStyle
+                                    .color m/Colors.white)}))])))))
+
+(defn app-info-section
+  "App information section"
+  []
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :m))
+          .child (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(comp/mongol-text-block
+                   {:text "App Information"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+                  (m/SizedBox .height (tokens/space :m))
+                  (comp/mongol-text-block
+                   {:text "Mongol Focus"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :m))})
+                  (comp/mongol-text-block
+                   {:text "Version: 1.0.0"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :s)
+                           .color (tokens/color :text-weak))})
+                  (m/SizedBox .height (tokens/space :s))
+                  (comp/mongol-text-block
+                   {:text "A task management app focused on traditional Mongolian vertical writing"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :s)
+                           .color (tokens/color :text-weak))})]))))
+
+(defn export-all-data
+  "Export all data as JSON
+  
+  Parameters:
+  - ctx: context map
+  - dao: DaoBridge
+  
+  Returns: Future<void>"
+  [ctx dao]
+  (let [now-ts (int (/ (System/currentTimeMillis) 1000))
+        start-ts (- now-ts (* 365 24 60 60))]  ; Query data from the last year
+    (-> (dart-core/Future.wait
+                              [(-> (task-db/watch-all-tasks dao)
+                                   (.first)
+                                   (.then (fn [tasks] (or tasks []))))
+                               (-> (project-db/watch-all-projects dao)
+                                   (.first)
+                                   (.then (fn [projects] (or projects []))))
+                               ;; Forecast: Query all forecasts for the next 30 days
+                               (-> (dart-core/Future.wait
+                                    (vec (map (fn [offset]
+                                               (let [date-yyyymmdd (+ (* (.year (dart-core/DateTime.now)) 10000)
+                                                                     (* (.month (dart-core/DateTime.now)) 100)
+                                                                     (.day (dart-core/DateTime.now))
+                                                                     offset)]
+                                                 (-> (forecast-db/watch-by-date dao date-yyyymmdd)
+                                                     (.first)
+                                                     (.then (fn [forecasts] (or forecasts []))))))
+                                             (range -30 30))))
+                                  (.then (fn [results] (apply concat results)))
+                                  (.then (fn [all-forecasts]
+                                          ;; Deduplicate
+                                          (let [id-map (reduce (fn [acc f]
+                                                                  (if (contains? acc (.-id f))
+                                                                    acc
+                                                                    (assoc acc (.-id f) f)))
+                                                                {}
+                                                                all-forecasts)]
+                                            (vec (vals id-map))))))
+                               (-> (perspective-db/watch-all dao)
+                                   (.first)
+                                   (.then (fn [perspectives] (or perspectives []))))
+                               (-> (review-db/watch-all-reviews dao)
+                                   (.first)
+                                   (.then (fn [reviews] (or reviews []))))
+                               (-> (timeline-db/query-range dao start-ts now-ts)
+                                   (.then (fn [events] (or events []))))])
+                             (.then (fn [results]
+                                     (let [[tasks projects forecasts perspectives reviews events] results
+                                           export-data {:version "1.0"
+                                                       :export-time (int (/ (System/currentTimeMillis) 1000))
+                                                       :tasks (vec (map (fn [t]
+                                                                         {:id (.-id t)
+                                                                          :title (.-title t)
+                                                                          :projectId (.-projectId t)
+                                                                          :perspectives (.-perspectives t)
+                                                                          :completed (.-completed t)
+                                                                          :createdAt (.-createdAt t)
+                                                                          :dueAt (.-dueAt t)
+                                                                          :deferAt (.-deferAt t)
+                                                                          :priority (.-priority t)
+                                                                          :postponeCount (.-postponeCount t)
+                                                                          :abandoned (.-abandoned t)})
+                                                                       tasks))
+                                                       :projects (vec (map (fn [p]
+                                                                           {:id (.-id p)
+                                                                            :title (.-title p)
+                                                                            :status (.-status p)
+                                                                            :reviewAt (.-reviewAt p)
+                                                                            :completed (.-completed p)
+                                                                            :createdAt (.-createdAt p)
+                                                                            :notes (.-notes p)})
+                                                                         projects))
+                                                       :forecasts (vec (map (fn [f]
+                                                                            {:id (.-id f)
+                                                                             :taskId (.-taskId f)
+                                                                             :scheduledDate (.-scheduledDate f)
+                                                                             :done (.-done f)
+                                                                             :skipped (.-skipped f)
+                                                                             :confidence (.-confidence f)
+                                                                             :source (.-source f)
+                                                                             :type (.-type f)
+                                                                             :createdAt (.-createdAt f)})
+                                                                          forecasts))
+                                                       :perspectives (vec (map (fn [p]
+                                                                               {:id (.-id p)
+                                                                                :title (.-title p)
+                                                                                :weight (.-weight p)
+                                                                                :weightHistory (.-weightHistory p)
+                                                                                :createdAt (.-createdAt p)
+                                                                                :updatedAt (.-updatedAt p)
+                                                                                :rules (.-rules p)})
+                                                                            perspectives))
+                                                       :reviews (vec (map (fn [r]
+                                                                          {:id (.-id r)
+                                                                           :periodStart (.-periodStart r)
+                                                                           :periodEnd (.-periodEnd r)
+                                                                           :expectedCount (.-expectedCount r)
+                                                                           :actualCount (.-actualCount r)
+                                                                           :expectedDuration (.-expectedDuration r)
+                                                                           :actualDuration (.-actualDuration r)
+                                                                           :moodScore (.-moodScore r)
+                                                                           :focusScore (.-focusScore r)
+                                                                           :createdAt (.-createdAt r)})
+                                                                       reviews))
+                                                       :events (vec (map (fn [e]
+                                                                         {:id (.-id e)
+                                                                          :timestamp (.-timestamp e)
+                                                                          :type (.-type e)
+                                                                          :entityType (.-entityType e)
+                                                                          :entityId (.-entityId e)
+                                                                          :title (.-title e)
+                                                                          :duration (.-duration e)
+                                                                          :perspectives (.-perspectives e)
+                                                                          :payload (.-payload e)})
+                                                                      events))}
+                                           json-str (json/jsonEncode export-data)]
+                                       (share/Share.share json-str)))))
+                             (.then (fn [_]
+                                     (toast/show-success-toast ctx "Data exported")))
+                             (.catchError (fn [error]
+                                          (dart-core/print (str "Error exporting data: " error))
+                                          (toast/show-error-toast ctx "Export failed")))))
+
+(defn data-management-section
+  "Data management section"
+  [{:keys [dao ctx]}]
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :m))
+          .child (m/Column
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(comp/mongol-text-block
+                   {:text "Data Management"
+                    :style (m/TextStyle
+                           .fontSize (tokens/font-size :l)
+                           .fontWeight m/FontWeight.bold)})
+                  (m/SizedBox .height (tokens/space :m))
+                  (m/ListTile
+                   .leading (m/Icon m/Icons.download)
+                   .title (comp/mongol-text-block
+                          {:text "Export Data"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :m))})
+                   .subtitle (comp/mongol-text-block
+                             {:text "Export all tasks, projects and forecast data"
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :s)
+                                     .color (tokens/color :text-weak))})
+                   .onTap (fn []
+                           (export-all-data ctx dao)))
+                  (m/Divider)
+                  (m/ListTile
+                   .leading (m/Icon m/Icons.upload)
+                   .title (comp/mongol-text-block
+                          {:text "Import Data"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :m))})
+                   .subtitle (comp/mongol-text-block
+                             {:text "Restore data from backup file"
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :s)
+                                     .color (tokens/color :text-weak))})
+                   .onTap (fn []
+                           ;; TODO: Implement data import
+                           (toast/show-info-toast nil "Data import feature in development")))
+                  (m/Divider)
+                  (m/ListTile
+                   .leading (m/Icon m/Icons.delete_forever
+                                    .color m/Colors.red)
+                   .title (comp/mongol-text-block
+                          {:text "Clear All Data"
+                           :style (m/TextStyle
+                                  .fontSize (tokens/font-size :m)
+                                  .color m/Colors.red)})
+                   .subtitle (comp/mongol-text-block
+                             {:text "⚠ This operation cannot be undone"
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :s)
+                                     .color m/Colors.red.shade700)})
+                   .onTap (fn []
+                           ;; TODO: Implement data clearing (requires confirmation dialog)
+                           (toast/show-info-toast nil "Data clearing feature in development")))]))))
+
+;; ============================================================================
+;; Main Screen
+;; ============================================================================
+
+(defn settings-screen [_params]
+  (let [dao (app-state/get-dao)
+        db (app-state/get-db)
+        ctx {:db db :dao dao}]
+    (f/widget
+     :bind {:dao dao :db db :ctx ctx}
+     
+     (m/Scaffold
+      .appBar (m/AppBar
+               .title (comp/mongol-text-block
+                      {:text "Settings"}))
+      .body (m/ListView
+             .children
+             [(forecast-settings-section
+               {:dao dao
+                :on-updated (fn []
+                             ;; Callback after settings update
+                             (dart-core/print "Settings updated"))})
+              
+              (app-info-section)
+              
+              (data-management-section
+               {:dao dao :ctx ctx})
+              
+              (m/SizedBox .height (tokens/space :xl))])))))

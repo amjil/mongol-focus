@@ -1,0 +1,60 @@
+(ns minii-focus.core.dao.forecast
+  "Forecast Auto-generation Wrapper
+  
+  Forecast auto-generation = Answer one question:
+  \"Under this Perspective, approximately how many tasks can I complete in the next N days?\"
+  
+  Usage example:
+  (regenerate!
+   db
+   {:entity :task
+    :filters [{:field :completed :op := :value false}]
+    :order-by [{:field :created-at :dir :asc}]
+    :limit 50}
+   7)"
+  (:require
+   ["package:cljd_mongol_focus/db/bridge/forecast_generation_bridge.dart" :as bridge]))
+
+(defn regenerate!
+  "Regenerate Forecast from Perspective
+  
+  Parameters:
+  - db: AppDatabase instance
+  - perspective: Perspective map
+    {:entity :task
+     :filters [{:field :completed :op := :value false}]
+     :order-by [{:field :created-at :dir :asc}]
+     :limit 50}
+  - days: Generate Forecast for next N days (optional, default 7)
+  
+  Returns: Future<void>
+  
+  Notes:
+  - This clears old auto forecasts (source = 0)
+  - Then regenerates based on Perspective
+  - This is a transaction operation, ensuring atomicity"
+  ([db perspective]
+   (regenerate! db perspective 7))
+  ([db perspective days]
+   (let [bridge-instance (new bridge/ForecastGenerationBridge db)
+         ;; Convert perspective map to Dart format
+         dart-perspective (cond-> {:entity (name (:entity perspective))}
+                            (:filters perspective)
+                            (assoc :filters
+                                   (mapv (fn [f]
+                                           {:field (name (:field f))
+                                            :op (name (:op f))
+                                            :value (:value f)})
+                                         (:filters perspective)))
+                            
+                            (:order-by perspective)
+                            (assoc :orderBy
+                                   (mapv (fn [o]
+                                           {:field (name (:field o))
+                                            :dir (name (:dir o))})
+                                         (:order-by perspective)))
+                            
+                            (:limit perspective)
+                            (assoc :limit (:limit perspective)))]
+     (.regenerateForecast bridge-instance dart-perspective .days days))))
+

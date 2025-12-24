@@ -1,0 +1,322 @@
+(ns minii-focus.core.domain.perspective.engine
+  "Perspective Engine Execution Engine
+  
+  Minimal execution flow of Perspective Engine:
+  
+  Perspective
+     ↓
+  Resolve Source
+     ↓
+  Apply Filters
+     ↓
+  Group + Sort
+     ↓
+  Render with DisplaySpec
+  
+  Pseudocode (ClojureDart approach):
+  (defn run-perspective [perspective]
+    (-> (load-source (:source perspective))
+        (apply-filters (:filters perspective))
+        (group-items (:group-by perspective))
+        (sort-items (:sort-by perspective))))
+  
+  UI layer only cares about:
+  {:groups [...]
+   :display (:display perspective)}"
+  (:require
+   ["dart:core" :as dart-core]
+   [clojure.string :as str]
+   [minii-focus.core.db.task :as task]
+   [minii-focus.core.utils.time :as time]))
+
+;; ============================================================================
+;; Source Resolution
+;; ============================================================================
+
+(defn load-source
+  "Load data source
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - source-type: keyword (:tasks | :forecast | :projects)
+  
+  Returns: Future<List<map>>"
+  [dao source-type]
+  (case source-type
+    :tasks
+    (task/watch-all-tasks dao)
+    
+    :forecast
+    ;; Forecast needs date range, returning empty list for now
+    ;; In actual use, date range should be specified in Perspective's filters
+    (dart-core/Future.value [])
+    
+    :projects
+    ;; TODO: Need to add watch-all-projects method
+    (dart-core/Future.value [])
+    
+    (dart-core/Future.value [])))
+
+;; ============================================================================
+;; Filter Application
+;; ============================================================================
+
+(defn resolve-filter-value
+  "Resolve special placeholders in filter values
+  
+  Parameters:
+  - value: Filter value
+  - time-context: Time context map (contains :today, etc.)
+  
+  Returns: Resolved value"
+  [value time-context]
+  (cond
+    (= value :today)
+    (let [now (dart-core/DateTime.now)
+          year (.year now)
+          month (.month now)
+          day (.day now)]
+      (dart-core/DateTime year month day))
+    
+    (= value :next-7-days)
+    ;; Return date range for next 7 days
+    (let [now (dart-core/DateTime.now)
+          end-date (.add now (dart-core/Duration :days 7))]
+      {:start now :end end-date})
+    
+    (keyword? value)
+    (get time-context value value)
+    
+    :else value))
+
+(defn get-field-value
+  "Get field value, supports Dart objects and Clojure maps
+  
+  Parameters:
+  - item: Data item (may be Dart object or Clojure map)
+  - field-name: Field name (string, e.g. \"projectId\" or \"project-id\")
+  
+  Returns: Field value
+  
+  Note:
+  - For Clojure maps, use keyword access
+  - For Dart objects, assume already converted to map or use get access
+  - Field names support kebab-case and camelCase"
+  [item field-name]
+  (let [field-keyword (keyword field-name)
+        ;; Try camelCase version (e.g. project-id -> projectId)
+        camel-name (if (some #(= % \-) field-name)
+                    (let [parts (str/split field-name #"-")]
+                      (str (first parts)
+                           (apply str (map str/capitalize (rest parts)))))
+                    field-name)
+        camel-keyword (keyword camel-name)]
+    (or (get item field-keyword)
+        (get item camel-keyword))))
+
+(defn apply-filter
+  "Apply a single filter
+  
+  Parameters:
+  - items: List of data items (may be Dart objects or Clojure maps)
+  - filter-spec: FilterSpec map
+  - time-context: Time context map
+  
+  Returns: Filtered list of data items"
+  [items filter-spec time-context]
+  (let [field-name (name (:field filter-spec))
+        op (:op filter-spec)
+        raw-value (:value filter-spec)
+        value (resolve-filter-value raw-value time-context)]
+    (filter
+     (fn [item]
+       (let [field-value (get-field-value item field-name)]
+         (case op
+           :== (= field-value value)
+           :!= (not= field-value value)
+           :< (and field-value value (< field-value value))
+           :<= (and field-value value (<= field-value value))
+           :> (and field-value value (> field-value value))
+           :>= (and field-value value (>= field-value value))
+           :in (and (vector? value) (some #(= field-value %) value))
+           :is-null (nil? field-value)
+           :is-not-null (some? field-value)
+           :within (and (map? value)
+                       (let [start (:start value)
+                             end (:end value)]
+                         (and field-value start end
+                              (>= field-value start)
+                              (<= field-value end))))
+           true)))
+     items)))
+
+(defn apply-filters
+  "Apply all filters
+  
+  Parameters:
+  - items: List of data items
+  - filters: List of FilterSpecs
+  - time-context: Time context map
+  
+  Returns: Filtered list of data items"
+  [items filters time-context]
+  (reduce
+   (fn [acc filter-spec]
+     (apply-filter acc filter-spec time-context))
+   items
+   filters))
+
+;; ============================================================================
+;; Group
+;; ============================================================================
+
+(defn get-field-value-for-grouping
+  "Get field value for grouping
+  
+  Parameters:
+  - item: Data item
+  - field-names: List of field names (in priority order)
+  
+  Returns: Field value"
+  [item field-names]
+  (some (fn [field-name]
+          (get-field-value item field-name))
+        field-names))
+
+(defn group-items
+  "Group items by specified field
+  
+  Parameters:
+  - items: List of data items
+  - group-by: keyword (:none | :date | :project | :tag)
+  
+  Returns: Grouped map or list
+  - :none -> Returns original list
+  - Others -> Returns map of {:group-key [items]}"
+  [items group-by]
+  (case group-by
+    :none
+    items
+    
+    :date
+    (reduce
+     (fn [groups item]
+       (let [date-field (get-field-value-for-grouping
+                         item
+                         ["scheduledDate" "scheduled-date" "dueDate" "due-date" "createdAt" "created-at"])
+             date-key (cond
+                       (number? date-field)
+                       (time/ts->yyyymmdd date-field)
+                       
+                       (instance? dart-core/DateTime date-field)
+                       (let [year (.year date-field)
+                             month (.month date-field)
+                             day (.day date-field)]
+                         (+ (* year 10000) (* month 100) day))
+                       
+                       :else
+                       date-field)]
+         (update groups date-key (fnil conj []) item)))
+     {}
+     items)
+    
+    :project
+    (reduce
+     (fn [groups item]
+       (let [project-id (or (get-field-value item "projectId")
+                           (get-field-value item "project-id")
+                           :none)]
+         (update groups project-id (fnil conj []) item)))
+     {}
+     items)
+    
+    :tag
+    ;; TODO: Implement tag grouping
+    items
+    
+    items))
+
+;; ============================================================================
+;; Sort
+;; ============================================================================
+
+(defn sort-items
+  "Sort items by specified field
+  
+  Parameters:
+  - items: List of data items (may be grouped map)
+  - sort-by: keyword (:manual | :due | :urgency | :created)
+  
+  Returns: Sorted data"
+  [items sort-by]
+  (if (map? items)
+    ;; If it's a grouped map, sort items within each group
+    (into {}
+          (map (fn [[k v]]
+                 [k (sort-items v sort-by)]))
+          items)
+    ;; If it's a list, sort directly
+    (case sort-by
+      :manual
+      items  ;; Manual sort, keep original order
+      
+      :due
+      (sort-by (fn [item]
+                 (or (get-field-value item "dueDate")
+                     (get-field-value item "due-date")
+                     0))
+               items)
+      
+      :urgency
+      ;; TODO: Implement urgency sorting logic
+      items
+      
+      :created
+      (sort-by (fn [item]
+                 (or (get-field-value item "createdAt")
+                     (get-field-value item "created-at")
+                     0))
+               items)
+      
+      items)))
+
+;; ============================================================================
+;; Main Execution Function
+;; ============================================================================
+
+(defn run-perspective
+  "Execute Perspective, return processed data
+  
+  Parameters:
+  - dao: DaoBridge instance
+  - perspective: Perspective map
+  - time-context: Time context map (optional)
+  
+  Returns: Future<map>
+  {:groups [...]  ;; Grouped data
+   :display {...}  ;; DisplaySpec
+   :perspective {...}  ;; Original Perspective (for UI reference)}
+  
+  Usage example:
+  (-> (run-perspective dao inbox-perspective)
+      (.then (fn [result]
+              (let [groups (:groups result)
+                    display (:display result)]
+                ;; UI rendering logic
+                ))))"
+  [dao perspective time-context]
+  (let [time-ctx (or time-context {})
+        source-type (:source perspective)
+        filters (:filters perspective)
+        group-by (:group-by perspective)
+        sort-by (:sort-by perspective)
+        display (:display perspective)]
+    (-> (load-source dao source-type)
+        (.then (fn [items]
+                (let [filtered (apply-filters items filters time-ctx)
+                      grouped (group-items filtered group-by)
+                      sorted (sort-items grouped sort-by)]
+                  {:groups sorted
+                   :display display
+                   :perspective perspective}))))))
+

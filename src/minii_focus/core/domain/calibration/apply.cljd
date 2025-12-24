@@ -1,0 +1,60 @@
+(ns minii-focus.core.domain.calibration.apply
+  "Apply Review → Forecast → Timeline Linked Calibration
+  
+  Responsibilities:
+  - Call calibration engine to calculate new values
+  - Atomically write Review / Forecast / Timeline through linked transaction Bridge
+  - One call = one Drift transaction
+  
+  This is the only place allowed to write Review / Forecast / Timeline simultaneously"
+  (:require
+   [minii-focus.core.domain.calibration.review-to-forecast :as engine]
+   ["package:cljd_mongol_focus/db/bridge/review_forecast_timeline_bridge.dart" :as bridge]))
+
+(defn apply-review->forecast+timeline!
+  "Apply Review calibration to Forecast and record Timeline Event
+  
+  Parameters:
+  - db: AppDatabase instance
+  - {:keys [review forecast]}
+  
+  Where:
+  - review: Review map (contains id, period-start, period-end, expected-count, actual-count, expected-duration, actual-duration, mood-score, focus-score, created-at)
+  - forecast: Current Forecast map (contains id, target-count, target-duration, confidence, volatility)
+  
+  Returns: Future<void>
+  
+  Note: This is a database transaction ensuring atomicity
+  - Review insert
+  - Forecast update
+  - Timeline Event insert
+  All three either succeed together or all rollback"
+  [db {:keys [review forecast]}]
+  (let [forecast-update
+        (engine/calibrate-forecast
+         {:review review
+          :forecast forecast})
+        
+        bridge-instance (new bridge/ReviewForecastTimelineBridge db)]
+    
+    (.applyReviewCalibration
+     bridge-instance
+     {:review
+      {:id (:id review)
+       :periodStart (:period-start review)
+       :periodEnd (:period-end review)
+       :expectedCount (:expected-count review)
+       :actualCount (:actual-count review)
+       :expectedDuration (:expected-duration review)
+       :actualDuration (:actual-duration review)
+       :moodScore (:mood-score review)
+       :focusScore (:focus-score review)
+       :createdAt (:created-at review)}
+      
+      :forecastUpdate
+      {:id (:id forecast)
+       :targetCount (:target-count forecast-update)
+       :targetDuration (:target-duration forecast-update)
+       :confidence (:confidence forecast-update)
+       :volatility (:volatility forecast-update)}})))
+

@@ -1,0 +1,123 @@
+(ns minii-focus.core.event.validator
+;;   "Event Validator (Core)
+  
+;;   Any invalid Event → directly reject
+  
+;;   This is key to long-term system control.
+  
+;;   Features:
+;;   1. Validate Event base structure (id, type, payload, created-at, source)
+;;   2. Validate if Event type exists
+;;   3. Validate Payload fields (required fields, unknown fields)
+  
+;;   Usage:
+;;   (validate-event! event)  ;; Validate and return event, throw exception on failure")
+  (:require
+   [minii-focus.core.event.schema :as schema]))
+
+(defn- missing-keys
+  "Calculate missing required fields
+  
+  Parameters:
+  - required: set of keywords
+  - payload: map
+  
+  Returns: set of keywords (missing fields)"
+  [required payload]
+  (let [payload-keys (set (keys payload))]
+    (set (filter #(not (contains? payload-keys %)) required))))
+
+(defn- unknown-keys
+  "Calculate unknown fields (fields not in allowed)
+  
+  Parameters:
+  - allowed: set of keywords
+  - payload: map
+  
+  Returns: set of keywords (unknown fields)"
+  [allowed payload]
+  (let [payload-keys (set (keys payload))]
+    (set (filter #(not (contains? allowed %)) payload-keys))))
+
+(defn validate-event-shape
+  "Validate Event base structure
+  
+  Checks:
+  1. Whether event is a map
+  2. Whether it contains all required base fields (id, type, payload, created-at, source)
+  
+  Parameters:
+  - event: map
+  
+  Returns: true (success) or throws exception (failure)"
+  [event]
+  (when-not (map? event)
+    (throw (ex-info "Event must be a map"
+                    {:event event})))
+
+  (let [event-keys (set (keys event))
+        missing (set (filter #(not (contains? event-keys %)) schema/event-base-keys))]
+    (when (seq missing)
+      (throw (ex-info "Missing base event keys"
+                      {:missing missing
+                       :event event
+                       :required schema/event-base-keys}))))
+  true)
+
+(defn validate-event-payload
+  "Validate Event Payload
+  
+  Checks:
+  1. Whether Event type exists
+  2. Whether Payload contains all required fields
+  3. Whether Payload contains unknown fields (not in required or optional)
+  
+  Parameters:
+  - event: map {:type keyword :payload map}
+  
+  Returns: true (success) or throws exception (failure)"
+  [event]
+  (let [{:keys [type payload]} event
+        schema (get schema/event-schemas type)]
+    (when-not schema
+      (throw (ex-info "Unknown event type"
+                      {:type type
+                       :available-types (keys schema/event-schemas)
+                       :event event})))
+
+    (let [{:keys [required optional]} schema
+          missing (missing-keys required payload)
+          allowed (into required optional)  ;; union = into
+          unknown (unknown-keys allowed payload)]
+      (when (seq missing)
+        (throw (ex-info "Missing payload keys"
+                        {:type type
+                         :missing missing
+                         :required required
+                         :payload payload})))
+      (when (seq unknown)
+        (throw (ex-info "Unknown payload keys"
+                        {:type type
+                         :unknown unknown
+                         :allowed allowed
+                         :payload payload})))))
+  true)
+
+(defn validate-event!
+  "Validate Event (full validation)
+  
+  Executes:
+  1. validate-event-shape (base structure)
+  2. validate-event-payload (Payload fields)
+  
+  Parameters:
+  - event: map
+  
+  Returns: event (success) or throws exception (failure)
+  
+  Exception information includes detailed error info for debugging."
+  [event]
+  (validate-event-shape event)
+  (validate-event-payload event)
+  event)
+
