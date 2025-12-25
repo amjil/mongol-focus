@@ -309,7 +309,8 @@
                                                                                        (reset! loading false)
                                                                                        (toast/show-error-toast ctx "Failed to batch adjust"))))))))
                                                        (.catchError (fn [error]
-                                                                      (dart-core/print (str "Error showing date picker: " error))))))))))
+                                                                      (dart-core/print (str "Error showing date picker: " error))
+                                                                      nil))))))))
                               (when @batch-mode
                                 (m/IconButton
                                  .icon (m/Icon m/Icons.close)
@@ -698,7 +699,8 @@
                                                                                                                                (dart-core/print (str "Error rescheduling forecast: " error))
                                                                                                                                (toast/show-error-toast ctx "Failed to adjust date"))))))))
                                                                                                (.catchError (fn [error]
-                                                                                                              (dart-core/print (str "Error showing date picker: " error))))))
+                                                                                                              (dart-core/print (str "Error showing date picker: " error))
+                                                                                                              nil))))
 
                                                                                          :cancel
                                                                                          ;; Cancel forecast

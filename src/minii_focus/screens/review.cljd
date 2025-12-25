@@ -745,7 +745,8 @@
                                                                        .label (str (int (* current-weight 100)) "%")
                                                                        .onChanged (fn [new-value]
                                                                                   (set! (.-text weight-controller)
-                                                                                        (str new-value))))
+                                                                                        (str new-value))
+                                                                                  nil))
                                                                       (comp/mongol-text-block
                                                                        {:text (str "Current Weight: "
                                                                                   (int (* current-weight 100))

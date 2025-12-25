@@ -391,36 +391,37 @@
                                       .fontSize (tokens/font-size :s)
                                       .fontFamily "OnonSoninSans"))])
                     .actions
-                    [(m/TextButton
-                      .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                      .child (m/Text "Cancel"))
-                     (m/TextButton
-                      .onPressed (fn []
-                                  (let [conditions-text (.text conditions-text-controller)
-                                        actions-text (.text actions-text-controller)]
-                                    (try
-                                      (let [conditions (json/jsonDecode conditions-text)
-                                            actions (json/jsonDecode actions-text)
-                                            new-rules {:conditions conditions :actions actions}]
-                                        (m/Navigator.pop dialog-ctx)
-                                        ;; Update rules
-                                        (-> (dispatch/dispatch-event! ctx
-                                                                     {:type :perspective/update-rules
-                                                                      :payload {:perspective-id (.-id perspective)
-                                                                               :rules new-rules}
-                                                                      :source :ui})
-                                            (.then (fn [_]
-                                                    (toast/show-success-toast ctx "Rules updated")))
-                                            (.catchError (fn [error]
-                                                         (dart-core/print (str "Error updating rules: " error))
-                                                         (toast/show-error-toast ctx "Failed to update rules")))))
-                                      (catch Exception error
-                                        (dart-core/print (str "Invalid JSON: " error))
-                                        (toast/show-error-toast ctx "JSON format error")))))
-                      .child (m/Text "Save"))])))
+                    (list (m/TextButton
+                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                           .child (m/Text "Close"))
+                          (m/TextButton
+                           .onPressed (fn []
+                                       (let [conditions-text (.text conditions-text-controller)
+                                             actions-text (.text actions-text-controller)]
+                                         (try
+                                           (let [conditions (json/jsonDecode conditions-text)
+                                                 actions (json/jsonDecode actions-text)
+                                                 new-rules {:conditions conditions :actions actions}]
+                                             (m/Navigator.pop dialog-ctx)
+                                             ;; Update rules
+                                             (-> (dispatch/dispatch-event! ctx
+                                                                          {:type :perspective/update-rules
+                                                                           :payload {:perspective-id (.-id perspective)
+                                                                                    :rules new-rules}
+                                                                           :source :ui})
+                                                 (.then (fn [_]
+                                                         (toast/show-success-toast ctx "Rules updated")))
+                                                 (.catchError (fn [error]
+                                                              (dart-core/print (str "Error updating rules: " error))
+                                                              (toast/show-error-toast ctx "Failed to update rules")))))
+                                           (catch Exception error
+                                             (dart-core/print (str "Invalid JSON: " error))
+                                             (toast/show-error-toast ctx "JSON format error")))))
+                           .child (m/Text "Save"))))))
         (.then (fn [_] nil))
         (.catchError (fn [error]
-                     (dart-core/print (str "Error showing rules editor: " error)))))))
+                     (dart-core/print (str "Error showing rules editor: " error))
+                     nil)))))
 
 ;; ============================================================================
 ;; Main Screen

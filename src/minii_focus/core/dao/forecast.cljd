@@ -56,5 +56,5 @@
                             
                             (:limit perspective)
                             (assoc :limit (:limit perspective)))]
-     (.regenerateForecast bridge-instance dart-perspective .days days))))
+     (.regenerateForecast bridge-instance dart-perspective days))))
 

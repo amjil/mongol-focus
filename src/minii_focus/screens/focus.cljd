@@ -13,6 +13,7 @@
   - Review can count Focus data"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    ["dart:async" :as async]
    [cljd.flutter :as f]
@@ -78,29 +79,29 @@
         pause-start-time (atom nil)  ; Pause start time (milliseconds timestamp)
         remaining-seconds (atom pomodoro-duration-seconds)  ; Remaining seconds
         timer (atom nil)  ; Timer reference
-        
+
         ;; Forecast list state
         today-forecasts (atom [])  ; Today's Forecast list
         task-titles-map (atom {})  ; Task ID -> Title mapping
         loading (atom false)
-        
+
         ;; Today's statistics
         today-stats (atom {:total-minutes 0 :session-count 0 :completed-count 0 :pause-count 0})
 
         ;; History records (derived from TimelineEvents)
         focus-history-events (atom [])
         history-loading (atom false)
-        
+
         ;; Focus depth related
         focus-depth-history (atom [])  ; Historical depth value list
         current-focus-depth (atom 0.0)  ; Current depth value
         pause-count (atom 0)  ; Pause count
-        
+
         ;; DAO
         dao (app-state/get-dao)
         db (app-state/get-db)
         db-ctx {:db db :dao dao}]
-    
+
     ;; Load today's statistics
     (letfn [(load-today-stats []
               (let [now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
@@ -108,28 +109,28 @@
                     today-end-ts (int (/ now 1000))]  ; Now
                 (-> (timeline-db/query-range dao today-start-ts today-end-ts)
                     (.then (fn [events]
-                            (let [focus-events (filter (fn [e]
-                                                        (or (= (.-type e) "focus/start")
-                                                            (= (.-type e) "focus/complete")
-                                                            (= (.-type e) "focus/abort")
-                                                            (= (.-type e) "focus/pause")))
-                                                      (or events []))
-                                  start-count (count (filter #(= (.-type %) "focus/start") focus-events))
-                                  complete-count (count (filter #(= (.-type %) "focus/complete") focus-events))
-                                  pause-count (count (filter #(= (.-type %) "focus/pause") focus-events))
-                                  total-minutes (reduce + 0
-                                                       (map (fn [e]
-                                                             (if (.-duration e)
-                                                               (.-duration e)
-                                                               0))
-                                                           (filter #(= (.-type %) "focus/complete") focus-events)))]
-                              (reset! today-stats
-                                     {:total-minutes total-minutes
-                                      :session-count start-count
-                                      :completed-count complete-count
-                                      :pause-count pause-count})))
-                    (.catchError (fn [error]
-                                 (dart-core/print (str "Error loading today stats: " error))))))))
+                             (let [focus-events (filter (fn [e]
+                                                          (or (= (.-type e) "focus/start")
+                                                              (= (.-type e) "focus/complete")
+                                                              (= (.-type e) "focus/abort")
+                                                              (= (.-type e) "focus/pause")))
+                                                        (or events []))
+                                   start-count (count (filter #(= (.-type %) "focus/start") focus-events))
+                                   complete-count (count (filter #(= (.-type %) "focus/complete") focus-events))
+                                   pause-count (count (filter #(= (.-type %) "focus/pause") focus-events))
+                                   total-minutes (reduce + 0
+                                                         (map (fn [e]
+                                                                (if (.-duration e)
+                                                                  (.-duration e)
+                                                                  0))
+                                                              (filter #(= (.-type %) "focus/complete") focus-events)))]
+                               (reset! today-stats
+                                       {:total-minutes total-minutes
+                                        :session-count start-count
+                                        :completed-count complete-count
+                                        :pause-count pause-count})))
+                           (.catchError (fn [error]
+                                          (dart-core/print (str "Error loading today stats: " error))))))))
 
             ;; Load Focus history (default last 30 days)
             (load-focus-history []
@@ -138,17 +139,17 @@
                     start-ts (- now-ts (* 30 24 60 60))]
                 (-> (timeline-db/query-range dao start-ts now-ts)
                     (.then (fn [events]
-                            (let [focus-events (filter (fn [e]
-                                                        (or (= (.-type e) "focus/start")
-                                                            (= (.-type e) "focus/pause")
-                                                            (= (.-type e) "focus/complete")
-                                                            (= (.-type e) "focus/abort")))
-                                                      (or events []))]
-                              (reset! focus-history-events (vec focus-events))
-                              (reset! history-loading false))))
+                             (let [focus-events (filter (fn [e]
+                                                          (or (= (.-type e) "focus/start")
+                                                              (= (.-type e) "focus/pause")
+                                                              (= (.-type e) "focus/complete")
+                                                              (= (.-type e) "focus/abort")))
+                                                        (or events []))]
+                               (reset! focus-history-events (vec focus-events))
+                               (reset! history-loading false))))
                     (.catchError (fn [error]
-                                 (dart-core/print (str "Error loading focus history: " error))
-                                 (reset! history-loading false))))))
+                                   (dart-core/print (str "Error loading focus history: " error))
+                                   (reset! history-loading false))))))
 
             (build-focus-sessions [events]
               ;; entityId = session-id; focus/start must also contain session-id to associate
@@ -161,7 +162,7 @@
                                 (if (or (nil? sid) (= sid ""))
                                   acc
                                   (let [curr (get acc sid {:session-id sid
-                                                          :pause-count 0})
+                                                           :pause-count 0})
                                         next (cond
                                                (= et "focus/start")
                                                (assoc curr :start-ts ts :title (or title (:title curr)))
@@ -220,67 +221,46 @@
                        .child (comp/mongol-text-block
                                {:text "No history records"
                                 :style (m/TextStyle
-                                       .fontSize (tokens/font-size :s)
-                                       .color (tokens/color :text-weak))}))
+                                        .fontSize (tokens/font-size :s)
+                                        .color (tokens/color :text-weak))}))
 
                       :else
                       (m/ListView
+                       .scrollDirection m/Axis.horizontal
                        .children
-                       (mapv
-                        (fn [date-str]
-                          (let [items (get grouped date-str)]
-                            (m/ExpansionTile
-                             .title (m/Text date-str)
-                             .subtitle (m/Text (str (count items) " times")))
-                             .children
-                             (mapv (fn [s]
-                                     (let [status (:status s)
-                                           status-text (case status
-                                                         :complete "Completed"
-                                                         :abort "Aborted"
-                                                         :unknown "Unknown"
-                                                         "Unknown")
-                                           minutes (:duration-minutes s)
-                                           pauses (:pause-count s)
-                                           start-ts (:start-ts s)]
-                                       (m/ListTile
-                                        .title (comp/mongol-text-block
-                                               {:text (str "[" status-text "] " (or (:title s) "Focus"))
-                                                :style (m/TextStyle
-                                                       .fontSize (tokens/font-size :m))})
-                                        .subtitle (comp/mongol-text-block
-                                                  {:text (str (when start-ts
-                                                               (str (format-time-only start-ts) " "))
-                                                             (when (and minutes (> minutes 0))
-                                                               (str minutes " minutes "))
-                                                             (when (and pauses (> pauses 0))
-                                                               (str "Paused " pauses " times")))
-                                                   :style (m/TextStyle
-                                                          .fontSize (tokens/font-size :s)
-                                                          .color (tokens/color :text-weak))}))))
-                                   items)))
-                        dates)))]
+                       (mapv (fn [forecast] ;; Use mapv to generate vector directly
+                               (let [task-id (.-taskId forecast)
+                                     task-title (get @task-titles-map task-id "Loading...")]
+                                 (m/Card
+                                  .margin (m/EdgeInsets.symmetric .vertical (tokens/space :s)
+                                                                  .horizontal (tokens/space :m))
+                                  .child (mgl/MongolListTile
+                                          .title (comp/mongol-text-block {:text task-title})
+                                          .trailing (mgl/MongolElevatedButton
+                                                     .onPressed (fn [] (start-focus forecast ctx))
+                                                     .child (mgl/MongolText "开始 (Start)"))))))
+                             @today-forecasts)))]
                 (-> (m/showDialog
                      .context ctx
                      .builder (fn [dialog-ctx]
-                               (m/AlertDialog
-                                .title (comp/mongol-text-block
-                                       {:text "Focus History"
-                                        :style (m/TextStyle
-                                               .fontSize (tokens/font-size :l)
-                                               .fontWeight m/FontWeight.bold)})
-                                .content (m/Container
-                                          .width 360
-                                          .height 520
-                                          .child content-widget)
-                                .actions
-                                [(m/TextButton
-                                  .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                  .child (m/Text "Close"))]))))
-                    (.then (fn [_] nil))
-                    (.catchError (fn [error]
-                                 (dart-core/print (str "Error showing focus history dialog: " error))))))
-            
+                                (m/AlertDialog
+                                 .title (comp/mongol-text-block
+                                         {:text "Focus History"
+                                          :style (m/TextStyle
+                                                  .fontSize (tokens/font-size :l)
+                                                  .fontWeight m/FontWeight.bold)})
+                                 .content (m/Container
+                                           .width 360
+                                           .height 520
+                                           .child content-widget)
+                                 .actions
+                                 [(m/TextButton
+                                   .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                   .child (m/Text "Close"))]))))
+                (.then (fn [_] nil))
+                (.catchError (fn [error]
+                               (dart-core/print (str "Error showing focus history dialog: " error))))))
+
             ;; Load today's Forecast
             (load-today-forecasts []
               (reset! loading true)
@@ -289,26 +269,26 @@
                 (-> (forecast-db/watch-by-date dao today-yyyymmdd)
                     (.first)
                     (.then (fn [forecasts]
-                              (let [forecasts-list (or forecasts [])
-                                  task-ids (distinct (map #(.-taskId %) forecasts-list))]
-                              (reset! today-forecasts forecasts-list)
-                              ;; Load Task titles
-                              (-> (dart-core/Future.wait
-                                   (vec (map (fn [task-id]
-                                              (-> (task-db/get-by-id dao task-id)
-                                                  (.then (fn [task]
-                                                          (when task
-                                                            (swap! task-titles-map assoc task-id (.-title task)))))))
-                                            task-ids)))
-                                  (.then (fn [_]
-                                          (reset! loading false)))
-                                  (.catchError (fn [error]
-                                               (dart-core/print (str "Error loading task titles: " error))
-                                               (reset! loading false))))))
-                    (.catchError (fn [error]
-                                 (dart-core/print (str "Error loading forecasts: " error))
-                                 (reset! loading false)))))))
-            
+                             (let [forecasts-list (or forecasts [])
+                                   task-ids (distinct (map #(.-taskId %) forecasts-list))]
+                               (reset! today-forecasts forecasts-list)
+                               ;; Load Task titles
+                               (-> (dart-core/Future.wait
+                                    (vec (map (fn [task-id]
+                                                (-> (task-db/get-by-id dao task-id)
+                                                    (.then (fn [task]
+                                                             (when task
+                                                               (swap! task-titles-map assoc task-id (.-title task)))))))
+                                              task-ids)))
+                                   (.then (fn [_]
+                                            (reset! loading false)))
+                                   (.catchError (fn [error]
+                                                  (dart-core/print (str "Error loading task titles: " error))
+                                                  (reset! loading false))))))
+                           (.catchError (fn [error]
+                                          (dart-core/print (str "Error loading forecasts: " error))
+                                          (reset! loading false)))))))
+
             ;; Start Focus
             (start-focus [forecast ui-ctx]
               (let [forecast-id (.-id forecast)
@@ -323,50 +303,50 @@
                                                          :title (str "Start Focus: " task-title)}
                                                :source :ui})
                     (.then (fn [_]
-                            (reset! current-forecast forecast)
-                            (reset! session-id new-session-id)
-                            (reset! is-focusing true)
-                            (reset! is-paused false)
-                            (reset! start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
-                            (reset! paused-time 0)
-                            (reset! pause-start-time nil)
-                            (reset! remaining-seconds pomodoro-duration-seconds)
-                            (reset! pause-count 0)
-                            (reset! current-focus-depth 0.0)
-                            
-                            ;; Load task information
-                            (-> (task-db/get-by-id dao task-id)
-                                (.then (fn [task]
-                                        (reset! current-task task)
-                                        (swap! task-titles-map assoc task-id (.-title task))))
-                                (.catchError (fn [error]
-                                             (dart-core/print (str "Error loading task: " error)))))
-                            
-                            ;; Start timer
-                            (reset! timer
-                                   (async/Timer.periodic
-                                    (dart-core/Duration .seconds 1)
-                                    (fn [_]
-                                      (when (and @is-focusing (not @is-paused))
-                                        (let [new-remaining (dec @remaining-seconds)
-                                              elapsed-seconds (- pomodoro-duration-seconds new-remaining)
-                                              depth (focus-depth/calculate-focus-depth
-                                                     elapsed-seconds
-                                                     pomodoro-duration-seconds
-                                                     @pause-count
-                                                     false)]
-                                          (reset! current-focus-depth depth)
-                                          (if (<= new-remaining 0)
-                                            (do
-                                              (reset! remaining-seconds 0)
-                                              nil)
-                                            (reset! remaining-seconds new-remaining)))))))
-                            
-                            (toast/show-success-toast ui-ctx "Focus started")))
+                             (reset! current-forecast forecast)
+                             (reset! session-id new-session-id)
+                             (reset! is-focusing true)
+                             (reset! is-paused false)
+                             (reset! start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
+                             (reset! paused-time 0)
+                             (reset! pause-start-time nil)
+                             (reset! remaining-seconds pomodoro-duration-seconds)
+                             (reset! pause-count 0)
+                             (reset! current-focus-depth 0.0)
+
+                             ;; Load task information
+                             (-> (task-db/get-by-id dao task-id)
+                                 (.then (fn [task]
+                                          (reset! current-task task)
+                                          (swap! task-titles-map assoc task-id (.-title task))))
+                                 (.catchError (fn [error]
+                                                (dart-core/print (str "Error loading task: " error)))))
+
+                             ;; Start timer
+                             (reset! timer
+                                     (async/Timer.periodic
+                                      (dart-core/Duration .seconds 1)
+                                      (fn [_]
+                                        (when (and @is-focusing (not @is-paused))
+                                          (let [new-remaining (dec @remaining-seconds)
+                                                elapsed-seconds (- pomodoro-duration-seconds new-remaining)
+                                                depth (focus-depth/calculate-focus-depth
+                                                       elapsed-seconds
+                                                       pomodoro-duration-seconds
+                                                       @pause-count
+                                                       false)]
+                                            (reset! current-focus-depth depth)
+                                            (if (<= new-remaining 0)
+                                              (do
+                                                (reset! remaining-seconds 0)
+                                                nil)
+                                              (reset! remaining-seconds new-remaining)))))))
+
+                             (toast/show-success-toast ui-ctx "Focus started")))
                     (.catchError (fn [error]
-                                 (dart-core/print (str "Error starting focus: " error))
-                                 (toast/show-error-toast ui-ctx "Failed to start Focus"))))))
-            
+                                   (dart-core/print (str "Error starting focus: " error))
+                                   (toast/show-error-toast ui-ctx "Failed to start Focus"))))))
+
             ;; Pause Focus
             (pause-focus [ui-ctx]
               (let [session-id-value @session-id]
@@ -377,14 +357,14 @@
                                                  :payload {:session-id session-id-value}
                                                  :source :ui})
                       (.then (fn [_]
-                              (reset! is-paused true)
-                              (reset! pause-start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
-                              (swap! pause-count inc)
-                              (toast/show-info-toast ui-ctx "Paused")))
+                               (reset! is-paused true)
+                               (reset! pause-start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
+                               (swap! pause-count inc)
+                               (toast/show-info-toast ui-ctx "Paused")))
                       (.catchError (fn [error]
-                                   (dart-core/print (str "Error pausing focus: " error))
-                                   (toast/show-error-toast ui-ctx "Failed to pause")))))))
-            
+                                     (dart-core/print (str "Error pausing focus: " error))
+                                     (toast/show-error-toast ui-ctx "Failed to pause")))))))
+
             ;; Resume Focus
             (resume-focus [ui-ctx]
               (let [session-id-value @session-id]
@@ -396,7 +376,7 @@
                   (reset! is-paused false)
                   (reset! pause-start-time nil)
                   (toast/show-info-toast ui-ctx "Resumed"))))
-            
+
             ;; Abort Focus
             (abort-focus [ui-ctx reason]
               (let [forecast @current-forecast
@@ -409,30 +389,30 @@
                                                            :reason reason}
                                                  :source :ui})
                       (.then (fn [_]
-                              (toast/show-info-toast ui-ctx (str "Aborted: " reason))
-                              ;; Clear state
-                              (reset! is-focusing false)
-                              (reset! is-paused false)
-                              (reset! current-forecast nil)
-                              (reset! current-task nil)
-                              (reset! session-id nil)
-                              (reset! start-time nil)
-                              (reset! paused-time 0)
-                              (reset! pause-start-time nil)
-                              (reset! remaining-seconds pomodoro-duration-seconds)
-                              (reset! pause-count 0)
-                              (reset! current-focus-depth 0.0)
-                              (when @timer
-                                (.cancel @timer)
-                                (reset! timer nil))
-                              ;; Reload Forecast and statistics
-                              (load-today-forecasts)
-                              (load-today-stats)
-                              (load-focus-history)))
+                               (toast/show-info-toast ui-ctx (str "Aborted: " reason))
+                               ;; Clear state
+                               (reset! is-focusing false)
+                               (reset! is-paused false)
+                               (reset! current-forecast nil)
+                               (reset! current-task nil)
+                               (reset! session-id nil)
+                               (reset! start-time nil)
+                               (reset! paused-time 0)
+                               (reset! pause-start-time nil)
+                               (reset! remaining-seconds pomodoro-duration-seconds)
+                               (reset! pause-count 0)
+                               (reset! current-focus-depth 0.0)
+                               (when @timer
+                                 (.cancel @timer)
+                                 (reset! timer nil))
+                               ;; Reload Forecast and statistics
+                               (load-today-forecasts)
+                               (load-today-stats)
+                               (load-focus-history)))
                       (.catchError (fn [error]
-                                   (dart-core/print (str "Error aborting focus: " error))
-                                   (toast/show-error-toast ui-ctx "Failed to abort")))))))
-            
+                                     (dart-core/print (str "Error aborting focus: " error))
+                                     (toast/show-error-toast ui-ctx "Failed to abort")))))))
+
             ;; Complete Focus
             (complete-focus [ui-ctx]
               (let [forecast @current-forecast
@@ -481,201 +461,198 @@
                                                   (toast/show-error-toast ui-ctx "Failed to mark Forecast")))))
                              (.catchError (fn [error]
                                             (dart-core/print (str "Error completing focus: " error))
-                                            (toast/show-error-toast ui-ctx "Failed to complete Focus"))))))))
-            
-            ]
-      
+                                            (toast/show-error-toast ui-ctx "Failed to complete Focus"))))))))]
+
       ;; Initialize loading
       (do
         (load-today-forecasts)
         (load-today-stats)
         (load-focus-history)
-        
+
         (f/widget
-       :context ctx
-       :bind {:current-forecast current-forecast
-              :current-task current-task
-              :is-focusing is-focusing
-              :is-paused is-paused
-              :remaining-seconds remaining-seconds
-              :today-forecasts today-forecasts
-              :task-titles-map task-titles-map
-              :loading loading
-              :today-stats today-stats
-              :history-loading history-loading}
-       :watch [_focus-state is-focusing
-               _pause-state is-paused]
-       
-       (m/Scaffold
-        .appBar (m/AppBar
-                 .title (comp/mongol-text-block
-                        {:text "Focus"})
-                 .actions
-                 [(m/IconButton
-                   .icon (m/Icon m/Icons.history)
-                   .tooltip "History"
-                   .onPressed (fn [] (show-focus-history-dialog ctx)))]
-                 .backgroundColor (tokens/color :bg-focus))
-        .backgroundColor (tokens/color :bg-focus)
-        .body (m/Container
-               .color (tokens/color :bg-focus)
-               .child (m/Column
-                      .children
-                      [
-                       ;; Today's statistics card
-                       (m/Card
-                        .margin (m/EdgeInsets.all (tokens/space :m))
-                        .child (m/Padding
-                               .padding (m/EdgeInsets.all (tokens/space :m))
-                               .child (m/Column
-                                      .crossAxisAlignment m/CrossAxisAlignment.start
-                                      .children
-                                      [(comp/mongol-text-block
-                                        {:text "Today's Statistics"
-                                         :style (m/TextStyle
-                                                .fontSize (tokens/font-size :m)
-                                                .fontWeight m/FontWeight.bold)})
-                                       (m/SizedBox .height (tokens/space :s))
-                                       (m/Row
-                                        .mainAxisAlignment m/MainAxisAlignment.spaceAround
-                                        .children
-                                        [                                       (m/Column
-                                        .crossAxisAlignment m/CrossAxisAlignment.center
-                                        .children
-                                        [(comp/mongol-text-block
-                                            {:text (str (:total-minutes @today-stats))
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :xl)
-                                                    .fontWeight m/FontWeight.bold
-                                                    .color (tokens/color :accent))})
-                                           (comp/mongol-text-block
-                                            {:text "minutes"
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :s)
-                                                    .color (tokens/color :text-weak))})])
-                                      (m/SizedBox .height (tokens/space :m))
-                                      ;; Depth history chart
-                                      (when (not (empty? @focus-depth-history))
-                                        (focus-depth/focus-depth-chart
-                                         {:depths @focus-depth-history
-                                          :max-items 7}))
-                                         (m/Column
-                                          .crossAxisAlignment m/CrossAxisAlignment.center
-                                          .children
-                                          [(comp/mongol-text-block
-                                            {:text (str (:session-count @today-stats))
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :xl)
-                                                    .fontWeight m/FontWeight.bold
-                                                    .color (tokens/color :accent))})
-                                           (comp/mongol-text-block
-                                            {:text "sessions"
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :s)
-                                                    .color (tokens/color :text-weak))})])
-                                         (m/Column
-                                          .crossAxisAlignment m/CrossAxisAlignment.center
-                                          .children
-                                          [(comp/mongol-text-block
-                                            {:text (str (:completed-count @today-stats))
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :xl)
-                                                    .fontWeight m/FontWeight.bold
-                                                    .color m/Colors.green)})
-                                           (comp/mongol-text-block
-                                            {:text "Completed"
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :s)
-                                                    .color (tokens/color :text-weak))})])
-                                         (m/Column
-                                          .crossAxisAlignment m/CrossAxisAlignment.center
-                                          .children
-                                          [(comp/mongol-text-block
-                                            {:text (str (:pause-count @today-stats))
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :xl)
-                                                    .fontWeight m/FontWeight.bold
-                                                    .color m/Colors.orange)})
-                                           (comp/mongol-text-block
-                                            {:text "Interruptions"
-                                             :style (m/TextStyle
-                                                    .fontSize (tokens/font-size :s)
-                                                    .color (tokens/color :text-weak))})])])])))
-                       
-                       ;; Focus content area
-                       (m/Expanded
-                        .child (if @is-focusing
-                                ;; Focus in progress
-                                (m/Center
-                        .child (m/Column
-                               .mainAxisAlignment m/MainAxisAlignment.center
-                               .crossAxisAlignment m/CrossAxisAlignment.center
-                               .children
-                               [(comp/mongol-text-block
-                                 {:text (get @task-titles-map (.-taskId @current-forecast) "Unknown task")
-                                  :style (m/TextStyle
-                                         .fontSize (tokens/font-size :xl)
-                                         .fontWeight m/FontWeight.bold)})
-                                (m/SizedBox .height (tokens/space :l))
-                                (comp/mongol-text-block
-                                 {:text (format-timer @remaining-seconds)
-                                  :style (m/TextStyle
-                                         .fontSize (tokens/font-size :xxl)
-                                         .fontWeight m/FontWeight.bold)})
-                                (m/SizedBox .height (tokens/space :l))
-                                ;; Focus depth visualization
-                                (focus-depth/focus-depth-bar
-                                 {:depth @current-focus-depth
-                                  :max-depth 1.0
-                                  :width 250.0
-                                  :height 24.0})
-                                (m/SizedBox .height (tokens/space :xl))
-                                ;; Pause/Resume button
-                                (if @is-paused
-                                  (m/ElevatedButton
-                                   .onPressed (fn [] (resume-focus ctx))
-                                   .child (m/Text "Resume"))
-                                  (m/OutlinedButton
-                                   .onPressed (fn [] (pause-focus ctx))
-                                   .child (m/Text "Pause")))
-                                (m/SizedBox .height (tokens/space :m))
-                                (m/Row
-                                 .mainAxisAlignment m/MainAxisAlignment.center
-                                 .children
-                                 [(m/ElevatedButton
-                                   .onPressed (fn [] (complete-focus ctx))
-                                   .child (m/Text "Complete"))
-                                  (m/SizedBox .width (tokens/space :m))
-                                  (m/OutlinedButton
-                                   .onPressed (fn [] (abort-focus ctx "User aborted"))
-                                   .child (m/Text "Abort"))])]))
-                                ;; Forecast selection
-                                (cond
-                        @loading
-                        (m/Center
-                         .child (m/CircularProgressIndicator))
-                        
-                        (empty? @today-forecasts)
-                        (m/Center
-                         .child (comp/mongol-text-block
-                                {:text "No Forecast for today"
-                                 :style (m/TextStyle
-                                        .color (tokens/color :text-weak))}))
-                        
-                        :else
-                        (m/ListView
+         :context ctx
+         :bind {:current-forecast current-forecast
+                :current-task current-task
+                :is-focusing is-focusing
+                :is-paused is-paused
+                :remaining-seconds remaining-seconds
+                :today-forecasts today-forecasts
+                :task-titles-map task-titles-map
+                :loading loading
+                :today-stats today-stats
+                :history-loading history-loading}
+         :watch [_focus-state is-focusing
+                 _pause-state is-paused]
+
+         (m/Scaffold
+          .appBar (m/AppBar
+                   .title (comp/mongol-text-block
+                           {:text "Focus"})
+                   .actions
+                   [(m/IconButton
+                     .icon (m/Icon m/Icons.history)
+                     .tooltip "History"
+                     .onPressed (fn [] (show-focus-history-dialog ctx)))]
+                   .backgroundColor (tokens/color :bg-focus))
+          .backgroundColor (tokens/color :bg-focus)
+          .body (m/Container
+                 .color (tokens/color :bg-focus)
+                 .child (m/Column
                          .children
-                         (vec (map (fn [forecast]
-                                    (let [task-id (.-taskId forecast)
-                                          task-title (get @task-titles-map task-id "Loading...")]
-                                      (m/Card
-                                       .margin (m/EdgeInsets.symmetric
-                                               .vertical (tokens/space :s)
-                                               .horizontal (tokens/space :m))
-                                       .child (m/ListTile
-                                              .title (comp/mongol-text-block
-                                                     {:text task-title})
-                                              .trailing (m/ElevatedButton
-                                                        .onPressed (fn [] (start-focus forecast ctx))
-                                                        .child (m/Text "Start"))))))
-                                  @today-forecasts))))))]))))))))
+                         [;; Today's statistics card
+                          (m/Card
+                           .margin (m/EdgeInsets.all (tokens/space :m))
+                           .child (m/Padding
+                                   .padding (m/EdgeInsets.all (tokens/space :m))
+                                   .child (m/Column
+                                           .crossAxisAlignment m/CrossAxisAlignment.start
+                                           .children
+                                           [(comp/mongol-text-block
+                                             {:text "Today's Statistics"
+                                              :style (m/TextStyle
+                                                      .fontSize (tokens/font-size :m)
+                                                      .fontWeight m/FontWeight.bold)})
+                                            (m/SizedBox .height (tokens/space :s))
+                                            (m/Row
+                                             .mainAxisAlignment m/MainAxisAlignment.spaceAround
+                                             .children
+                                             [(m/Column
+                                               .crossAxisAlignment m/CrossAxisAlignment.center
+                                               .children
+                                               [(comp/mongol-text-block
+                                                 {:text (str (:total-minutes @today-stats))
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :xl)
+                                                          .fontWeight m/FontWeight.bold
+                                                          .color (tokens/color :accent))})
+                                                (comp/mongol-text-block
+                                                 {:text "minutes"
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :s)
+                                                          .color (tokens/color :text-weak))})])
+                                              (m/SizedBox .height (tokens/space :m))
+                                              ;; Depth history chart
+                                              (when (not (empty? @focus-depth-history))
+                                                (focus-depth/focus-depth-chart
+                                                 {:depths @focus-depth-history
+                                                  :max-items 7}))
+                                              (m/Column
+                                               .crossAxisAlignment m/CrossAxisAlignment.center
+                                               .children
+                                               [(comp/mongol-text-block
+                                                 {:text (str (:session-count @today-stats))
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :xl)
+                                                          .fontWeight m/FontWeight.bold
+                                                          .color (tokens/color :accent))})
+                                                (comp/mongol-text-block
+                                                 {:text "sessions"
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :s)
+                                                          .color (tokens/color :text-weak))})])
+                                              (m/Column
+                                               .crossAxisAlignment m/CrossAxisAlignment.center
+                                               .children
+                                               [(comp/mongol-text-block
+                                                 {:text (str (:completed-count @today-stats))
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :xl)
+                                                          .fontWeight m/FontWeight.bold
+                                                          .color m/Colors.green)})
+                                                (comp/mongol-text-block
+                                                 {:text "Completed"
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :s)
+                                                          .color (tokens/color :text-weak))})])
+                                              (m/Column
+                                               .crossAxisAlignment m/CrossAxisAlignment.center
+                                               .children
+                                               [(comp/mongol-text-block
+                                                 {:text (str (:pause-count @today-stats))
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :xl)
+                                                          .fontWeight m/FontWeight.bold
+                                                          .color m/Colors.orange)})
+                                                (comp/mongol-text-block
+                                                 {:text "Interruptions"
+                                                  :style (m/TextStyle
+                                                          .fontSize (tokens/font-size :s)
+                                                          .color (tokens/color :text-weak))})])])])))
+
+                          ;; Focus content area
+                          (m/Expanded
+                           .child (if @is-focusing
+                                    ;; Focus in progress
+                                    (m/Center
+                                     .child (m/Column
+                                             .mainAxisAlignment m/MainAxisAlignment.center
+                                             .crossAxisAlignment m/CrossAxisAlignment.center
+                                             .children
+                                             [(comp/mongol-text-block
+                                               {:text (get @task-titles-map (.-taskId @current-forecast) "Unknown task")
+                                                :style (m/TextStyle
+                                                        .fontSize (tokens/font-size :xl)
+                                                        .fontWeight m/FontWeight.bold)})
+                                              (m/SizedBox .height (tokens/space :l))
+                                              (comp/mongol-text-block
+                                               {:text (format-timer @remaining-seconds)
+                                                :style (m/TextStyle
+                                                        .fontSize (tokens/font-size :xxl)
+                                                        .fontWeight m/FontWeight.bold)})
+                                              (m/SizedBox .height (tokens/space :l))
+                                              ;; Focus depth visualization
+                                              (focus-depth/focus-depth-bar
+                                               {:depth @current-focus-depth
+                                                :max-depth 1.0
+                                                :width 250.0
+                                                :height 24.0})
+                                              (m/SizedBox .height (tokens/space :xl))
+                                              ;; Pause/Resume button
+                                              (if @is-paused
+                                                (m/ElevatedButton
+                                                 .onPressed (fn [] (resume-focus ctx))
+                                                 .child (m/Text "Resume"))
+                                                (m/OutlinedButton
+                                                 .onPressed (fn [] (pause-focus ctx))
+                                                 .child (m/Text "Pause")))
+                                              (m/SizedBox .height (tokens/space :m))
+                                              (m/Row
+                                               .mainAxisAlignment m/MainAxisAlignment.center
+                                               .children
+                                               [(m/ElevatedButton
+                                                 .onPressed (fn [] (complete-focus ctx))
+                                                 .child (m/Text "Complete"))
+                                                (m/SizedBox .width (tokens/space :m))
+                                                (m/OutlinedButton
+                                                 .onPressed (fn [] (abort-focus ctx "User aborted"))
+                                                 .child (m/Text "Abort"))])]))
+                                    ;; Forecast selection
+                                    (cond
+                                      @loading
+                                      (m/Center
+                                       .child (m/CircularProgressIndicator))
+
+                                      (empty? @today-forecasts)
+                                      (m/Center
+                                       .child (comp/mongol-text-block
+                                               {:text "No Forecast for today"
+                                                :style (m/TextStyle
+                                                        .color (tokens/color :text-weak))}))
+
+                                      :else
+                                      (m/ListView
+                                       .children
+                                       (vec (map (fn [forecast]
+                                                   (let [task-id (.-taskId forecast)
+                                                         task-title (get @task-titles-map task-id "Loading...")]
+                                                     (m/Card
+                                                      .margin (m/EdgeInsets.symmetric
+                                                               .vertical (tokens/space :s)
+                                                               .horizontal (tokens/space :m))
+                                                      .child (m/ListTile
+                                                              .title (comp/mongol-text-block
+                                                                      {:text task-title})
+                                                              .trailing (m/ElevatedButton
+                                                                         .onPressed (fn [] (start-focus forecast ctx))
+                                                                         .child (m/Text "Start"))))))
+                                                 @today-forecasts))))))]))))))))

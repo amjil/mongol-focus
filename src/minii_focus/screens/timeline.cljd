@@ -10,6 +10,7 @@
    ["dart:core" :as dart-core]
    ["dart:convert" :as json]
    ["package:share_plus/share_plus.dart" :as share]
+   ["package:cljd_mongol_focus/mongol_dropdown_button.dart" :as mdb]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
@@ -58,31 +59,31 @@
         (= event-type "task/complete")
         (= event-type "task/archive"))
     m/Icons.task
-    
+
     (or (.startsWith event-type "forecast/")
         (= event-type "forecast/add")
         (= event-type "forecast/complete"))
     m/Icons.calendar_today
-    
+
     (or (.startsWith event-type "focus/")
         (= event-type "focus/start")
         (= event-type "focus/complete")
         (= event-type "focus/pause")
         (= event-type "focus/abort"))
     m/Icons.timer
-    
+
     (or (.startsWith event-type "project/")
         (= event-type "project/create"))
     m/Icons.folder
-    
+
     (or (.startsWith event-type "perspective/")
         (= event-type "perspective/create"))
     m/Icons.explore
-    
+
     (or (.startsWith event-type "review/")
         (= event-type "review/submit"))
     m/Icons.feedback
-    
+
     :else
     m/Icons.event))
 
@@ -100,25 +101,25 @@
         (= event-type "project/create")
         (= event-type "perspective/create"))
     m/Colors.blue
-    
+
     (or (= event-type "task/complete")
         (= event-type "forecast/complete")
         (= event-type "focus/complete"))
     m/Colors.green
-    
+
     (= event-type "focus/start")
     m/Colors.orange
-    
+
     (= event-type "focus/pause")
     m/Colors.amber
-    
+
     (or (= event-type "focus/abort")
         (= event-type "task/archive"))
     m/Colors.red
-    
+
     (= event-type "review/submit")
     m/Colors.purple
-    
+
     :else
     (tokens/color :text-main)))
 
@@ -190,16 +191,16 @@
   (try
     (let [events-data (map event->json-map events)
           export-data {:version "1.0"
-                      :export-time (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
-                      :total-events (count events)
-                      :events events-data}
+                       :export-time (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+                       :total-events (count events)
+                       :events events-data}
           json-str (json/jsonEncode export-data)]
       (-> (share/Share.share json-str)
           (.then (fn [_]
-                  (toast/show-success-toast ctx "Data exported")))
+                   (toast/show-success-toast ctx "Data exported")))
           (.catchError (fn [error]
-                       (dart-core/print (str "Error sharing timeline data: " error))
-                       (toast/show-error-toast ctx "Export failed")))))
+                         (dart-core/print (str "Error sharing timeline data: " error))
+                         (toast/show-error-toast ctx "Export failed")))))
     (catch Exception error
       (dart-core/print (str "Error exporting timeline data: " error))
       (toast/show-error-toast ctx "Export failed"))))
@@ -224,28 +225,28 @@
     (letfn [(apply-filters []
               (let [type-filtered (filter-events @events @filter-type @filter-entity-type)
                     search-filtered (if (and (not (empty? @search-query))
-                                            (not= @search-query ""))
-                                    (filter (fn [event]
-                                             (let [title (.-title event)
-                                                   type-str (str (.-type event))
-                                                   query-lower (.toLowerCase @search-query)
-                                                   title-lower (.toLowerCase title)
-                                                   type-lower (.toLowerCase type-str)]
-                                               (or (.contains title-lower query-lower)
-                                                   (.contains type-lower query-lower))))
-                                           type-filtered)
-                                    type-filtered)
+                                             (not= @search-query ""))
+                                      (filter (fn [event]
+                                                (let [title (.-title event)
+                                                      type-str (str (.-type event))
+                                                      query-lower (.toLowerCase @search-query)
+                                                      title-lower (.toLowerCase title)
+                                                      type-lower (.toLowerCase type-str)]
+                                                  (or (.contains title-lower query-lower)
+                                                      (.contains type-lower query-lower))))
+                                              type-filtered)
+                                      type-filtered)
                     date-filtered (if (or @date-range-start @date-range-end)
-                                   (filter (fn [event]
-                                            (let [event-ts (.-timestamp event)]
-                                              (and (or (nil? @date-range-start)
-                                                      (>= event-ts @date-range-start))
-                                                   (or (nil? @date-range-end)
-                                                      (<= event-ts @date-range-end)))))
-                                          search-filtered)
-                                   search-filtered)]
+                                    (filter (fn [event]
+                                              (let [event-ts (.-timestamp event)]
+                                                (and (or (nil? @date-range-start)
+                                                         (>= event-ts @date-range-start))
+                                                     (or (nil? @date-range-end)
+                                                         (<= event-ts @date-range-end)))))
+                                            search-filtered)
+                                    search-filtered)]
                 (reset! filtered-events date-filtered)))
-            
+
             ;; Load more events
             (load-more-events []
               (when (and (not @loading-more) @has-more)
@@ -253,18 +254,18 @@
                 (let [new-start-ts (- @current-end-ts (* 7 24 60 60))]  ; Load 7 days earlier
                   (-> (timeline/query-range dao new-start-ts @current-end-ts)
                       (.then (fn [result]
-                              (let [new-events (or result [])]
-                                (if (< (count new-events) page-size)
-                                  (reset! has-more false)
-                                  (reset! current-end-ts new-start-ts))
-                                (reset! events (concat new-events @events))
-                                (apply-filters)
-                                (reset! loading-more false)))
-                      (.catchError (fn [error]
-                                   (dart-core/print (str "Error loading more events: " error))
-                                   (reset! loading-more false)
-                                   (reset! has-more false))))))))]
-      
+                               (let [new-events (or result [])]
+                                 (if (< (count new-events) page-size)
+                                   (reset! has-more false)
+                                   (reset! current-end-ts new-start-ts))
+                                 (reset! events (concat new-events @events))
+                                 (apply-filters)
+                                 (reset! loading-more false)))
+                             (.catchError (fn [error]
+                                            (dart-core/print (str "Error loading more events: " error))
+                                            (reset! loading-more false)
+                                            (reset! has-more false))))))))]
+
       ;; Load events on mount
       (reset! loading true)
       (reset! current-end-ts initial-end-ts)
@@ -277,308 +278,318 @@
                      (reset! events initial-events)
                      (apply-filters)
                      (reset! loading false)))
-          (.catchError (fn [error]
-                         (dart-core/print (str "Error loading timeline events: " error))
-                         (reset! loading false)
-                         (reset! has-more false))))
-      
-      (f/widget
-       :context ctx
-       :bind {:events events
-              :filtered-events filtered-events
-              :filter-type filter-type
-              :filter-entity-type filter-entity-type
-              :loading loading
-              :loading-more loading-more
-              :has-more has-more
-              :search-query search-query
-              :date-range-start date-range-start
-              :date-range-end date-range-end}
-       :watch [_filter-type filter-type
-               _filter-entity-type filter-entity-type
-               _search-query search-query]
-       
-       (m/Scaffold
-        .appBar (m/AppBar
-                 .title (comp/mongol-text-block
-                         {:text "Timeline"})
-                 .actions
-                 [(m/IconButton
-                   .icon (m/Icon m/Icons.download)
-                   .tooltip "Export Data"
-                   .onPressed (fn []
-                              ;; Export currently filtered event data
-                              (if (empty? @filtered-events)
-                                (toast/show-info-toast ctx "No data to export")
-                                (export-timeline-data @filtered-events ctx))))
-                  (m/IconButton
-                   .icon (m/Icon m/Icons.search)
-                   .onPressed (fn []
-                              ;; Show search dialog
-                              (let [search-controller (m/TextEditingController.)]
-                                (-> (m/showDialog
-                                     .context ctx
-                                     .builder (fn [dialog-ctx]
-                                              (m/AlertDialog
-                                               .title (comp/mongol-text-block
-                                                      {:text "Search Events"
-                                                       :style (m/TextStyle
-                                                              .fontSize (tokens/font-size :l)
-                                                              .fontWeight m/FontWeight.bold)})
-                                               .content (m/Column
-                                                        .mainAxisSize m/MainAxisSize.min
-                                                        .children
-                                                        [(mongol/MongolTextField
-                                                          .controller search-controller
-                                                          .decoration (m/InputDecoration
-                                                                      .hintText "Enter search keywords (title or type)"
-                                                                      .prefixIcon (m/Icon m/Icons.search))
-                                                          .style (m/TextStyle
-                                                                 .fontSize (tokens/font-size :m)
-                                                                 .fontFamily "OnonSoninSans")
-                                                          .autofocus true
-                                                          .onChanged (fn [text]
-                                                                      (reset! search-query text)
-                                                                      (apply-filters)))])
-                                               .actions
-                                               [(m/TextButton
-                                                 .onPressed (fn []
-                                                            (reset! search-query "")
-                                                            (.clear search-controller)
-                                                            (apply-filters)
-                                                            (m/Navigator.pop dialog-ctx))
-                                                 .child (m/Text "Clear"))
-                                                (m/TextButton
-                                                 .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                                                 .child (m/Text "Close"))])))
-                                    (.then (fn [_] nil))
-                                    (.catchError (fn [error]
-                                                 (dart-core/print (str "Error showing search dialog: " error))))))))
-                  (m/IconButton
-                   .icon (m/Icon m/Icons.date_range)
-                   .onPressed (fn []
-                              ;; Show date range selection dialog
-                              (let [now (dart-core/DateTime.now)
-                                    start-date (if @date-range-start
-                                                 (dart-core/DateTime.fromMillisecondsSinceEpoch @date-range-start)
-                                                 (dart-core/DateTime (- (.year now) 1) (.month now) (.day now)))
-                                    end-date (if @date-range-end
-                                               (dart-core/DateTime.fromMillisecondsSinceEpoch @date-range-end)
-                                               now)]
-                                (-> (m/showDateRangePicker
-                                     .context ctx
-                                     .firstDate (dart-core/DateTime 2020 1 1)
-                                     .lastDate now
-                                     .initialDateRange (m/DateTimeRange
-                                                       .start start-date
-                                                       .end end-date))
-                                    (.then (fn [date-range]
-                                            (when date-range
-                                              (let [start-ts (int (/ (.millisecondsSinceEpoch (.-start date-range)) 1000))
-                                                    end-ts (int (/ (.millisecondsSinceEpoch (.-end date-range)) 1000))]
-                                                (reset! date-range-start start-ts)
-                                                (reset! date-range-end end-ts)
-                                                ;; Reload events in this date range
-                                                (reset! loading true)
-                                                (reset! current-end-ts end-ts)
-                                                (-> (timeline/query-range dao start-ts end-ts)
-                                                    (.then (fn [result]
-                                                            (let [range-events (or result [])]
-                                                              (reset! events range-events)
-                                                              (apply-filters)
-                                                              (reset! loading false))))
-                                                    (.catchError (fn [error]
-                                                                 (dart-core/print (str "Error loading date range events: " error))
-                                                                 (reset! loading false))))))))
-                                    (.catchError (fn [error]
-                                                 (dart-core/print (str "Error showing date range picker: " error))))))))
-                  (m/PopupMenuButton
-                   .itemBuilder (fn [_ctx]
-                                 (let [all-types (get-all-event-types @events)
-                                       all-entity-types (get-all-entity-types @events)]
-                                   (vec (concat
-                                         [(m/PopupMenuItem
-                                           .value :clear-type
-                                           .child (m/Text "Clear Type Filter"))]
-                                         (map (fn [event-type]
-                                               (m/PopupMenuItem
-                                                .value event-type
-                                                .child (m/Text event-type)))
-                                             (take 10 all-types))
-                                         [(m/PopupMenuDivider)
-                                          (m/PopupMenuItem
-                                           .value :clear-entity
-                                           .child (m/Text "Clear Entity Filter"))]
-                                         (map (fn [entity-type]
-                                               (m/PopupMenuItem
-                                                .value (str "entity:" entity-type)
-                                                .child (m/Text (str "Entity: " entity-type))))
-                                             (take 10 all-entity-types))
-                                         [(m/PopupMenuDivider)
-                                          (m/PopupMenuItem
-                                           .value :clear-date-range
-                                           .child (m/Text "Clear Date Range"))]))))
-                   .onSelected (fn [value]
-                                (cond
-                                  (= value :clear-type)
-                                  (do
-                                    (reset! filter-type nil)
-                                    (apply-filters))
-                                  
-                                  (= value :clear-entity)
-                                  (do
-                                    (reset! filter-entity-type nil)
-                                    (apply-filters))
-                                  
-                                  (= value :clear-date-range)
-                                  (do
-                                    (reset! date-range-start nil)
-                                    (reset! date-range-end nil)
-                                    ;; Reload events in default date range
-                                    (reset! loading true)
-                                    (reset! current-end-ts initial-end-ts)
-                                    (-> (timeline/query-range dao initial-start-ts initial-end-ts)
-                                        (.then (fn [result]
-                                                (let [initial-events (or result [])]
-                                                  (if (< (count initial-events) page-size)
-                                                    (reset! has-more false)
-                                                    (reset! current-end-ts (- initial-end-ts (* 7 24 60 60))))
-                                                  (reset! events initial-events)
-                                                  (apply-filters)
-                                                  (reset! loading false)))
-                                        (.catchError (fn [error]
-                                                     (dart-core/print (str "Error reloading events: " error))
-                                                     (reset! loading false)))))
-                                  
-                                  (.startsWith (str value) "entity:")
-                                  (do
-                                    (reset! filter-entity-type (subs (str value) 7))
-                                    (apply-filters))
-                                  
-                                  :else
-                                  (do
-                                    (reset! filter-type (str value))
-                                    (apply-filters))))))])
-        .body (comp/mongol-column-layout
-               {:main-column
-                (cond
-                  @loading
-                  (m/Center
-                   .child (m/CircularProgressIndicator))
-                  
-                  (empty? @filtered-events)
-                  (m/Center
-                   .child (comp/mongol-text-block
-                           {:text (if (or @filter-type @filter-entity-type)
-                                   "No events matching filter criteria"
-                                   "No events yet")
-                            :style (m/TextStyle
-                                    .color (tokens/color :text-weak))}))
-                  
-                  :else
-                  (let [grouped (group-events-by-date @filtered-events)
-                        sorted-dates (reverse (sort (keys grouped))) ; Latest dates first
-                        scroll-controller (m/ScrollController)]
-                    ;; Listen for scroll to bottom
-                    (.addListener scroll-controller
-                                  (fn []
-                                    (let [max-scroll (.position.maxScrollExtent (.position scroll-controller))
-                                          current-scroll (.offset (.position scroll-controller))]
-                                      ;; Load more when scrolled within 200px of bottom
-                                      (when (and (> max-scroll 0)
-                                                 (< (- max-scroll current-scroll) 200))
-                                        (load-more-events)))))
-                    (m/ListView
-                     .controller scroll-controller
-                     .children
-                     (vec (concat
-                           (map
-                            (fn [date-key]
-                              (let [day-events (get grouped date-key)
-                                    date-ts (* (int date-key) 86400)
-                                    date-str (format-date-only date-ts)]
-                                (m/ExpansionTile
-                                 .key (m/ValueKey (str "date-" date-key))
-                                 .initiallyExpanded false
-                                 .title (comp/mongol-text-block
-                                         {:text date-str
-                                          :style (m/TextStyle
-                                                  .fontSize (tokens/font-size :m)
-                                                  .fontWeight m/FontWeight.bold)})
-                                 .subtitle (comp/mongol-text-block
-                                            {:text (str (count day-events) " events")
-                                             :style (m/TextStyle
-                                                     .fontSize (tokens/font-size :s)
-                                                     .color (tokens/color :text-weak))})
-                                 .children
-                                 (vec (map
-                                       (fn [event]
-                                         (m/Card
-                                          .key (m/ValueKey (.-id event))
-                                          .margin (m/EdgeInsets.symmetric
-                                                   :vertical (tokens/space :xs)
-                                                   :horizontal (tokens/space :m))
-                                          .child (m/Padding
-                                                  .padding (m/EdgeInsets.all (tokens/space :s))
-                                                  .child (m/Row
-                                                          .crossAxisAlignment m/CrossAxisAlignment.start
-                                                          .children
-                                                          [(m/Icon
-                                                            (get-event-icon (.-type event))
-                                                            .color (get-event-color (.-type event))
-                                                            .size 24)
-                                                           (m/SizedBox .width (tokens/space :s))
-                                                           (m/Expanded
-                                                            .child (m/Column
-                                                                    .crossAxisAlignment m/CrossAxisAlignment.start
-                                                                    .children
-                                                                    (vec (filter some?
-                                                                                 [(comp/mongol-text-block
-                                                                                   {:text (str "Type: " (.-type event))
-                                                                                    :style (m/TextStyle
-                                                                                            .fontSize (tokens/font-size :m)
-                                                                                            .fontWeight m/FontWeight.w500
-                                                                                            .color (get-event-color (.-type event)))})
-                                                                                  (m/SizedBox .height (tokens/space :xs))
-                                                                                  (comp/mongol-text-block
-                                                                                   {:text (str "Title: " (.-title event))})
-                                                                                  (when (.-duration event)
-                                                                                    (m/Column
-                                                                                     .children
-                                                                                     [(m/SizedBox .height (tokens/space :xs))
+                 (.catchError (fn [error]
+                                (dart-core/print (str "Error loading timeline events: " error))
+                                (reset! loading false)
+                                (reset! has-more false))))
+
+          (f/widget
+           :context ctx
+           :bind {:events events
+                  :filtered-events filtered-events
+                  :filter-type filter-type
+                  :filter-entity-type filter-entity-type
+                  :loading loading
+                  :loading-more loading-more
+                  :has-more has-more
+                  :search-query search-query
+                  :date-range-start date-range-start
+                  :date-range-end date-range-end}
+           :watch [_filter-type filter-type
+                   _filter-entity-type filter-entity-type
+                   _search-query search-query]
+
+           (m/Scaffold
+            .appBar (m/AppBar
+                     .actions
+                     [(m/IconButton
+                       .icon (m/Icon m/Icons.download)
+                       .tooltip "Export Data"
+                       .onPressed (fn []
+                                    ;; Export currently filtered event data
+                                    (if (empty? @filtered-events)
+                                      (toast/show-info-toast ctx "No data to export")
+                                      (export-timeline-data @filtered-events ctx))))
+                      (m/IconButton
+                       .icon (m/Icon m/Icons.search)
+                       .onPressed (fn []
+                                    ;; Show search dialog
+                                    (let [search-controller (m/TextEditingController.)]
+                                      (-> (m/showDialog
+                                           .context ctx
+                                           .builder (fn [dialog-ctx]
+                                                      (m/AlertDialog
+                                                       .title (comp/mongol-text-block
+                                                               {:text "Search Events"
+                                                                :style (m/TextStyle
+                                                                        .fontSize (tokens/font-size :l)
+                                                                        .fontWeight m/FontWeight.bold)})
+                                                       .content (m/Column
+                                                                 .mainAxisSize m/MainAxisSize.min
+                                                                 .children
+                                                                 [(mongol/MongolTextField
+                                                                   .controller search-controller
+                                                                   .decoration (m/InputDecoration
+                                                                                .hintText "Enter search keywords (title or type)"
+                                                                                .prefixIcon (m/Icon m/Icons.search))
+                                                                   .style (m/TextStyle
+                                                                           .fontSize (tokens/font-size :m)
+                                                                           .fontFamily "OnonSoninSans")
+                                                                   .autofocus true
+                                                                   .onChanged (fn [text]
+                                                                                (reset! search-query text)
+                                                                                (apply-filters)))])
+                                                       .actions
+                                                       [(m/TextButton
+                                                         .onPressed (fn []
+                                                                      (reset! search-query "")
+                                                                      (.clear search-controller)
+                                                                      (apply-filters)
+                                                                      (m/Navigator.pop dialog-ctx))
+                                                         .child (m/Text "Clear"))
+                                                        (m/TextButton
+                                                         .onPressed (fn [] (m/Navigator.pop dialog-ctx))
+                                                         .child (m/Text "Close"))])))
+                                          (.then (fn [_] nil))
+                                          (.catchError (fn [error]
+                                                         (dart-core/print (str "Error showing search dialog: " error))))))))
+                      (m/IconButton
+                       .icon (m/Icon m/Icons.date_range)
+                       .onPressed (fn []
+                                    ;; Show date range selection dialog
+                                    (let [now (dart-core/DateTime.now)
+                                          start-date (if @date-range-start
+                                                       (dart-core/DateTime.fromMillisecondsSinceEpoch @date-range-start)
+                                                       (dart-core/DateTime (- (.year now) 1) (.month now) (.day now)))
+                                          end-date (if @date-range-end
+                                                     (dart-core/DateTime.fromMillisecondsSinceEpoch @date-range-end)
+                                                     now)]
+                                      (-> (m/showDateRangePicker
+                                           .context ctx
+                                           .firstDate (dart-core/DateTime 2020 1 1)
+                                           .lastDate now
+                                           .initialDateRange (m/DateTimeRange
+                                                              .start start-date
+                                                              .end end-date))
+                                          (.then (fn [date-range]
+                                                   (when date-range
+                                                     (let [start-ts (int (/ (.millisecondsSinceEpoch (.-start date-range)) 1000))
+                                                           end-ts (int (/ (.millisecondsSinceEpoch (.-end date-range)) 1000))]
+                                                       (reset! date-range-start start-ts)
+                                                       (reset! date-range-end end-ts)
+                                                       ;; Reload events in this date range
+                                                       (reset! loading true)
+                                                       (reset! current-end-ts end-ts)
+                                                       (-> (timeline/query-range dao start-ts end-ts)
+                                                           (.then (fn [result]
+                                                                    (let [range-events (or result [])]
+                                                                      (reset! events range-events)
+                                                                      (apply-filters)
+                                                                      (reset! loading false))))
+                                                           (.catchError (fn [error]
+                                                                          (dart-core/print (str "Error loading date range events: " error))
+                                                                          (reset! loading false))))))))
+                                          (.catchError (fn [error]
+                                                         (dart-core/print (str "Error showing date range picker: " error))))))))
+                      (mdb/MongolSelect
+                       .value (cond
+                                @filter-type @filter-type
+                                @filter-entity-type (str "entity:" @filter-entity-type)
+                                :else :none)
+                       .items (let [all-types (get-all-event-types @events)
+                                    all-entity-types (get-all-entity-types @events)]
+                                (vec (concat
+                                      [(mdb/MongolSelectItem
+                                        .value :clear-type
+                                        .label (mongol/MongolText "Clear Type Filter"))]
+                                      (map (fn [event-type]
+                                             (mdb/MongolSelectItem
+                                              .value event-type
+                                              .label (mongol/MongolText event-type)))
+                                           (take 10 all-types))
+                                      [(mdb/MongolSelectItem
+                                        .value :clear-entity
+                                        .label (mongol/MongolText "Clear Entity Filter"))]
+                                      (map (fn [entity-type]
+                                             (mdb/MongolSelectItem
+                                              .value (str "entity:" entity-type)
+                                              .label (mongol/MongolText (str "Entity: " entity-type))))
+                                           (take 10 all-entity-types))
+                                      [(mdb/MongolSelectItem
+                                        .value :clear-date-range
+                                        .label (mongol/MongolText "Clear Date Range"))])))
+                       .valueBuilder (fn [value]
+                                       (mongol/MongolText
+                                        (cond
+                                          (= value :none) "Filter"
+                                          (= value :clear-type) "Clear Type Filter"
+                                          (= value :clear-entity) "Clear Entity Filter"
+                                          (= value :clear-date-range) "Clear Date Range"
+                                          (.startsWith (str value) "entity:")
+                                          (str "Entity: " (subs (str value) 7))
+                                          :else
+                                          (str value))))
+                       .onChanged (fn [value]
+                                    (cond
+                                      (= value :clear-type)
+                                      (do
+                                        (reset! filter-type nil)
+                                        (apply-filters))
+
+                                      (= value :clear-entity)
+                                      (do
+                                        (reset! filter-entity-type nil)
+                                        (apply-filters))
+
+                                      (= value :clear-date-range)
+                                      (do
+                                        (reset! date-range-start nil)
+                                        (reset! date-range-end nil)
+                                        ;; Reload events in default date range
+                                        (reset! loading true)
+                                        (reset! current-end-ts initial-end-ts)
+                                        (-> (timeline/query-range dao initial-start-ts initial-end-ts)
+                                            (.then (fn [result]
+                                                     (let [initial-events (or result [])]
+                                                       (if (< (count initial-events) page-size)
+                                                         (reset! has-more false)
+                                                         (reset! current-end-ts (- initial-end-ts (* 7 24 60 60))))
+                                                       (reset! events initial-events)
+                                                       (apply-filters)
+                                                       (reset! loading false)))
+                                                  (.catchError (fn [error]
+                                                                 (dart-core/print (str "Error reloading events: " error))
+                                                                 (reset! loading false))))))
+
+                                      (.startsWith (str value) "entity:")
+                                      (do
+                                        (reset! filter-entity-type (subs (str value) 7))
+                                        (apply-filters))
+
+                                      :else
+                                      (do
+                                        (reset! filter-type (str value))
+                                        (apply-filters)))))])
+            .body (comp/mongol-column-layout
+                   {:main-column
+                    (cond
+                      @loading
+                      (m/Center
+                       .child (m/CircularProgressIndicator))
+
+                      (empty? @filtered-events)
+                      (m/Center
+                       .child (comp/mongol-text-block
+                               {:text (if (or @filter-type @filter-entity-type)
+                                        "No events matching filter criteria"
+                                        "No events yet")
+                                :style (m/TextStyle
+                                        .color (tokens/color :text-weak))}))
+
+                      :else
+                      (let [grouped (group-events-by-date @filtered-events)
+                            sorted-dates (reverse (sort (keys grouped))) ; Latest dates first
+                            scroll-controller (m/ScrollController)]
+                        ;; Listen for scroll to bottom
+                        (.addListener scroll-controller
+                                      (fn []
+                                        (let [max-scroll (.position.maxScrollExtent (.position scroll-controller))
+                                              current-scroll (.offset (.position scroll-controller))]
+                                          ;; Load more when scrolled within 200px of bottom
+                                          (when (and (> max-scroll 0)
+                                                     (< (- max-scroll current-scroll) 200))
+                                            (load-more-events)))))
+                        (m/ListView
+                         .controller scroll-controller
+                         .children
+                         (vec (concat
+                               (map
+                                (fn [date-key]
+                                  (let [day-events (get grouped date-key)
+                                        date-ts (* (int date-key) 86400)
+                                        date-str (format-date-only date-ts)]
+                                    (m/ExpansionTile
+                                     .key (m/ValueKey (str "date-" date-key))
+                                     .initiallyExpanded false
+                                     .title (comp/mongol-text-block
+                                             {:text date-str
+                                              :style (m/TextStyle
+                                                      .fontSize (tokens/font-size :m)
+                                                      .fontWeight m/FontWeight.bold)})
+                                     .subtitle (comp/mongol-text-block
+                                                {:text (str (count day-events) " events")
+                                                 :style (m/TextStyle
+                                                         .fontSize (tokens/font-size :s)
+                                                         .color (tokens/color :text-weak))})
+                                     .children
+                                     (vec (map
+                                           (fn [event]
+                                             (m/Card
+                                              .key (m/ValueKey (.-id event))
+                                              .margin (m/EdgeInsets.symmetric
+                                                       :vertical (tokens/space :xs)
+                                                       :horizontal (tokens/space :m))
+                                              .child (m/Padding
+                                                      .padding (m/EdgeInsets.all (tokens/space :s))
+                                                      .child (m/Row
+                                                              .crossAxisAlignment m/CrossAxisAlignment.start
+                                                              .children
+                                                              [(m/Icon
+                                                                (get-event-icon (.-type event))
+                                                                .color (get-event-color (.-type event))
+                                                                .size 24)
+                                                               (m/SizedBox .width (tokens/space :s))
+                                                               (m/Expanded
+                                                                .child (m/Column
+                                                                        .crossAxisAlignment m/CrossAxisAlignment.start
+                                                                        .children
+                                                                        (vec (filter some?
+                                                                                     [(comp/mongol-text-block
+                                                                                       {:text (str "Type: " (.-type event))
+                                                                                        :style (m/TextStyle
+                                                                                                .fontSize (tokens/font-size :m)
+                                                                                                .fontWeight m/FontWeight.w500
+                                                                                                .color (get-event-color (.-type event)))})
+                                                                                      (m/SizedBox .height (tokens/space :xs))
                                                                                       (comp/mongol-text-block
-                                                                                       {:text (str "Duration: " (.-duration event) " min")
+                                                                                       {:text (str "Title: " (.-title event))})
+                                                                                      (when (.-duration event)
+                                                                                        (m/Column
+                                                                                         .children
+                                                                                         [(m/SizedBox .height (tokens/space :xs))
+                                                                                          (comp/mongol-text-block
+                                                                                           {:text (str "Duration: " (.-duration event) " min")
+                                                                                            :style (m/TextStyle
+                                                                                                    .fontSize (tokens/font-size :s)
+                                                                                                    .color (tokens/color :text-weak))})]))
+                                                                                      (m/SizedBox .height (tokens/space :xs))
+                                                                                      (comp/mongol-text-block
+                                                                                       {:text (format-timestamp (.-timestamp event))
                                                                                         :style (m/TextStyle
                                                                                                 .fontSize (tokens/font-size :s)
-                                                                                                .color (tokens/color :text-weak))})]))
-                                                                                  (m/SizedBox .height (tokens/space :xs))
-                                                                                  (comp/mongol-text-block
-                                                                                   {:text (format-timestamp (.-timestamp event))
-                                                                                    :style (m/TextStyle
-                                                                                            .fontSize (tokens/font-size :s)
-                                                                                            .color (tokens/color :text-weak))})]))))]))))
-                                          day-events)))))
-                            sorted-dates)
-                           ;; Load more indicator
-                           (when @has-more
-                             [(m/Padding
-                               .padding (m/EdgeInsets.all (tokens/space :m))
-                               .child (m/InkWell
-                                      .onTap (fn [] (load-more-events))
-                                      .child (m/Row
-                                             .mainAxisAlignment m/MainAxisAlignment.center
-                                             .children
-                                             (vec (filter some?
-                                                          [(when @loading-more
-                                                             (m/CircularProgressIndicator
-                                                              .strokeWidth 2
-                                                              .value nil))
-                                                            (m/SizedBox .width (tokens/space :s))
-                                                            (comp/mongol-text-block
-                                                             {:text (if @loading-more
-                                                                     "Loading..."
-                                                                     "Load More")
-                                                              :style (m/TextStyle
-                                                                      .fontSize (tokens/font-size :s)
-                                                                      .color (tokens/color :accent))})])))))]))))))})))))))
+                                                                                                .color (tokens/color :text-weak))})]))))]))))
+                                           day-events)))))
+                                sorted-dates)
+                               ;; Load more indicator
+                               (when @has-more
+                                 [(m/Padding
+                                   .padding (m/EdgeInsets.all (tokens/space :m))
+                                   .child (m/InkWell
+                                           .onTap (fn [] (load-more-events))
+                                           .child (m/Row
+                                                   .mainAxisAlignment m/MainAxisAlignment.center
+                                                   .children
+                                                   (vec (filter some?
+                                                                [(when @loading-more
+                                                                   (m/CircularProgressIndicator
+                                                                    .strokeWidth 2
+                                                                    .value nil))
+                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                 (comp/mongol-text-block
+                                                                  {:text (if @loading-more
+                                                                           "Loading..."
+                                                                           "Load More")
+                                                                   :style (m/TextStyle
+                                                                           .fontSize (tokens/font-size :s)
+                                                                           .color (tokens/color :accent))})])))))]))))))})))))))
 

@@ -6,7 +6,6 @@
    [minii-focus.core.infra.bridge :as bridge]
    ["dart:core" :as dart-core]
    ["package:cljd_mongol_focus/db/bridge/task_bridge.dart" :as task-bridge]
-   ["package:cljd_mongol_focus/db/tables/tasks.dart" :as tasks]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
 
 (defn task-companion
@@ -27,7 +26,7 @@
   [{:keys [id title project-id perspectives completed created-at priority postpone-count abandoned]}]
   (let [now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))] ; Timestamp in seconds
     (bridge/dart-new
-     app-db/TasksCompanion.insert
+     app-db/TasksCompanion
      {:id id
       :title title
       :projectId project-id  ; nullable, nil will be handled automatically
