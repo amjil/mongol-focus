@@ -101,41 +101,35 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
   void _show() {
     _overlay = OverlayEntry(
       builder: (context) {
-        final mediaQuery = MediaQuery.of(context);
-        final screenSize = mediaQuery.size;
-        
-        // Center menu on screen
-        final menuWidth = widget.menuWidth;
-        final menuHeight = widget.maxHeight;
-        final left = (screenSize.width - menuWidth) / 2;
-        final top = (screenSize.height - menuHeight) / 2;
-
-        return Positioned.fill(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _remove,
-              ),
-              Positioned(
-                left: left,
-                top: top,
-                child: Material(
-                  color: Colors.transparent,
-                  clipBehavior: Clip.none,
-                  child: FadeTransition(
-                    opacity: _fade,
-                    child: ScaleTransition(
-                      scale: _scale,
-                      alignment: Alignment.center,
-                      child: _buildMenu(context),
-                    ),
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _remove,
+            ),
+            CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
+              offset: widget.openToLeft
+                  ? Offset(-widget.menuWidth, 0) // Open to the left
+                  : Offset.zero, // Open to the right
+              child: Material(
+                color: Colors.transparent,
+                clipBehavior: Clip.none,
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: ScaleTransition(
+                    scale: _scale,
+                    alignment: widget.openToLeft
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: _buildMenu(context),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -155,6 +149,50 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
     final theme = Theme.of(context);
 
     Widget? currentGroup;
+    final menuItems = <Widget>[];
+
+    for (final item in widget.items) {
+      // Add group header if this item has a different group
+      final group = item.group;
+      if (group != null && group != currentGroup) {
+        currentGroup = group;
+        menuItems.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: DefaultTextStyle.merge(
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.hintColor),
+              child: group,
+            ),
+          ),
+        );
+      }
+
+      // Add menu item
+      final selected = item.value == widget.value;
+      menuItems.add(
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            widget.onChanged(item.value);
+            _remove();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              vertical: 12,
+              horizontal: 10,
+            ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? theme.colorScheme.primary.withOpacity(0.12)
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: item.label,
+          ),
+        ),
+      );
+    }
 
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -178,50 +216,7 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
           shrinkWrap: false,
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        children: widget.items.expand((item) {
-          final widgets = <Widget>[];
-
-          if (item.group != null && item.group != currentGroup) {
-            currentGroup = item.group;
-            widgets.add(
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: DefaultTextStyle.merge(
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.hintColor),
-                  child: item.group!,
-                ),
-              ),
-            );
-          }
-
-          final selected = item.value == widget.value;
-
-          widgets.add(
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () {
-                widget.onChanged(item.value);
-                _remove();
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? theme.colorScheme.primary.withOpacity(0.12)
-                      : null,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: item.label,
-              ),
-            ),
-          );
-
-          return widgets;
-        }).toList(),
+          children: menuItems,
         ),
       ),
     );

@@ -123,11 +123,26 @@ class _MongolExpansionTileState extends State<MongolExpansionTile>
   void didUpdateWidget(covariant MongolExpansionTile oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // Update animation controller duration and curve if changed
+    if (widget.duration != oldWidget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (widget.curve != oldWidget.curve) {
+      _animation = CurvedAnimation(
+        parent: _controller,
+        curve: widget.curve,
+      );
+    }
+
+    // Update animation state if expanded state changed
     if (widget.expanded != null &&
         widget.expanded != oldWidget.expanded) {
-      widget.expanded!
-          ? _controller.forward()
-          : _controller.reverse();
+      final isExpanded = widget.expanded!;
+      if (widget.enableAnimation) {
+        isExpanded ? _controller.forward() : _controller.reverse();
+      } else {
+        _controller.value = isExpanded ? 1.0 : 0.0;
+      }
     }
   }
 
@@ -142,6 +157,9 @@ class _MongolExpansionTileState extends State<MongolExpansionTile>
 
     if (widget.enableAnimation) {
       next ? _controller.forward() : _controller.reverse();
+    } else {
+      // Sync controller value when animation is disabled
+      _controller.value = next ? 1.0 : 0.0;
     }
   }
 
@@ -194,7 +212,7 @@ class _MongolExpansionTileState extends State<MongolExpansionTile>
           mainAxisSize: MainAxisSize.min,
           children: [
             widget.title,
-            if (widget.trailing != null) widget.trailing!,
+            if (widget.trailing != null) widget.trailing as Widget,
           ],
         ),
       ),
