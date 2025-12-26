@@ -14,10 +14,11 @@
    
    Returns: Future<AppDatabase>"
   []
-  (let [db-instance (db/initAppDatabase)]
-    (reset! app-db db-instance)
-    (reset! dao (dao-bridge/DaoBridge. db-instance))
-    db-instance))
+  (-> (db/initAppDatabase)
+      (.then (fn [db-instance]
+              (reset! app-db db-instance)
+              (reset! dao (dao-bridge/DaoBridge. db-instance))
+              db-instance))))
 
 (defn get-db
   "Get database instance

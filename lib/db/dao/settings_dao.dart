@@ -9,7 +9,7 @@ part 'settings_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Settings])
-class SettingsDao extends DatabaseAccessor with _$SettingsDaoMixin {
+class SettingsDao extends DatabaseAccessor<AppDatabase> with _$SettingsDaoMixin {
   SettingsDao(super.attachedDatabase);
 
   /// Get setting value by key

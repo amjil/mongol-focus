@@ -9,7 +9,7 @@ part 'forecast_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Forecasts])
-class ForecastDao extends DatabaseAccessor with _$ForecastDaoMixin {
+class ForecastDao extends DatabaseAccessor<AppDatabase> with _$ForecastDaoMixin {
   ForecastDao(super.attachedDatabase);
 
   /// Insert a new forecast

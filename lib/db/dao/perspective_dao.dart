@@ -9,7 +9,7 @@ part 'perspective_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Perspectives])
-class PerspectiveDao extends DatabaseAccessor with _$PerspectiveDaoMixin {
+class PerspectiveDao extends DatabaseAccessor<AppDatabase> with _$PerspectiveDaoMixin {
   PerspectiveDao(super.attachedDatabase);
 
   /// Insert a new perspective

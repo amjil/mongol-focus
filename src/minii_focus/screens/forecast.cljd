@@ -307,10 +307,12 @@
                                                                         (.catchError (fn [error]
                                                                                        (dart-core/print (str "Error batch rescheduling: " error))
                                                                                        (reset! loading false)
-                                                                                       (toast/show-error-toast ctx "Failed to batch adjust")
-                                                                                       nil)))))))
+                                                                                       (toast/show-error-toast ctx "Failed to batch adjust"))))))))
                                                        (.catchError (fn [error]
-                                                                      (dart-core/print (str "Error showing date picker: " error))))))))))
+                                                                      (dart-core/print (str "Error showing date picker: " error))
+                                                                      (toast/show-error-toast ctx "Error showing date picker")
+                                                                      nil)))))
+                                               nil)))
                               (when @batch-mode
                                 (m/IconButton
                                  .icon (m/Icon m/Icons.close)
@@ -663,10 +665,12 @@
                                                                                                                      (toast/show-success-toast ctx "Forecast completed")))
                                                                                                             (.catchError (fn [error]
                                                                                                                            (dart-core/print (str "Error completing forecast: " error))
-                                                                                                                           (toast/show-error-toast ctx "Failed to complete forecast"))))))
-                                                                                                            (.catchError (fn [error]
-                                                                                                                           (dart-core/print (str "Error getting task: " error))
-                                                                                                                           (toast/show-error-toast ctx "Failed to get task info")))))
+                                                                                                                           (toast/show-error-toast ctx "Failed to complete forecast")
+                                                                                                                           nil)))))
+                                                                                                    (.catchError (fn [error]
+                                                                                                                   (dart-core/print (str "Error getting task: " error))
+                                                                                                                   (toast/show-error-toast ctx "Failed to get task info")
+                                                                                                                   nil))))
 
                                                                                          :reschedule
                                                                                          ;; Reschedule - show date picker dialog
@@ -700,7 +704,9 @@
                                                                                                                                (dart-core/print (str "Error rescheduling forecast: " error))
                                                                                                                                (toast/show-error-toast ctx "Failed to adjust date"))))))))
                                                                                                (.catchError (fn [error]
-                                                                                                              (dart-core/print (str "Error showing date picker: " error))))))
+                                                                                                              (dart-core/print (str "Error showing date picker: " error))
+                                                                                                              (toast/show-error-toast ctx "Error showing date picker"))))
+                                                                                           nil)
 
                                                                                          :cancel
                                                                                          ;; Cancel forecast

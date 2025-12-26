@@ -801,8 +801,8 @@
                                                                                            " Perspectives"))))
                                                    (.catchError (fn [error]
                                                                   (dart-core/print (str "Error updating weights: " error))
-                                                                  (toast/show-error-toast ctx "Failed to update weights")
-                                                                  nil)))))
+                                                                  (toast/show-error-toast ctx "Failed to update weights")))))
+                                             nil)
                                 .child (m/Text "Save"))]))))))
              (.catchError (fn [error]
                             (dart-core/print (str "Error loading perspectives: " error))
@@ -827,7 +827,8 @@
               (toast/show-success-toast ctx "Next period Forecast generated")))
       (.catchError (fn [error]
                    (dart-core/print (str "Error generating forecast: " error))
-                   (toast/show-error-toast ctx "Failed to generate Forecast")))))
+                   (toast/show-error-toast ctx "Failed to generate Forecast")
+                   nil))))
 
 ;; ============================================================================
 ;; Main Screen

@@ -9,7 +9,7 @@ part 'forecast_calibration_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [ForecastCalibrations])
-class ForecastCalibrationDao extends DatabaseAccessor with _$ForecastCalibrationDaoMixin {
+class ForecastCalibrationDao extends DatabaseAccessor<AppDatabase> with _$ForecastCalibrationDaoMixin {
   ForecastCalibrationDao(super.attachedDatabase);
 
   /// Insert a new forecast calibration

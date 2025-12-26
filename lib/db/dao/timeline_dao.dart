@@ -9,7 +9,7 @@ part 'timeline_dao.g.dart';
 /// 
 /// Core principle: Append-only. Events cannot be modified or deleted.
 @DriftAccessor(tables: [TimelineEvents])
-class TimelineDao extends DatabaseAccessor with _$TimelineDaoMixin {
+class TimelineDao extends DatabaseAccessor<AppDatabase> with _$TimelineDaoMixin {
   TimelineDao(super.attachedDatabase);
 
   /// Insert a new timeline event

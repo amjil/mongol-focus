@@ -10,7 +10,7 @@ part 'project_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Projects, Tasks])
-class ProjectDao extends DatabaseAccessor with _$ProjectDaoMixin {
+class ProjectDao extends DatabaseAccessor<AppDatabase> with _$ProjectDaoMixin {
   ProjectDao(super.attachedDatabase);
 
   /// Insert a new project

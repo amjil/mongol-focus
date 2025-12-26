@@ -9,7 +9,7 @@ part 'review_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Reviews])
-class ReviewDao extends DatabaseAccessor with _$ReviewDaoMixin {
+class ReviewDao extends DatabaseAccessor<AppDatabase> with _$ReviewDaoMixin {
   ReviewDao(super.attachedDatabase);
 
   /// Insert a new review

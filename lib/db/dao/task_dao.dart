@@ -9,7 +9,7 @@ part 'task_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [Tasks])
-class TaskDao extends DatabaseAccessor with _$TaskDaoMixin {
+class TaskDao extends DatabaseAccessor<AppDatabase> with _$TaskDaoMixin {
   TaskDao(super.attachedDatabase);
 
   /// Insert a new task

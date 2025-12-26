@@ -9,7 +9,7 @@ part 'inbox_dao.g.dart';
 /// 
 /// Only provides basic CRUD operations, no business logic.
 @DriftAccessor(tables: [InboxItems])
-class InboxDao extends DatabaseAccessor with _$InboxDaoMixin {
+class InboxDao extends DatabaseAccessor<AppDatabase> with _$InboxDaoMixin {
   InboxDao(super.attachedDatabase);
 
   /// Insert a new inbox item

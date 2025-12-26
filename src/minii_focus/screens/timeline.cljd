@@ -200,7 +200,8 @@
                    (toast/show-success-toast ctx "Data exported")))
           (.catchError (fn [error]
                          (dart-core/print (str "Error sharing timeline data: " error))
-                         (toast/show-error-toast ctx "Export failed")))))
+                         (toast/show-error-toast ctx "Export failed")
+                         nil))))
     (catch Exception error
       (dart-core/print (str "Error exporting timeline data: " error))
       (toast/show-error-toast ctx "Export failed"))))
@@ -281,7 +282,8 @@
                  (.catchError (fn [error]
                                 (dart-core/print (str "Error loading timeline events: " error))
                                 (reset! loading false)
-                                (reset! has-more false)))))
+                                (reset! has-more false)
+                                nil))))
 
           (f/widget
            :context ctx
@@ -353,7 +355,8 @@
                                           (.then (fn [_] nil))
                                           (.catchError (fn [error]
                                                          (dart-core/print (str "Error showing search dialog: " error))
-                                                         nil))))))
+                                                         (toast/show-error-toast ctx "Error showing search dialog")))))
+                                    nil))
                       (m/IconButton
                        .icon (m/Icon m/Icons.date_range)
                        .onPressed (fn []
@@ -389,10 +392,12 @@
                                                                       (reset! loading false))))
                                                            (.catchError (fn [error]
                                                                           (dart-core/print (str "Error loading date range events: " error))
-                                                                          (reset! loading false))))))))
+                                                                          (reset! loading false)
+                                                                          nil)))))))
                                           (.catchError (fn [error]
                                                          (dart-core/print (str "Error showing date range picker: " error))
-                                                         nil))))))
+                                                         (toast/show-error-toast ctx "Error showing date range picker")))))
+                                    nil))
                       (mdb/MongolSelect
                        .value (cond
                                 @filter-type @filter-type
@@ -459,9 +464,10 @@
                                                        (reset! events initial-events)
                                                        (apply-filters)
                                                        (reset! loading false)))
-                                                  (.catchError (fn [error]
-                                                                 (dart-core/print (str "Error reloading events: " error))
-                                                                 (reset! loading false))))))
+                                                   (.catchError (fn [error]
+                                                                  (dart-core/print (str "Error reloading events: " error))
+                                                                  (reset! loading false)
+                                                                  nil)))))
 
                                       (.startsWith (str value) "entity:")
                                       (do
