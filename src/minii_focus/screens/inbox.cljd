@@ -714,8 +714,9 @@
                                                          (toast/show-success-toast ctx "Task created")))
                                                 (.catchError (fn [error]
                                                                (dart-core/print (str "Error creating task: " error))
-                                                               (toast/show-error-toast ctx "Failed to create")))
-                                            nil)))))
+                                                               (toast/show-error-toast ctx "Failed to create")
+                                                               nil))))
+                                            nil)))
 
                   ;; Tag filter bar (All + each tag)
                   (m/Container
@@ -812,7 +813,8 @@
                                                   (.catchError (fn [error]
                                                                  (dart-core/print (str "Error batch completing: " error))
                                                                  (reset! loading false)
-                                                                 (toast/show-error-toast ctx "Failed to batch complete"))))))
+                                                                 (toast/show-error-toast ctx "Failed to batch complete")
+                                                                 nil)))))
                               .child (m/Text "Complete"))
                               (m/SizedBox .width (tokens/space :s))
                               (m/TextButton
@@ -1167,7 +1169,8 @@
                                                                                                   .child (m/Text "Cancel"))])))
                                                                                      (.then (fn [_] nil))
                                                                                      (.catchError (fn [error]
-                                                                                                  (dart-core/print (str "Error showing priority dialog: " error)))))
+                                                                                                  (dart-core/print (str "Error showing priority dialog: " error))
+                                                                                                  nil)))
                                                                                 
                                                                                 :edit-tags
                                                                                 ;; Show edit tags dialog
@@ -1202,7 +1205,8 @@
                                                                                              (toast/show-success-toast ctx "Task archived")))
                                                                                     (.catchError (fn [error]
                                                                                                  (dart-core/print (str "Error archiving task: " error))
-                                                                                                 (toast/show-error-toast ctx "Failed to archive"))))
+                                                                                                 (toast/show-error-toast ctx "Failed to archive")
+                                                                                                 nil)))
                                                                                 
                                                                                 nil)))))))
                                          sorted-tasks)))))))

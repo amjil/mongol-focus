@@ -715,10 +715,12 @@
                                                                                                                       @forecasts-list))
                                                                                                       (reset! forecasts-order
                                                                                                               (filter #(not= % forecast-id) @forecasts-order))
-                                                                                                      (toast/show-success-toast ctx "Forecast canceled")))
+                                                                                                      (toast/show-success-toast ctx "Forecast canceled")
+                                                                                                      nil))
                                                                                              (.catchError (fn [error]
                                                                                                             (dart-core/print (str "Error canceling forecast: " error))
-                                                                                                            (toast/show-error-toast ctx "Failed to cancel forecast")))
+                                                                                                            (toast/show-error-toast ctx "Failed to cancel forecast")
+                                                                                                            nil)))
 
                                                                                          :delete
                                                                                          ;; Delete forecast
@@ -733,10 +735,12 @@
                                                                                                                       @forecasts-list))
                                                                                                       (reset! forecasts-order
                                                                                                               (filter #(not= % forecast-id) @forecasts-order))
-                                                                                                      (toast/show-success-toast ctx "Forecast deleted")))
+                                                                                                      (toast/show-success-toast ctx "Forecast deleted")
+                                                                                                      nil))
                                                                                              (.catchError (fn [error]
                                                                                                             (dart-core/print (str "Error deleting forecast: " error))
-                                                                                                            (toast/show-error-toast ctx "Failed to delete forecast"))))
+                                                                                                            (toast/show-error-toast ctx "Failed to delete forecast")
+                                                                                                            nil)))
 
-                                                                                         nil)))))))))
+                                                                                         nil))))))))
                                                ordered-forecasts))))))])}))))))

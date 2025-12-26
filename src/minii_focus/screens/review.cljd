@@ -801,7 +801,8 @@
                                                                                            " Perspectives"))))
                                                    (.catchError (fn [error]
                                                                   (dart-core/print (str "Error updating weights: " error))
-                                                                  (toast/show-error-toast ctx "Failed to update weights"))))))
+                                                                  (toast/show-error-toast ctx "Failed to update weights")
+                                                                  nil)))))
                                 .child (m/Text "Save"))]))))))
              (.catchError (fn [error]
                             (dart-core/print (str "Error loading perspectives: " error))

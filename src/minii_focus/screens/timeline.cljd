@@ -281,7 +281,7 @@
                  (.catchError (fn [error]
                                 (dart-core/print (str "Error loading timeline events: " error))
                                 (reset! loading false)
-                                (reset! has-more false))))
+                                (reset! has-more false)))))
 
           (f/widget
            :context ctx
@@ -352,7 +352,8 @@
                                                          .child (m/Text "Close"))])))
                                           (.then (fn [_] nil))
                                           (.catchError (fn [error]
-                                                         (dart-core/print (str "Error showing search dialog: " error))))))))
+                                                         (dart-core/print (str "Error showing search dialog: " error))
+                                                         nil))))))
                       (m/IconButton
                        .icon (m/Icon m/Icons.date_range)
                        .onPressed (fn []
@@ -390,7 +391,8 @@
                                                                           (dart-core/print (str "Error loading date range events: " error))
                                                                           (reset! loading false))))))))
                                           (.catchError (fn [error]
-                                                         (dart-core/print (str "Error showing date range picker: " error))))))))
+                                                         (dart-core/print (str "Error showing date range picker: " error))
+                                                         nil))))))
                       (mdb/MongolSelect
                        .value (cond
                                 @filter-type @filter-type
@@ -591,5 +593,5 @@
                                                                            "Load More")
                                                                    :style (m/TextStyle
                                                                            .fontSize (tokens/font-size :s)
-                                                                           .color (tokens/color :accent))})])))))]))))))})))))))
+                                                                           .color (tokens/color :accent))})])))))]))))))}))))))
 
