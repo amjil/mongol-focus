@@ -1,4 +1,4 @@
-import '../tables/perspectives.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Perspective Bridge - Bridge layer for Perspective operations

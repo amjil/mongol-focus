@@ -1,4 +1,4 @@
-import '../tables/reviews.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Review Bridge - Bridge layer for Review operations

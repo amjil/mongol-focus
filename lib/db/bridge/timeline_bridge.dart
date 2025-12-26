@@ -1,4 +1,4 @@
-import '../tables/timeline_events.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Timeline Bridge - Bridge layer for Timeline Event operations

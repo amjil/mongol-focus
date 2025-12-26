@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../app_database.dart';
 import '../tables/timeline_events.dart';
 
 part 'timeline_dao.g.dart';

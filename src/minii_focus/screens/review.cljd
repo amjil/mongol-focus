@@ -693,119 +693,119 @@
   (-> (perspective-db/watch-all dao)
       (.first)
       (.then (fn [perspectives-list]
-              (let [perspectives (or perspectives-list [])
-                    weight-controllers (atom {})]
-                ;; Create Slider controller for each Perspective
-                (doseq [p perspectives]
-                  (swap! weight-controllers assoc
-                         (.-id p)
-                         (m/TextEditingController.
-                          :text (str (.-weight p)))))
-                
-                ;; Show dialog
-                (m/showDialog
-                 .context ctx
-                 .builder (fn [dialog-ctx]
-                           (m/AlertDialog
-                            .title (comp/mongol-text-block
-                                   {:text "Adjust Perspective Weights"
-                                    :style (m/TextStyle
-                                           .fontSize (tokens/font-size :l)
-                                           .fontWeight m/FontWeight.bold)})
-                            .content (m/Container
-                                     .width 400
-                                     .height 500
-                                     .child (m/ListView
-                                            .children
-                                            (vec (map
-                                                  (fn [p]
-                                                    (let [p-id (.-id p)
-                                                          p-title (.-title p)
-                                                          current-weight (.-weight p)
-                                                          weight-controller (get @weight-controllers p-id)]
-                                                      (m/Card
-                                                       .margin (m/EdgeInsets.symmetric
-                                                               :vertical (tokens/space :s))
-                                                       .child (m/Padding
-                                                              .padding (m/EdgeInsets.all (tokens/space :m))
-                                                              .child (m/Column
-                                                                     .crossAxisAlignment m/CrossAxisAlignment.start
-                                                                     .children
-                                                                     [(comp/mongol-text-block
-                                                                       {:text p-title
-                                                                        :style (m/TextStyle
-                                                                               .fontSize (tokens/font-size :m)
-                                                                               .fontWeight m/FontWeight.w500)})
-                                                                      (m/SizedBox .height (tokens/space :s))
-                                                                      (m/Slider
-                                                                       .value current-weight
-                                                                       .min 0.0
-                                                                       .max 1.0
-                                                                       .divisions 100
-                                                                       .label (str (int (* current-weight 100)) "%")
-                                                                       .onChanged (fn [new-value]
-                                                                                  (set! (.-text weight-controller)
-                                                                                        (str new-value))
-                                                                                  nil))
-                                                                      (comp/mongol-text-block
-                                                                       {:text (str "Current Weight: "
-                                                                                  (int (* current-weight 100))
-                                                                                  "%")
-                                                                        :style (m/TextStyle
-                                                                               .fontSize (tokens/font-size :s)
-                                                                               .color (tokens/color :text-weak))})])))))
-                                                  perspectives))))
-                            .actions
-                            [(m/TextButton
-                              .onPressed (fn []
-                                         (m/Navigator.pop dialog-ctx))
-                              .child (m/Text "Cancel"))
-                             (m/TextButton
-                              .onPressed (fn []
-                                         ;; Save weights
-                                         (let [updates (atom [])]
-                                           (doseq [p perspectives]
-                                             (let [p-id (.-id p)
-                                                   weight-controller (get @weight-controllers p-id)
-                                                   new-weight (double (dart-core/double.parse (.-text weight-controller)))
-                                                   old-weight (.-weight p)
-                                                   updated-at (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
-                                                   old-history (.-weightHistory p)]
-                                               (when (not= new-weight old-weight)
-                                                 (let [new-history (update-weight-history old-history new-weight updated-at)]
-                                                   (swap! updates conj
-                                                          {:id p-id
-                                                           :weight new-weight
-                                                           :history new-history
-                                                           :updated-at updated-at})))))
-                                           
-                                           ;; Batch update
-                                           (-> (dart-core/Future.wait
+               (let [perspectives (or perspectives-list [])
+                     weight-controllers (atom {})]
+                 ;; Create Slider controller for each Perspective
+                 (doseq [p perspectives]
+                   (swap! weight-controllers assoc
+                          (.-id p)
+                          (m/TextEditingController.
+                           :text (str (.-weight p)))))
+
+                 ;; Show dialog
+                 (m/showDialog
+                  .context ctx
+                  .builder (fn [dialog-ctx]
+                             (m/AlertDialog
+                              .title (comp/mongol-text-block
+                                      {:text "Adjust Perspective Weights"
+                                       :style (m/TextStyle
+                                               .fontSize (tokens/font-size :l)
+                                               .fontWeight m/FontWeight.bold)})
+                              .content (m/Container
+                                        .width 400
+                                        .height 500
+                                        .child (m/ListView
+                                                .children
                                                 (vec (map
-                                                      (fn [update]
-                                                        (-> (perspective-db/update-weight! dao
-                                                                                           (:id update)
-                                                                                           (:weight update)
-                                                                                           (:updated-at update))
-                                                            (.then (fn [_]
-                                                                    (perspective-db/update-weight-history! dao
-                                                                                                           (:id update)
-                                                                                                           (:history update)
-                                                                                                           (:updated-at update))))))
-                                                      @updates)))
-                                               (.then (fn [_]
-                                                       (m/Navigator.pop dialog-ctx)
-                                                       (toast/show-success-toast ctx
-                                                                                (str "Updated weights for "
-                                                                                     (count @updates)
-                                                                                     " Perspectives"))))
-                                               (.catchError (fn [error]
-                                                            (dart-core/print (str "Error updating weights: " error))
-                                                            (toast/show-error-toast ctx "Failed to update weights"))))))
-                              .child (m/Text "Save"))]))))
-      (.catchError (fn [error]
-                   (dart-core/print (str "Error loading perspectives: " error))
-                   (toast/show-error-toast ctx "Failed to load Perspectives")))))))
+                                                      (fn [p]
+                                                        (let [p-id (.-id p)
+                                                              p-title (.-title p)
+                                                              current-weight (.-weight p)
+                                                              weight-controller (get @weight-controllers p-id)]
+                                                          (m/Card
+                                                           .margin (m/EdgeInsets.symmetric
+                                                                    :vertical (tokens/space :s))
+                                                           .child (m/Padding
+                                                                   .padding (m/EdgeInsets.all (tokens/space :m))
+                                                                   .child (m/Column
+                                                                           .crossAxisAlignment m/CrossAxisAlignment.start
+                                                                           .children
+                                                                           [(comp/mongol-text-block
+                                                                             {:text p-title
+                                                                              :style (m/TextStyle
+                                                                                      .fontSize (tokens/font-size :m)
+                                                                                      .fontWeight m/FontWeight.w500)})
+                                                                            (m/SizedBox .height (tokens/space :s))
+                                                                            (m/Slider
+                                                                             .value current-weight
+                                                                             .min 0.0
+                                                                             .max 1.0
+                                                                             .divisions 100
+                                                                             .label (str (int (* current-weight 100)) "%")
+                                                                             .onChanged (fn [new-value]
+                                                                                          (set! (.-text weight-controller)
+                                                                                                (str new-value))
+                                                                                          nil))
+                                                                            (comp/mongol-text-block
+                                                                             {:text (str "Current Weight: "
+                                                                                         (int (* current-weight 100))
+                                                                                         "%")
+                                                                              :style (m/TextStyle
+                                                                                      .fontSize (tokens/font-size :s)
+                                                                                      .color (tokens/color :text-weak))})])))))
+                                                      perspectives))))
+                              .actions
+                              [(m/TextButton
+                                .onPressed (fn []
+                                             (m/Navigator.pop dialog-ctx))
+                                .child (m/Text "Cancel"))
+                               (m/TextButton
+                                .onPressed (fn []
+                                             ;; Save weights
+                                             (let [updates (atom [])]
+                                               (doseq [p perspectives]
+                                                 (let [p-id (.-id p)
+                                                       weight-controller (get @weight-controllers p-id)
+                                                       new-weight (double (dart-core/double.parse (.-text weight-controller)))
+                                                       old-weight (.-weight p)
+                                                       updated-at (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+                                                       old-history (.-weightHistory p)]
+                                                   (when (not= new-weight old-weight)
+                                                     (let [new-history (update-weight-history old-history new-weight updated-at)]
+                                                       (swap! updates conj
+                                                              {:id p-id
+                                                               :weight new-weight
+                                                               :history new-history
+                                                               :updated-at updated-at})))))
+
+                                               ;; Batch update
+                                               (-> (dart-core/Future.wait
+                                                    (vec (map
+                                                          (fn [update]
+                                                            (-> (perspective-db/update-weight! dao
+                                                                                               (:id update)
+                                                                                               (:weight update)
+                                                                                               (:updated-at update))
+                                                                (.then (fn [_]
+                                                                         (perspective-db/update-weight-history! dao
+                                                                                                                (:id update)
+                                                                                                                (:history update)
+                                                                                                                (:updated-at update))))))
+                                                          @updates)))
+                                                   (.then (fn [_]
+                                                            (m/Navigator.pop dialog-ctx)
+                                                            (toast/show-success-toast ctx
+                                                                                      (str "Updated weights for "
+                                                                                           (count @updates)
+                                                                                           " Perspectives"))))
+                                                   (.catchError (fn [error]
+                                                                  (dart-core/print (str "Error updating weights: " error))
+                                                                  (toast/show-error-toast ctx "Failed to update weights"))))))
+                                .child (m/Text "Save"))]))))))
+             (.catchError (fn [error]
+                            (dart-core/print (str "Error loading perspectives: " error))
+                            (toast/show-error-toast ctx "Failed to load Perspectives")))))
 
 (defn generate-next-period-forecast!
   "Generate next period Forecast
@@ -857,7 +857,8 @@
                   (.catchError (fn [error]
                                (dart-core/print (str "Error loading review data: " error))
                                (reset! loading false)
-                               (toast/show-error-toast ctx "Failed to load Review data")))))
+                               (toast/show-error-toast ctx "Failed to load Review data")
+                               nil))))
 
             (load-review-history []
               (reset! history-loading true)

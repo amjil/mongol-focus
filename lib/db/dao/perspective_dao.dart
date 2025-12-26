@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../app_database.dart';
 import '../tables/perspectives.dart';
 
 part 'perspective_dao.g.dart';

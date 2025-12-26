@@ -1,4 +1,4 @@
-import '../tables/forecasts.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Forecast Bridge - Bridge layer for Forecast operations

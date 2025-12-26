@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../app_database.dart';
 import '../tables/forecast_calibrations.dart';
 
 part 'forecast_calibration_dao.g.dart';

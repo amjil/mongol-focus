@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../app_database.dart';
 import '../tables/reviews.dart';
 
 part 'review_dao.g.dart';

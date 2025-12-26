@@ -307,10 +307,10 @@
                                                                         (.catchError (fn [error]
                                                                                        (dart-core/print (str "Error batch rescheduling: " error))
                                                                                        (reset! loading false)
-                                                                                       (toast/show-error-toast ctx "Failed to batch adjust"))))))))
+                                                                                       (toast/show-error-toast ctx "Failed to batch adjust")
+                                                                                       nil)))))))
                                                        (.catchError (fn [error]
-                                                                      (dart-core/print (str "Error showing date picker: " error))
-                                                                      nil))))))))
+                                                                      (dart-core/print (str "Error showing date picker: " error))))))))))
                               (when @batch-mode
                                 (m/IconButton
                                  .icon (m/Icon m/Icons.close)
@@ -392,7 +392,8 @@
                                               (.catchError (fn [error]
                                                              (dart-core/print (str "Error regenerating forecast: " error))
                                                              (reset! loading false)
-                                                             (toast/show-error-toast ctx "Failed to generate forecast"))))
+                                                             (toast/show-error-toast ctx "Failed to generate forecast")
+                                                             nil)))
                                           nil)
                              .child (comp/mongol-text-block
                                      {:text "Regenerate"}))]))
@@ -662,10 +663,10 @@
                                                                                                                      (toast/show-success-toast ctx "Forecast completed")))
                                                                                                             (.catchError (fn [error]
                                                                                                                            (dart-core/print (str "Error completing forecast: " error))
-                                                                                                                           (toast/show-error-toast ctx "Failed to complete forecast")))))))
-                                                                                             (.catchError (fn [error]
-                                                                                                            (dart-core/print (str "Error getting task: " error))
-                                                                                                            (toast/show-error-toast ctx "Failed to get task info"))))
+                                                                                                                           (toast/show-error-toast ctx "Failed to complete forecast"))))))
+                                                                                                            (.catchError (fn [error]
+                                                                                                                           (dart-core/print (str "Error getting task: " error))
+                                                                                                                           (toast/show-error-toast ctx "Failed to get task info")))))
 
                                                                                          :reschedule
                                                                                          ;; Reschedule - show date picker dialog
@@ -699,8 +700,7 @@
                                                                                                                                (dart-core/print (str "Error rescheduling forecast: " error))
                                                                                                                                (toast/show-error-toast ctx "Failed to adjust date"))))))))
                                                                                                (.catchError (fn [error]
-                                                                                                              (dart-core/print (str "Error showing date picker: " error))
-                                                                                                              nil))))
+                                                                                                              (dart-core/print (str "Error showing date picker: " error))))))
 
                                                                                          :cancel
                                                                                          ;; Cancel forecast
@@ -718,7 +718,7 @@
                                                                                                       (toast/show-success-toast ctx "Forecast canceled")))
                                                                                              (.catchError (fn [error]
                                                                                                             (dart-core/print (str "Error canceling forecast: " error))
-                                                                                                            (toast/show-error-toast ctx "Failed to cancel forecast"))))
+                                                                                                            (toast/show-error-toast ctx "Failed to cancel forecast")))
 
                                                                                          :delete
                                                                                          ;; Delete forecast
@@ -738,5 +738,5 @@
                                                                                                             (dart-core/print (str "Error deleting forecast: " error))
                                                                                                             (toast/show-error-toast ctx "Failed to delete forecast"))))
 
-                                                                                         nil))))))))
+                                                                                         nil)))))))))
                                                ordered-forecasts))))))])}))))))

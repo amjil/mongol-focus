@@ -321,13 +321,15 @@
                                                                   :style (m/TextStyle
                                                                          .fontSize (tokens/font-size :xs)
                                                                          .color (tokens/color :text-weak))})]))))
-                                                              analysis))))))
-                                [(m/TextButton
-                                  .onPressed (fn [] (m/Navigator.pop ctx))
-                                  .child (m/Text "Close"))])))
+                                                              analysis)))))
+                    .actions
+                    (list (m/TextButton
+                           .onPressed (fn [] (m/Navigator.pop ctx))
+                           .child (m/Text "Close")))))))
         (.then (fn [_] nil))
         (.catchError (fn [error]
-                     (dart-core/print (str "Error showing weight analysis: " error))))))
+                     (dart-core/print (str "Error showing weight analysis: " error))
+                     nil))))
 
 (defn show-rules-editor
   "Show Perspective rules editor dialog"

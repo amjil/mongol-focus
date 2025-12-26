@@ -1,5 +1,4 @@
-import '../tables/projects.dart';
-import '../tables/tasks.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Project Bridge - Bridge layer for Project operations

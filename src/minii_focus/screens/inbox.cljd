@@ -86,7 +86,8 @@
                                                 (toast/show-success-toast ctx "Tags updated")))
                                         (.catchError (fn [error]
                                                      (dart-core/print (str "Error updating task tags: " error))
-                                                     (toast/show-error-toast ctx "Failed to update tags"))))))
+                                                     (toast/show-error-toast ctx "Failed to update tags")
+                                                     nil)))))
                       .child (m/Text "Save"))])))
         (.then (fn [_] nil))
         (.catchError (fn [error]
@@ -155,7 +156,8 @@
                                                                  (toast/show-success-toast ctx "Tag added")))
                                                          (.catchError (fn [error]
                                                                       (dart-core/print (str "Error saving tags: " error))
-                                                                      (toast/show-error-toast ctx "Failed to save tag"))))))))
+                                                                      (toast/show-error-toast ctx "Failed to save tag")
+                                                                      nil)))))))
                                   .child (m/Text "Add"))
                                  (m/SizedBox .width (tokens/space :s))
                                  (m/TextButton
@@ -195,7 +197,8 @@
                                                                        (toast/show-success-toast ctx "Tag deleted")))
                                                                (.catchError (fn [error]
                                                                             (dart-core/print (str "Error deleting tag: " error))
-                                                                            (toast/show-error-toast ctx "Failed to delete")))))))))
+                                                                            (toast/show-error-toast ctx "Failed to delete")
+                                                                            nil))))))))
                                          @all-tags-atom)))))]))
                     .actions
                     [(m/TextButton
@@ -203,7 +206,8 @@
                       .child (m/Text "Close"))])))))
         (.catchError (fn [error]
                      (dart-core/print (str "Error opening tags manager: " error))
-                     (toast/show-error-toast ctx "Failed to open tag management"))))))
+                     (toast/show-error-toast ctx "Failed to open tag management")
+                     nil)))))
 
 (defn show-edit-relations-dialog
   "Show edit task relations dialog"
@@ -302,7 +306,8 @@
                                                 (toast/show-success-toast ctx "Relations updated")))
                                         (.catchError (fn [error]
                                                      (dart-core/print (str "Error updating task relations: " error))
-                                                     (toast/show-error-toast ctx "Failed to update relations"))))))
+                                                     (toast/show-error-toast ctx "Failed to update relations")
+                                                     nil)))))
                       .child (m/Text "Save"))])))
         (.then (fn [_] nil))
         (.catchError (fn [error]
@@ -358,7 +363,8 @@
                                                                    (dart-core/print (str "Error reloading templates: " error))))))
                                           (.catchError (fn [error]
                                                        (dart-core/print (str "Error saving template: " error))
-                                                       (toast/show-error-toast ctx "Failed to save template"))))))))
+                                                       (toast/show-error-toast ctx "Failed to save template")
+                                                       nil)))))))
                       .child (m/Text "Save"))])))
         (.then (fn [_] nil))
         (.catchError (fn [error]
@@ -409,7 +415,8 @@
                                                                                                 (reset! loading false))))))
                                                                        (.catchError (fn [error]
                                                                                     (dart-core/print (str "Error creating task from template: " error))
-                                                                                    (toast/show-error-toast ctx "Failed to create task")))))))
+                                                                                    (toast/show-error-toast ctx "Failed to create task")
+                                                                                    nil))))))
                                                         templates))))
                                 .actions
                                 [(m/TextButton
@@ -420,7 +427,8 @@
                                  (dart-core/print (str "Error showing template selector: " error))))))))
       (.catchError (fn [error]
                    (dart-core/print (str "Error loading templates: " error))
-                   (toast/show-error-toast ctx "Failed to load templates")))))
+                   (toast/show-error-toast ctx "Failed to load templates")
+                   nil))))
 
 (defn format-date-time
   "Format date time (display creation time)"
@@ -706,8 +714,8 @@
                                                          (toast/show-success-toast ctx "Task created")))
                                                 (.catchError (fn [error]
                                                                (dart-core/print (str "Error creating task: " error))
-                                                               (toast/show-error-toast ctx "Failed to create"))))
-                                            nil))))
+                                                               (toast/show-error-toast ctx "Failed to create")))
+                                            nil)))))
 
                   ;; Tag filter bar (All + each tag)
                   (m/Container
@@ -838,48 +846,49 @@
                                                                          .shrinkWrap true
                                                                          .children
                                                                          (vec (map (fn [priority]
-                                                                                   (m/ListTile
-                                                                                    .leading (m/Icon
-                                                                                             m/Icons.flag
-                                                                                             .color (case priority
-                                                                                                     0 m/Colors.red
-                                                                                                     1 m/Colors.orange
-                                                                                                     2 m/Colors.yellow.shade700
-                                                                                                     3 (tokens/color :text-weak)
-                                                                                                     4 m/Colors.blue
-                                                                                                     5 m/Colors.grey
-                                                                                                     (tokens/color :text-weak)))
-                                                                                    .title (comp/mongol-text-block
-                                                                                           {:text (str "P" priority)})
-                                                                                    .onTap (fn []
-                                                                                            (m/Navigator.pop priority-dialog-ctx)
-                                                                                            (reset! loading true)
-                                                                                            (let [selected-count (count @selected-tasks)]
-                                                                                              (-> (dart-core/Future.wait
-                                                                                                   (vec (map (fn [task-id]
-                                                                                                             (let [updates (bridge/dart-new
-                                                                                                                           app-db/TasksCompanion
-                                                                                                                           {:priority priority})]
-                                                                                                               (task/update-task! dao task-id updates)))
-                                                                                                           @selected-tasks)))
-                                                                                                  (.then (fn [_]
-                                                                                                          (reset! selected-tasks #{})
-                                                                                                          (reset! batch-mode false)
-                                                                                                          (-> (task/watch-all-tasks dao)
-                                                                                                              (.first)
-                                                                                                              (.then (fn [result]
-                                                                                                                      (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
-                                                                                                                        (reset! tasks incomplete-tasks)
-                                                                                                                        (reset! loading false))))
-                                                                                                              (.catchError (fn [error]
-                                                                                                                           (dart-core/print (str "Error reloading: " error))
-                                                                                                                           (reset! loading false))))
-                                                                                                          (toast/show-success-toast ctx (str "Updated priority for " selected-count " tasks"))))
-                                                                                                  (.catchError (fn [error]
-                                                                                                               (dart-core/print (str "Error batch updating priority: " error))
-                                                                                                               (reset! loading false)
-                                                                                                               (toast/show-error-toast ctx "Failed to batch update"))))))))
-                                                                                 (range 0 6))))])
+                                                                                     (m/ListTile
+                                                                                      .leading (m/Icon
+                                                                                                m/Icons.flag
+                                                                                                .color (case priority
+                                                                                                         0 m/Colors.red
+                                                                                                         1 m/Colors.orange
+                                                                                                         2 m/Colors.yellow.shade700
+                                                                                                         3 (tokens/color :text-weak)
+                                                                                                         4 m/Colors.blue
+                                                                                                         5 m/Colors.grey
+                                                                                                         (tokens/color :text-weak)))
+                                                                                      .title (comp/mongol-text-block
+                                                                                              {:text (str "P" priority)})
+                                                                                      .onTap (fn []
+                                                                                               (m/Navigator.pop priority-dialog-ctx)
+                                                                                               (reset! loading true)
+                                                                                               (let [selected-count (count @selected-tasks)]
+                                                                                                 (-> (dart-core/Future.wait
+                                                                                                      (vec (map (fn [task-id]
+                                                                                                                  (let [updates (bridge/dart-new
+                                                                                                                                 app-db/TasksCompanion
+                                                                                                                                 {:priority priority})]
+                                                                                                                    (task/update-task! dao task-id updates)))
+                                                                                                                @selected-tasks)))
+                                                                                                     (.then (fn [_]
+                                                                                                              (reset! selected-tasks #{})
+                                                                                                              (reset! batch-mode false)
+                                                                                                              (-> (task/watch-all-tasks dao)
+                                                                                                                  (.first)
+                                                                                                                  (.then (fn [result]
+                                                                                                                           (let [incomplete-tasks (filter (fn [t] (not (.-completed t))) (or result []))]
+                                                                                                                             (reset! tasks incomplete-tasks)
+                                                                                                                             (reset! loading false))))
+                                                                                                                  (.catchError (fn [error]
+                                                                                                                                 (dart-core/print (str "Error reloading: " error))
+                                                                                                                                 (reset! loading false))))
+                                                                                                              (toast/show-success-toast ctx (str "Updated priority for " selected-count " tasks"))))
+                                                                                                     (.catchError (fn [error]
+                                                                                                                    (dart-core/print (str "Error batch updating priority: " error))
+                                                                                                                    (reset! loading false)
+                                                                                                                    (toast/show-error-toast ctx "Failed to batch update")
+                                                                                                                    nil)))))))
+                                                                                   (range 0 6))))])
                                                               .actions
                                                               [(m/TextButton
                                                                 .onPressed (fn [] (m/Navigator.pop priority-dialog-ctx))
@@ -914,7 +923,8 @@
                                                   (.catchError (fn [error]
                                                                  (dart-core/print (str "Error batch archiving: " error))
                                                                  (reset! loading false)
-                                                                 (toast/show-error-toast ctx "Failed to batch archive"))))))
+                                                                 (toast/show-error-toast ctx "Failed to batch archive")
+                                                                 nil)))))
                               .child (m/Text "Archive"))])]))
                   (m/SizedBox))
 

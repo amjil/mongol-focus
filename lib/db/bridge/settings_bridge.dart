@@ -1,4 +1,4 @@
-import '../tables/settings.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Settings Bridge - Bridge layer for Settings operations

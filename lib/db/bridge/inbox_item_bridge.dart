@@ -1,4 +1,4 @@
-import '../tables/inbox_items.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Inbox Item Bridge - Bridge layer for Inbox Item operations

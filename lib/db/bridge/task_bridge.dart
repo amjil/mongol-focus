@@ -1,4 +1,4 @@
-import '../tables/tasks.dart';
+import '../app_database.dart';
 import 'dao_bridge.dart';
 
 /// Task Bridge - Bridge layer for Task operations
