@@ -1,5 +1,5 @@
 import '../app_database.dart';
-import '../forecast_timeline_aggregator.dart';
+import '../forecast/forecast_timeline_aggregator.dart';
 
 /// Forecast Timeline Bridge - Bridge layer for Forecast Timeline aggregation
 /// 

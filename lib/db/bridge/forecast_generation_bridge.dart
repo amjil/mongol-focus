@@ -1,5 +1,5 @@
 import '../app_database.dart';
-import '../forecast_generation.dart';
+import '../forecast/forecast_generation.dart';
 
 /// Forecast Generation Bridge - Bridge layer for Forecast generation operations
 /// 

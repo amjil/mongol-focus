@@ -1,10 +1,10 @@
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart';
 
-import 'app_database.dart';
-import 'bridge/perspective_query_bridge.dart';
-import 'tables/forecasts.dart';
-import 'tables/timeline_events.dart';
+import '../app_database.dart';
+import '../bridge/perspective_query_bridge.dart';
+import '../tables/forecasts.dart';
+import '../tables/timeline_events.dart';
 
 /// Convert DateTime to yyyyMMdd format (int)
 int dateTimeToYyyyMmDd(DateTime date) {

@@ -1,9 +1,9 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
-import 'app_database.dart';
-import 'tables/forecasts.dart';
-import 'tables/timeline_events.dart';
+import '../app_database.dart';
+import '../tables/forecasts.dart';
+import '../tables/timeline_events.dart';
 
 /// Aggregate Forecast to Timeline daily completion intensity
 Future<void> aggregateForecastToTimeline({
