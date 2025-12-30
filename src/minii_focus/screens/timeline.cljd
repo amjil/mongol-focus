@@ -7,7 +7,6 @@
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
-   [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.timeline :as timeline]
    [minii-focus.widgets.common :as widgets]))
 
@@ -59,23 +58,19 @@
     (m/Column .children (mapv (fn [e] (event-card {:event e})) events))]))
 
 (defn timeline-screen [_params]
-  (let [dao (app-state/get-dao)]
-
+  (let [dao (app-state/get-dao)
+        now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+        start-ts (int (/ (- now (* 7 24 60 60 1000)) 1000))
+        end-ts (int (/ now 1000))]
     (letfn [(group-by-date [es]
               (reduce (fn [acc e]
                         (let [d (widgets/format-yyyymmdd (int (/ (.-timestamp e) 86400)))]
                           (update acc d (fnil conj []) e)))
-                      (array-map) es))
-            (load-events []
-              (ui-state/update-timeline-state! assoc :loading true)
-              (let [now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
-                    start-ts (int (/ (- now (* 7 24 60 60 1000)) 1000))]
-                (-> (timeline/query-range dao start-ts (int (/ now 1000)))
-                    (.then (fn [res]
-                             (ui-state/update-timeline-state! assoc :events (or res []) :loading false))))))]
-      (load-events)
+                      {} es))]
       (f/widget
-       :watch [{:keys [events loading]} ui-state/timeline-state]
+       :watch [events (future (timeline/query-range dao start-ts end-ts))]
+       :let [loading (nil? events)
+             events (or events [])]
        (m/Scaffold
         .appBar (m/AppBar .title (comp/mongol-text-block {:text "Timeline"}))
         .body (if loading

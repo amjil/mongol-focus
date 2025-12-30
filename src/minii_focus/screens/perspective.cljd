@@ -8,7 +8,6 @@
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
-   [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.core.db.task :as task-db]
    [minii-focus.core.event.dispatch :as dispatch]
@@ -97,30 +96,23 @@
 
 (defn perspective-screen [_params]
   (let [dao (app-state/get-dao)]
-    (letfn [(load-all []
-              (ui-state/update-perspective-state! assoc :loading true)
-              (-> (perspective-db/watch-all dao)
-                  (.then (fn [s]
-                           (-> s
-                               (.first)
-                               (.then (fn [res]
-                                        (ui-state/update-perspective-state! assoc :perspectives (or res []))
-                                        (-> (task-db/watch-all-tasks dao)
-                                            (.then (fn [ts] (ui-state/update-perspective-state! assoc :all-tasks (or ts []) :loading false)))))))))))]
-      (load-all)
-      (f/widget
-       :context ctx
-       :watch [{:keys [perspectives all-tasks loading]} ui-state/perspective-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Perspective"}))
-        .body (if loading
-                (widgets/loading-indicator)
-                (if (empty? perspectives)
-                  (widgets/empty-state "No Perspective")
-                  (m/ListView
-                   .children
-                   (mapv (fn [p]
-                           (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
-                                 stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
-                             (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
-                         perspectives)))))))))
+    (f/widget
+     :context ctx
+     :watch [perspectives-res (stream :as-values (perspective-db/watch-all dao))
+             all-tasks-res (stream :as-values (task-db/watch-all-tasks dao))]
+     :let [loading (or (nil? perspectives-res) (nil? all-tasks-res))
+           perspectives (or (:value perspectives-res) [])
+           all-tasks (or (:value all-tasks-res) [])]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Perspective"}))
+      .body (if loading
+              (widgets/loading-indicator)
+              (if (empty? perspectives)
+                (widgets/empty-state "No Perspective")
+                (m/ListView
+                 .children
+                 (mapv (fn [p]
+                         (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
+                               stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
+                           (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
+                       perspectives))))))))

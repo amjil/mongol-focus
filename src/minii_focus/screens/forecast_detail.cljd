@@ -21,10 +21,11 @@
            .child (m/Column
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
-                   [(comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})
-                    (m/SizedBox .height (tokens/space :xs))
-                    (comp/mongol-text-block {:text (str value) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold .color (or color (tokens/color :text-main)))})
-                    (when subtitle (comp/mongol-text-block {:text subtitle :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))}))]))))
+                   (filterv some?
+                    [(comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})
+                     (m/SizedBox .height (tokens/space :xs))
+                     (comp/mongol-text-block {:text (str value) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold .color (or color (tokens/color :text-main)))})
+                     (when subtitle (comp/mongol-text-block {:text subtitle :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))}))])))))
 
 (defn forecast-detail-item [{:keys [forecast task-title]}]
   (m/Card
@@ -33,32 +34,32 @@
            .padding (m/EdgeInsets.all (tokens/space :m))
            .child (m/Row
                    .children
-                   [(m/Expanded .child (comp/mongol-text-block {:text task-title :style (m/TextStyle .fontSize (tokens/font-size :m) .decoration (when (.-done forecast) m/TextDecoration.lineThrough))}))
-                    (when (.-done forecast) (m/Icon m/Icons.check_circle .color m/Colors.green))]))))
+                   (filterv some?
+                    [(m/Expanded .child (comp/mongol-text-block {:text task-title :style (m/TextStyle .fontSize (tokens/font-size :m) .decoration (when (.-done forecast) m/TextDecoration.lineThrough))}))
+                     (when (.-done forecast) (m/Icon m/Icons.check_circle .color m/Colors.green))])))))
 
 (defn forecast-detail-screen [params]
   (let [date-yyyymmdd (if-let [id (:id params)] (int id) (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))))
         dao (app-state/get-dao)]
-    (letfn [(load-all []
-              (ui-state/update-forecast-detail-state! assoc :loading true)
-              (-> (forecast-db/watch-by-date dao date-yyyymmdd)
-                  (.first)
-                  (.then (fn [fs]
-                           (let [forecasts (or fs [])]
-                             (ui-state/update-forecast-detail-state! assoc :forecasts forecasts)
-                             (doseq [f forecasts]
-                               (-> (task-db/get-by-id dao (.-taskId f))
-                                   (.then (fn [t] (when t (ui-state/update-forecast-detail-state! update :titles assoc (.-taskId f) (.-title t))))))))))
-                  (.then (fn [_] (ui-state/update-forecast-detail-state! assoc :loading false)))))]
-      (load-all)
-      (f/widget
-       :watch [{:keys [forecasts titles loading]} ui-state/forecast-detail-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast Detail"}))
-        .body (if loading (widgets/loading-indicator)
-                  (m/ListView
-                   .children
-                   [(m/Container .padding (m/EdgeInsets.all (tokens/space :l)) .child (comp/mongol-text-block {:text (widgets/format-yyyymmdd date-yyyymmdd) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold)}))
-                    (stat-card {:title "Total" :value (count forecasts)})
-                    (stat-card {:title "Done" :value (count (filter #(.-done %) forecasts)) :color m/Colors.green})
-                    (m/Column .children (mapv (fn [f] (forecast-detail-item {:forecast f :task-title (get titles (.-taskId f) "Loading...")})) forecasts))])))))))
+    (f/widget
+     :watch [forecasts (stream
+                        (map (fn [fs]
+                               (let [tids (distinct (map #(.-taskId %) (or fs [])))]
+                                 (doseq [tid tids]
+                                   (when-not (get (:titles @ui-state/forecast-detail-state) tid)
+                                     (-> (task-db/get-by-id dao tid)
+                                         (.then (fn [t] (when t (ui-state/update-forecast-detail-state! update :titles assoc tid (.-title t)))))))))
+                               fs))
+                        :as-values (forecast-db/watch-by-date dao date-yyyymmdd))
+             {:keys [titles]} ui-state/forecast-detail-state]
+     :let [loading (nil? forecasts)
+           forecasts (or forecasts [])]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast Detail"}))
+      .body (if loading (widgets/loading-indicator)
+                (m/ListView
+                 .children
+                 [(m/Container .padding (m/EdgeInsets.all (tokens/space :l)) .child (comp/mongol-text-block {:text (widgets/format-yyyymmdd date-yyyymmdd) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold)}))
+                  (stat-card {:title "Total" :value (count forecasts)})
+                  (stat-card {:title "Done" :value (count (filter #(.-done %) forecasts)) :color m/Colors.green})
+                  (m/Column .children (mapv (fn [f] (forecast-detail-item {:forecast f :task-title (get titles (.-taskId f) "Loading...")})) forecasts))]))))))

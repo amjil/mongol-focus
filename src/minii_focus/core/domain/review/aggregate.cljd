@@ -127,7 +127,7 @@
   
   Returns: DateTime"
   [date]
-  (dart-core/DateTime (.year date) (.month date) 1))
+  (dart-core/DateTime. (.year date) (.month date) 1))
 
 (defn end-of-month
   "Calculate end time of the month containing the specified date (last day 23:59:59)
@@ -137,9 +137,9 @@
   
   Returns: DateTime"
   [date]
-  (let [next-month (if (= (.month date) 12)
-                     (dart-core/DateTime (+ (.year date) 1) 1 1)
-                     (dart-core/DateTime (.year date) (+ (.month date) 1) 1))]
+  (let [next-month (if (= (.-month date) 12)
+                     (dart-core/DateTime. (+ (.-year date) 1) 1 1)
+                     (dart-core/DateTime. (.-year date) (+ (.-month date) 1) 1))]
     (.subtract next-month (dart-core/Duration :seconds 1))))
 
 (defn get-period-boundaries
@@ -152,7 +152,7 @@
   Returns: {:start DateTime :end DateTime}"
   [period-type & [selected-date]]
   (let [date (or selected-date (dart-core/DateTime.now))
-        base-date (dart-core/DateTime (.year date) (.month date) (.day date))]
+        base-date (dart-core/DateTime. (.-year date) (.-month date) (.-day date))]
     (case period-type
       :day
       {:start base-date

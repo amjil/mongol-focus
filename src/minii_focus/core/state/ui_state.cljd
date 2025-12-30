@@ -1,5 +1,18 @@
 (ns minii-focus.core.state.ui-state
-  "UI State Management for the application")
+  "UI State Management for the application"
+  (:require
+   ["dart:core" :as dart-core]
+   ["dart:async" :as async]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.forecast :as forecast-db]
+   [minii-focus.core.db.timeline :as timeline-db]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.time :as time]
+   [minii-focus.core.utils.toast :as toast]
+   [minii-focus.core.components.focus-depth :as focus-depth]))
+
+(def pomodoro-duration-seconds (* 25 60))
 
 ;; Focus screen state
 (defonce focus-state
@@ -9,14 +22,17 @@
     :is-focusing false
     :is-paused false
     :start-time nil
-    :remaining-seconds 1500 ; Default pomodoro duration
+    :remaining-seconds pomodoro-duration-seconds
     :today-forecasts []
     :task-titles-map {}
     :loading false
     :today-stats {:total-minutes 0 :session-count 0 :completed-count 0 :pause-count 0}
     :focus-depth-history []
     :current-focus-depth 0.0
-    :pause-count 0}))
+    :pause-count 0
+    :timer nil
+    :dao nil
+    :db-ctx nil}))
 
 ;; Today screen state
 (defonce today-state
@@ -102,6 +118,108 @@
 
 (defn update-focus-state! [f & args]
   (apply swap! focus-state f args))
+
+(defn load-today-stats []
+  (let [dao (or (:dao @focus-state) (app-state/get-dao))
+        now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+        today-start-ts (int (/ (- now (* 24 60 60 1000)) 1000))
+        today-end-ts (int (/ now 1000))]
+    (-> (timeline-db/query-range dao today-start-ts today-end-ts)
+        (.then (fn [events]
+                 (let [focus-events (filter #(re-find #"^focus/" (.-type %)) (or events []))
+                       start-count (count (filter #(= (.-type %) "focus/start") focus-events))
+                       complete-count (count (filter #(= (.-type %) "focus/complete") focus-events))
+                       p-count (count (filter #(= (.-type %) "focus/pause") focus-events))
+                       total-minutes (reduce + 0 (map #(or (.-duration %) 0) (filter #(= (.-type %) "focus/complete") focus-events)))]
+                   (update-focus-state!
+                    assoc :today-stats
+                    {:total-minutes total-minutes
+                     :session-count start-count
+                     :completed-count complete-count
+                     :pause-count p-count})))))))
+
+(defn load-today-forecasts []
+  (let [dao (or (:dao @focus-state) (app-state/get-dao))]
+    (update-focus-state! assoc :loading true)
+    (let [today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+      (-> (forecast-db/watch-by-date dao today-yyyymmdd)
+          (.first)
+          (.then (fn [forecasts]
+                   (let [fs (or forecasts [])
+                         tids (distinct (map #(.-taskId %) fs))]
+                     (update-focus-state! assoc :today-forecasts fs)
+                     (-> (dart-core/Future.wait
+                          (mapv (fn [tid]
+                                  (-> (task-db/get-by-id dao tid)
+                                      (.then (fn [t] (when t (update-focus-state! update :task-titles-map assoc tid (.-title t)))))))
+                                tids))
+                         (.then (fn [_] (update-focus-state! assoc :loading false)))))))))))
+
+(defn start-focus [f ctx]
+  (let [dao (or (:dao @focus-state) (app-state/get-dao))
+        db-ctx (or (:db-ctx @focus-state) {:db (app-state/get-db) :dao dao})
+        tid (.-taskId f)
+        sid (str "focus-session-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))
+        title (get (:task-titles-map @focus-state) tid "Unknown task")]
+    (-> (dispatch/dispatch-event! db-ctx
+                                  {:type :focus/start
+                                   :payload {:forecast-id (.-id f) :session-id sid :title (str "Start Focus: " title)}
+                                   :source :ui})
+        (.then (fn [_]
+                 (update-focus-state!
+                  merge
+                  {:current-forecast f
+                   :session-id sid
+                   :is-focusing true
+                   :is-paused false
+                   :start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+                   :remaining-seconds pomodoro-duration-seconds
+                   :pause-count 0
+                   :current-focus-depth 0.0})
+                 (let [timer (async/Timer.periodic
+                              (dart-core/Duration .seconds 1)
+                              (fn [_]
+                                (let [{:keys [is-focusing is-paused remaining-seconds pause-count]} @focus-state]
+                                  (when (and is-focusing (not is-paused))
+                                    (let [new-rem (dec remaining-seconds)
+                                          depth (focus-depth/calculate-focus-depth (- pomodoro-duration-seconds new-rem) pomodoro-duration-seconds pause-count false)]
+                                      (update-focus-state!
+                                       merge
+                                       {:current-focus-depth depth
+                                        :remaining-seconds (if (<= new-rem 0) 0 new-rem)}))))))]
+                   (update-focus-state! assoc :timer timer))
+                 (toast/show-success-toast ctx "Focus started"))))))
+
+(defn complete-focus [ctx]
+  (let [{:keys [current-forecast session-id start-time task-titles-map current-focus-depth timer dao db-ctx]} @focus-state
+        dao (or dao (app-state/get-dao))
+        db-ctx (or db-ctx {:db (app-state/get-db) :dao dao})
+        dur (int (/ (- (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) start-time) 60000))
+        title (get task-titles-map (.-taskId current-forecast) "Unknown task")]
+    (when (and current-forecast session-id)
+      (-> (dispatch/dispatch-event! db-ctx
+                                    {:type :focus/complete
+                                     :payload {:session-id session-id :duration-minutes dur :title (str "Complete Focus: " title " (" dur " minutes)")}
+                                     :source :ui})
+          (.then (fn [_]
+                   (-> (forecast-db/mark-done! dao (.-id current-forecast))
+                       (.then (fn [_]
+                                (toast/show-success-toast ctx "Focus completed")
+                                (update-focus-state!
+                                 (fn [s]
+                                   (-> s
+                                       (assoc :is-focusing false)
+                                       (update :focus-depth-history conj current-focus-depth))))
+                                (when timer (.cancel timer) (update-focus-state! assoc :timer nil))
+                                (load-today-forecasts)
+                                (load-today-stats))))))))))
+
+(defn init-focus-screen! []
+  (let [dao (app-state/get-dao)
+        db-ctx {:db (app-state/get-db) :dao dao}]
+    (update-focus-state! merge {:dao dao :db-ctx db-ctx})
+    (load-today-forecasts)
+    (load-today-stats)))
 
 (defn reset-focus-state! [new-val]
   (reset! focus-state new-val))

@@ -1,7 +1,6 @@
 (ns minii-focus.screens.inbox
   (:require
    ["package:flutter/material.dart" :as m]
-   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
@@ -16,25 +15,26 @@
      .child (m/ListTile
              .leading (m/Checkbox .value false .onChanged (fn [_] (on-complete tid)))
              .title (m/Text (.-title task-item))
-             .subtitle (m/Column .children [(m/Text (widgets/format-date-time (.-createdAt task-item)))
-                                            (let [ts (get task-tags-map tid [])] (when (seq ts) (m/Wrap .children (mapv #(m/Chip .label (m/Text %)) ts))))])))))
+            .subtitle (m/Column .children (filterv some? [(m/Text (widgets/format-date-time (.-createdAt task-item)))
+                                                           (let [ts (get task-tags-map tid [])] (when (seq ts) (m/Wrap .children (mapv #(m/Chip .label (m/Text %)) ts))))]))))))
 
 (defn inbox-screen [_params]
   (let [dao (app-state/get-dao)]
-    (letfn [(load-all []
-              (ui-state/update-inbox-state! assoc :loading true)
-              (-> (task/watch-all-tasks dao)
-                  (.first)
-                  (.then (fn [res]
-                           (let [ins (filter #(not (.-completed %)) (or res []))]
-                             (ui-state/update-inbox-state! assoc :tasks ins)
-                             (-> (dart-core/Future.wait (mapv (fn [t] (-> (task-tags/get-task-tags dao (.-id t)) (.then (fn [tags] [(.-id t) tags])))) ins))
-                                 (.then (fn [rs] (ui-state/update-inbox-state! assoc :task-tags-map (into {} rs) :loading false)))))))))]
-      (load-all)
-      (f/widget
-       :watch [{:keys [tasks task-tags-map loading]} ui-state/inbox-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (m/Text "Inbox"))
-        .body (if loading
-                (widgets/loading-indicator)
-                (m/ListView .children (mapv (fn [t] (task-item-card {:task-item t :task-tags-map task-tags-map :on-complete (fn [_] (load-all))})) tasks))))))))
+    (f/widget
+     :watch [tasks (task/watch-all-tasks dao)
+             {:keys [task-tags-map]} ui-state/inbox-state]
+     :let [loading (nil? tasks)
+           tasks (or tasks [])
+           _ (when (and (not loading) (coll? tasks))
+               (let [ins (filter #(not (.-completed %)) tasks)]
+                 (doseq [t ins]
+                   (let [tid (.-id t)]
+                     (when-not (contains? task-tags-map tid)
+                       (-> (task-tags/get-task-tags dao tid)
+                           (.then (fn [tags] (ui-state/update-inbox-state! update :task-tags-map assoc tid tags)))))))))]
+     (m/Scaffold
+      .appBar (m/AppBar .title (m/Text "Inbox"))
+      .body (if loading
+              (widgets/loading-indicator)
+              (let [ins (filter #(not (.-completed %)) tasks)]
+                (m/ListView .children (mapv (fn [t] (task-item-card {:task-item t :task-tags-map task-tags-map :on-complete (fn [_] nil)})) ins))))))))

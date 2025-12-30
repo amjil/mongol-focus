@@ -43,29 +43,25 @@
 
 (defn review-screen [_params]
   (let [dao (app-state/get-dao)]
-    (letfn [(load-data []
-              (ui-state/update-review-state! assoc :loading true)
-              (-> (aggregate/aggregate-review-data! dao (:period-type @ui-state/review-state))
-                  (.then (fn [data]
-                           (ui-state/update-review-state! assoc :review-data data :loading false)))))]
-      (load-data)
-      (f/widget
-       :watch [{:keys [review-data loading]} ui-state/review-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Review"})
-                         .actions [(m/PopupMenuButton
-                                    .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v) (load-data))
-                                    .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
-                                                          (m/PopupMenuItem .value :week .child (m/Text "Week"))
-                                                          (m/PopupMenuItem .value :month .child (m/Text "Month"))]))])
-        .body (if loading
-                (widgets/loading-indicator)
-                (if (nil? review-data)
-                  (widgets/empty-state "No data for this period")
-                  (m/ListView
-                   .children
-                   [(overview-card {:overview (:overview review-data)})
-                    (m/Padding
-                     .padding (m/EdgeInsets.all (tokens/space :m))
-                     .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)}))
-                    (m/Column .children (mapv (fn [p-data] (perspective-review-item {:data p-data})) (:perspectives review-data)))]))))))))
+    (f/widget
+     :watch [{:keys [period-type]} ui-state/review-state
+             review-data (future (aggregate/aggregate-review-data! dao period-type))]
+     :let [loading (nil? review-data)]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Review"})
+                       .actions [(m/PopupMenuButton
+                                  .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
+                                  .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
+                                                        (m/PopupMenuItem .value :week .child (m/Text "Week"))
+                                                        (m/PopupMenuItem .value :month .child (m/Text "Month"))]))])
+      .body (if loading
+              (widgets/loading-indicator)
+              (if (nil? review-data)
+                (widgets/empty-state "No data for this period")
+                (m/ListView
+                 .children
+                 [(overview-card {:overview (:overview review-data)})
+                  (m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)}))
+                  (m/Column .children (mapv (fn [p-data] (perspective-review-item {:data p-data})) (:perspectives review-data)))])))))))

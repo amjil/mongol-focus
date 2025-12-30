@@ -18,7 +18,7 @@
   Example:
   (ts->yyyymmdd 1713427200) => 20240419"
   [ts]
-  (let [date-time (dart-core/DateTime.fromMillisecondsSinceEpoch ts)
+  (let [date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (* ts 1000))
         year (.year date-time)
         month (.month date-time)
         day (.day date-time)]
@@ -41,8 +41,8 @@
         month-day (mod yyyymmdd 10000)
         month (int (/ month-day 100))
         day (mod month-day 100)
-        date-time (dart-core/DateTime year month day)]
-    (int (.secondsSinceEpoch date-time))))
+        date-time (dart-core/DateTime. year month day)]
+    (int (/ (.millisecondsSinceEpoch date-time) 1000))))
 
 (defn yyyymmdd-add-days
   "Add specified number of days to yyyyMMdd date
@@ -60,7 +60,7 @@
         month-day (mod yyyymmdd 10000)
         month (int (/ month-day 100))
         day (mod month-day 100)
-        date-time (dart-core/DateTime year month day)
+        date-time (dart-core/DateTime. year month day)
         new-date-time (.add date-time (dart-core/Duration :days days))
         new-year (.year new-date-time)
         new-month (.month new-date-time)

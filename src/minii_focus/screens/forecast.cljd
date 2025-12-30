@@ -22,23 +22,21 @@
            .trailing (if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green) nil))))
 
 (defn forecast-screen [_params]
-  (let [dao (app-state/get-dao)]
-    (letfn [(load-fs [yyyymmdd]
-              (ui-state/update-forecast-state! assoc :loading true)
-              (-> (forecast/watch-by-date dao yyyymmdd)
-                  (.first)
-                  (.then (fn [fs]
-                           (let [forecasts (or fs [])]
-                             (ui-state/update-forecast-state! assoc :forecasts-list forecasts)
-                             (doseq [f forecasts]
-                               (-> (task/get-by-id dao (.-taskId f))
-                                   (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc (.-taskId f) (.-title t))))))))))
-                  (.then (fn [_] (ui-state/update-forecast-state! assoc :loading false)))))]
-      (load-fs (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))))
-      (f/widget
-       :watch [{:keys [forecasts-list task-titles-map loading]} ui-state/forecast-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast"}))
-        .body (if loading (widgets/loading-indicator)
-                  (if (empty? forecasts-list) (widgets/empty-state "No forecasts")
-                      (m/ListView .children (mapv (fn [f] (forecast-item-card {:forecast-item f :task-title (get task-titles-map (.-taskId f) "Loading...")})) forecasts-list)))))))))
+  (let [dao (app-state/get-dao)
+        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+    (f/widget
+     :watch [forecasts (forecast/watch-by-date dao today-yyyymmdd)
+             {:keys [task-titles-map]} ui-state/forecast-state]
+     :let [loading (nil? forecasts)
+           forecasts (or forecasts [])
+           _ (when (and (not loading) (coll? forecasts))
+               (let [tids (distinct (map #(.-taskId %) forecasts))]
+                 (doseq [tid tids]
+                   (when-not (get task-titles-map tid)
+                     (-> (task/get-by-id dao tid)
+                         (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc tid (.-title t))))))))))]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast"}))
+      .body (if loading (widgets/loading-indicator)
+                (if (empty? forecasts) (widgets/empty-state "No forecasts")
+                    (m/ListView .children (mapv (fn [f] (forecast-item-card {:forecast-item f :task-title (get task-titles-map (.-taskId f) "Loading...")})) forecasts))))))))

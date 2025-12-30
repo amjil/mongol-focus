@@ -13,32 +13,25 @@
    [minii-focus.widgets.common :as widgets]))
 
 (defn forecast-settings-section [{:keys [dao on-updated]}]
-  (letfn [(load-settings []
-            (ui-state/update-settings-state! assoc :loading true)
-            (-> (settings-db/get-value dao "daily_capacity")
-                (.then (fn [v]
-                         (when v (ui-state/update-settings-state! assoc :daily-capacity (dart-core/double.parse v)))
-                         (ui-state/update-settings-state! assoc :loading false)))))]
-    (load-settings)
-    (f/widget
-     :watch [{:keys [daily-capacity loading]} ui-state/settings-state]
-     (m/Card
-      .margin (m/EdgeInsets.all (tokens/space :m))
-      .child (m/Padding
-              .padding (m/EdgeInsets.all (tokens/space :m))
-              .child (m/Column
+  (f/widget
+   :watch [daily-capacity-val (future (settings-db/get-value dao "daily_capacity"))
+           {:keys [daily-capacity]} ui-state/settings-state]
+   :let [daily-capacity (or (some-> daily-capacity-val dart-core/double.tryParse) daily-capacity)]
+   (m/Card
+    .margin (m/EdgeInsets.all (tokens/space :m))
+    .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(comp/mongol-text-block {:text "Forecast Settings" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
+                     (m/SizedBox .height (tokens/space :m))
+                     (m/Column
                       .crossAxisAlignment m/CrossAxisAlignment.start
                       .children
-                      [(comp/mongol-text-block {:text "Forecast Settings" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                       (m/SizedBox .height (tokens/space :m))
-                       (if loading
-                         (widgets/loading-indicator)
-                         (m/Column
-                          .crossAxisAlignment m/CrossAxisAlignment.start
-                          .children
-                          [(comp/mongol-text-block {:text (str "Daily Capacity: " (int daily-capacity))})
-                           (m/Slider .value daily-capacity .min 1.0 .max 10.0 .divisions 9 .onChanged (fn [v] (ui-state/update-settings-state! assoc :daily-capacity v)))
-                           (m/ElevatedButton .onPressed (fn [] (-> (settings-db/set-value! dao "daily_capacity" (str daily-capacity)) (.then (fn [_] (on-updated))))) .child (m/Text "Save"))]))]))))))
+                      [(comp/mongol-text-block {:text (str "Daily Capacity: " (int daily-capacity))})
+                       (m/Slider .value daily-capacity .min 1.0 .max 10.0 .divisions 9 .onChanged (fn [v] (ui-state/update-settings-state! assoc :daily-capacity v)))
+                       (m/ElevatedButton .onPressed (fn [] (-> (settings-db/set-value! dao "daily_capacity" (str daily-capacity)) (.then (fn [_] (on-updated))))) .child (m/Text "Save"))])])))))
 
 (defn app-info-section []
   (m/Card

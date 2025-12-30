@@ -5,7 +5,6 @@
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
-   [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.core.db.task :as task-db]
    [minii-focus.widgets.common :as widgets]))
@@ -13,46 +12,39 @@
 (defn perspective-detail-screen [params]
   (let [pid (:id params)
         dao (app-state/get-dao)]
-    (letfn [(load-all []
-              (ui-state/update-perspective-detail-state! assoc :loading true)
-              (-> (perspective-db/get-by-id dao pid)
-                  (.then (fn [p]
-                           (ui-state/update-perspective-detail-state! assoc :perspective p)
-                           (if p
-                             (-> (task-db/watch-all-tasks dao)
-                                 (.then (fn [ts]
-                                          (ui-state/update-perspective-detail-state! assoc :tasks (filter (fn [t] (some #(= % pid) (widgets/parse-json (.-perspectives t)))) ts))
-                                          (ui-state/update-perspective-detail-state! assoc :loading false))))
-                             (ui-state/update-perspective-detail-state! assoc :loading false))))))]
-      (load-all)
-      (f/widget
-       :watch [{:keys [perspective tasks loading]} ui-state/perspective-detail-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text (or (some-> perspective .-title) "Perspective Detail")}))
-        .body (if loading
-                (widgets/loading-indicator)
-                (if (nil? perspective)
-                  (widgets/empty-state "Perspective not found")
-                  (m/ListView
+    (f/widget
+     :watch [perspective-res (stream :as-values (perspective-db/get-by-id dao pid))
+             all-tasks-res (stream :as-values (task-db/watch-all-tasks dao))]
+     :let [loading (or (nil? perspective-res) (nil? all-tasks-res))
+           perspective (:value perspective-res)
+           all-tasks (:value all-tasks-res)
+           tasks (if loading [] (filter (fn [t] (some #(= % pid) (widgets/parse-json (.-perspectives t)))) (or all-tasks [])))]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text (or (some-> perspective .-title) "Perspective Detail")}))
+      .body (if loading
+              (widgets/loading-indicator)
+              (if (nil? perspective)
+                (widgets/empty-state "Perspective not found")
+                (m/ListView
+                 .children
+                 [(m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .child (m/Column
+                           .crossAxisAlignment m/CrossAxisAlignment.start
+                           .children
+                           [(comp/mongol-text-block {:text "Weight History" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                            (widgets/weight-history-chart {:weight-history (widgets/parse-json (.-weightHistory perspective))})
+                            (m/SizedBox .height (tokens/space :m))
+                            (comp/mongol-text-block {:text (str "Current Weight: " (int (* (.-weight perspective) 100)) "%")})]))
+                  (m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :m))
+                   .child (comp/mongol-text-block {:text "Tasks" :style (m/TextStyle .fontWeight m/FontWeight.bold)}))
+                  (m/Column
                    .children
-                   [(m/Padding
-                     .padding (m/EdgeInsets.all (tokens/space :m))
-                     .child (m/Column
-                             .crossAxisAlignment m/CrossAxisAlignment.start
-                             .children
-                             [(comp/mongol-text-block {:text "Weight History" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
-                              (widgets/weight-history-chart {:weight-history (widgets/parse-json (.-weightHistory perspective))})
-                              (m/SizedBox .height (tokens/space :m))
-                              (comp/mongol-text-block {:text (str "Current Weight: " (int (* (.-weight perspective) 100)) "%")})]))
-                    (m/Padding
-                     .padding (m/EdgeInsets.all (tokens/space :m))
-                     .child (comp/mongol-text-block {:text "Tasks" :style (m/TextStyle .fontWeight m/FontWeight.bold)}))
-                    (m/Column
-                     .children
-                     (mapv (fn [t]
-                             (m/Card
-                              .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 16)
-                              .child (m/ListTile
-                                      .title (comp/mongol-text-block {:text (.-title t)})
-                                      .trailing (if (.-completed t) (m/Icon m/Icons.check_circle .color m/Colors.green) nil))))
-                           tasks))]))))))))
+                   (mapv (fn [t]
+                           (m/Card
+                            .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 16)
+                            .child (m/ListTile
+                                    .title (comp/mongol-text-block {:text (.-title t)})
+                                    .trailing (if (.-completed t) (m/Icon m/Icons.check_circle .color m/Colors.green) nil))))
+                         tasks))])))))))

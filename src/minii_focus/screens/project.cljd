@@ -70,32 +70,29 @@
 
 (defn project-screen [_params]
   (let [dao (app-state/get-dao)]
-    (letfn [(load-all []
-              (ui-state/update-project-state! assoc :loading true)
-              (-> (project-db/watch-all-projects dao)
-                  (.then (fn [res]
-                           (let [projects (or res [])]
-                             (ui-state/update-project-state! assoc :projects projects)
-                             (doseq [p projects]
-                               (-> (project-db/get-next-action dao (.-id p))
-                                   (.then (fn [na] (ui-state/update-project-state! update :next-actions assoc (.-id p) na)))))
-                             (ui-state/update-project-state! assoc :loading false))))))]
-      (load-all)
-      (f/widget
-       :context ctx
-       :watch [{:keys [projects selected-project next-actions project-tasks loading]} ui-state/project-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Project"}))
-        .body (comp/mongol-column-layout
-               {:main-width 0.3 :side-width 0.7
-                :main-column (if loading (widgets/loading-indicator)
-                                 (if (empty? projects) (widgets/empty-state "No projects")
-                                     (m/ListView .children (mapv (fn [p] (project-list-item {:project p :next-action (get next-actions (.-id p)) :health (project-db/project-health p (get next-actions (.-id p)))
-                                                                                             :on-selected (fn [sp] (ui-state/update-project-state! assoc :selected-project sp) (-> (project-db/get-project-tasks dao (.-id sp)) (.then (fn [ts] (ui-state/update-project-state! update :project-tasks assoc (.-id sp) ts)))))})) projects))))
-                :side-column (if-let [p selected-project]
-                               (m/ListView .children [(project-status-card {:project p :health (project-db/project-health p (get next-actions (.-id p)))
-                                                                              :on-archive (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui}) (.then (fn [_] (load-all)))))
-                                                                              :on-restore (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui}) (.then (fn [_] (load-all)))))
-                                                                              :on-save-template (fn [_] (toast/show-info-toast ctx "Template feature in progress"))})
-                                                      (project-progress-card {:tasks (get project-tasks (.-id p) [])})])
-                               (widgets/empty-state "Select a project"))}))))))
+    (f/widget
+     :context ctx
+     :watch [projects (stream (map identity) :as-values (project-db/watch-all-projects dao))
+             {:keys [selected-project next-actions project-tasks]} ui-state/project-state]
+     :let [loading (nil? projects)
+           projects (or projects [])
+           _ (when (and (not loading) (coll? projects))
+               (doseq [p projects]
+                 (when-not (contains? next-actions (.-id p))
+                   (-> (project-db/get-next-action dao (.-id p))
+                       (.then (fn [na] (ui-state/update-project-state! update :next-actions assoc (.-id p) na)))))))]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Project"}))
+      .body (comp/mongol-column-layout
+             {:main-width 0.3 :side-width 0.7
+              :main-column (if loading (widgets/loading-indicator)
+                               (if (empty? projects) (widgets/empty-state "No projects")
+                                   (m/ListView .children (mapv (fn [p] (project-list-item {:project p :next-action (get next-actions (.-id p)) :health (project-db/project-health p (get next-actions (.-id p)))
+                                                                                           :on-selected (fn [sp] (ui-state/update-project-state! assoc :selected-project sp) (-> (project-db/get-project-tasks dao (.-id sp)) (.then (fn [ts] (ui-state/update-project-state! update :project-tasks assoc (.-id sp) ts)))))})) projects))))
+              :side-column (if-let [p selected-project]
+                             (m/ListView .children [(project-status-card {:project p :health (project-db/project-health p (get next-actions (.-id p)))
+                                                                            :on-archive (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui})))
+                                                                            :on-restore (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui})))
+                                                                            :on-save-template (fn [_] (toast/show-info-toast ctx "Template feature in progress"))})
+                                                    (project-progress-card {:tasks (get project-tasks (.-id p) [])})])
+                             (widgets/empty-state "Select a project"))})))))

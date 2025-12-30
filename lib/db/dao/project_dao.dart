@@ -19,10 +19,10 @@ class ProjectDao extends DatabaseAccessor<AppDatabase> with _$ProjectDaoMixin {
   }
 
   /// Watch all projects
-  Future<List<Project>> watchAllProjects() async {
-    return await (select(projects)
+  Stream<List<Project>> watchAllProjects() {
+    return (select(projects)
           ..orderBy([(p) => OrderingTerm.desc(p.createdAt)]))
-        .get();
+        .watch();
   }
 
   /// Get project by ID

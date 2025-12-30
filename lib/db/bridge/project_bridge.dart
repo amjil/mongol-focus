@@ -11,7 +11,7 @@ Future<void> insertProject(DaoBridge bridge, ProjectsCompanion project) {
 }
 
 /// Watch all projects
-Future<List<Project>> watchAllProjects(DaoBridge bridge) {
+Stream<List<Project>> watchAllProjects(DaoBridge bridge) {
   return bridge.projectDao.watchAllProjects();
 }
 

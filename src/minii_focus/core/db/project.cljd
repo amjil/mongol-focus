@@ -49,12 +49,12 @@
      companion)))
 
 (defn watch-all-projects
-  "Query all projects
+  "Watch all projects
   
   Parameters:
   - dao-bridge: DaoBridge instance
   
-  Returns: Future<List<Project>>"
+  Returns: Stream<List<Project>>"
   [dao-bridge]
   (bridge/dart-call
    project-bridge/watchAllProjects

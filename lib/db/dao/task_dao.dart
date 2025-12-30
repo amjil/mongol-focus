@@ -24,8 +24,8 @@ class TaskDao extends DatabaseAccessor<AppDatabase> with _$TaskDaoMixin {
   }
 
   /// Get all tasks (incomplete)
-  Future<List<Task>> watchAllTasks() async {
-    return await (select(tasks)..where((t) => t.completed.equals(false))).get();
+  Stream<List<Task>> watchAllTasks() {
+    return (select(tasks)..where((t) => t.completed.equals(false))).watch();
   }
 
   /// Get task by ID

@@ -76,7 +76,7 @@
           year (.year now)
           month (.month now)
           day (.day now)]
-      (dart-core/DateTime year month day))
+      (dart-core/DateTime. year month day))
     
     (= value :next-7-days)
     ;; Return date range for next 7 days

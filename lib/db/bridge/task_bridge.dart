@@ -16,7 +16,7 @@ Future<void> insertTask(DaoBridge bridge, TasksCompanion task) {
 }
 
 /// Get all tasks (incomplete)
-Future<List<Task>> watchAllTasks(DaoBridge bridge) {
+Stream<List<Task>> watchAllTasks(DaoBridge bridge) {
   return bridge.taskDao.watchAllTasks();
 }
 

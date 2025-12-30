@@ -67,12 +67,12 @@
      companion)))
 
 (defn watch-all-tasks
-  "Query all tasks (incomplete)
+  "Watch all tasks (incomplete)
   
   Parameters:
   - dao-bridge: DaoBridge instance
   
-  Returns: Future<List<Task>>"
+  Returns: Stream<List<Task>>"
   [dao-bridge]
   (bridge/dart-call
    task-bridge/watchAllTasks

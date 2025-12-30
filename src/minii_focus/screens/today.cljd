@@ -30,53 +30,49 @@
                           .onPressed (fn [] (on-action forecast-item :start))))))))
 
 (defn today-screen [_params]
-  (let [dao (app-state/get-dao)]
+  (let [dao (app-state/get-dao)
+        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
 
-    (letfn [(load-today []
-              (ui-state/update-today-state! assoc :loading true)
-              (let [today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
-                (-> (forecast-db/watch-by-date dao today-yyyymmdd)
-                    (.first)
-                    (.then (fn [forecasts]
-                             (let [fs (or forecasts [])
-                                   tids (distinct (map #(.-taskId %) fs))]
-                               (ui-state/update-today-state! assoc :forecasts fs)
-                               (-> (dart-core/Future.wait
-                                    (mapv (fn [tid]
-                                            (-> (task-db/get-by-id dao tid)
-                                                (.then (fn [t] (when t (ui-state/update-today-state! update :task-titles-map assoc tid (.-title t)))))))
-                                          tids))
-                                   (.then (fn [_] (ui-state/update-today-state! assoc :loading false))))))))))]
-
-      (load-today)
-
-      (f/widget
-       :watch [{:keys [forecasts task-titles-map loading]} ui-state/today-state]
-       (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Today"}))
-        .body (m/Column
-               .children
-               [(m/Padding
-                 .padding (m/EdgeInsets.all (tokens/space :m))
-                 .child (m/Row
-                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                         .children
-                         [(comp/mongol-text-block
-                           {:text (str "Today's Forecast: " (count forecasts))
-                            :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
-                          (m/ElevatedButton
-                           .onPressed (fn [] (nav/navigate! :focus {}))
-                           .child (m/Text "Start Focus"))]))
-                (m/Expanded
-                 .child (if loading
-                          (widgets/loading-indicator)
-                          (if (empty? forecasts)
-                            (widgets/empty-state "No tasks for today")
-                            (m/ListView
-                             .children
-                             (mapv (fn [f]
-                                     (forecast-item
-                                      {:forecast-item f
-                                       :task-title (get task-titles-map (.-taskId f) "Loading...")
-                                       :on-action (fn [_ _] (nav/navigate! :focus {}))}))
-                                   forecasts)))))]))))))
+    (f/widget
+     :watch [forecasts (forecast-db/watch-by-date dao today-yyyymmdd)
+             {:keys [task-titles-map]} ui-state/today-state]
+     :let [loading (nil? forecasts)
+           forecasts (or forecasts [])
+           _ (when (and (not loading) (coll? forecasts))
+               (let [tids (distinct (map #(.-taskId %) forecasts))]
+                 (doseq [tid tids]
+                   (when-not (get task-titles-map tid)
+                     (-> (task-db/get-by-id dao tid)
+                         (.then (fn [t] (when t (ui-state/update-today-state! update :task-titles-map assoc tid (.-title t))))))))))]
+     (m/Scaffold
+      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Today"}))
+      .body (m/Column
+             .children
+             [(m/Padding
+               .padding (m/EdgeInsets.all (tokens/space :m))
+               .child (m/Row
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(comp/mongol-text-block
+                         {:text (str "Today's Forecast: " (count forecasts))
+                          :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
+                        (m/ElevatedButton
+                         .onPressed (fn [] 
+                                      (ui-state/init-focus-screen!)
+                                      (nav/navigate! :focus {}))
+                         .child (m/Text "Start Focus"))]))
+              (m/Expanded
+               .child (if loading
+                        (widgets/loading-indicator)
+                        (if (empty? forecasts)
+                          (widgets/empty-state "No tasks for today")
+                          (m/ListView
+                           .children
+                           (mapv (fn [f]
+                                   (forecast-item
+                                    {:forecast-item f
+                                    :task-title (get task-titles-map (.-taskId f) "Loading...")
+                                    :on-action (fn [_ _] 
+                                                 (ui-state/init-focus-screen!)
+                                                 (nav/navigate! :focus {}))}))
+                                 forecasts)))))])))))

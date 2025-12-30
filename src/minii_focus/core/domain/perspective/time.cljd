@@ -18,7 +18,7 @@
         year (.year now)
         month (.month now)
         day (.day now)]
-    (dart-core/DateTime year month day)))
+    (dart-core/DateTime. year month day)))
 
 (defn week-range
   "Returns the start and end dates of this week
@@ -37,8 +37,8 @@
         js-day (if (= weekday 7) 0 (- weekday 1))
         days-from-sunday js-day
         days-to-saturday (- 6 js-day)
-        start (dart-core/DateTime (.year d) (.month d) (- (.day d) days-from-sunday))
-        end (dart-core/DateTime (.year d) (.month d) (+ (.day d) days-to-saturday))]
+        start (dart-core/DateTime. (.year d) (.month d) (- (.day d) days-from-sunday))
+        end (dart-core/DateTime. (.year d) (.month d) (+ (.day d) days-to-saturday))]
     {:week-start start
      :week-end end}))
 
