@@ -71,3 +71,19 @@
    start-ts
    end-ts))
 
+(defn watch-range
+  "Watch Timeline Events in time range (Stream)
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - start-ts: int (timestamp, seconds)
+  - end-ts: int (timestamp, seconds)
+  
+  Returns: Stream<List<TimelineEvent>>"
+  [dao-bridge start-ts end-ts]
+  (bridge/dart-call
+   timeline-bridge/watchTimelineRange
+   dao-bridge
+   start-ts
+   end-ts))
+

@@ -4,11 +4,8 @@
    ["dart:core" :as dart-core]
    ["dart:async" :as async]
    [minii-focus.core.state.app-state :as app-state]
-   [minii-focus.core.db.task :as task-db]
    [minii-focus.core.db.forecast :as forecast-db]
-   [minii-focus.core.db.timeline :as timeline-db]
    [minii-focus.core.event.dispatch :as dispatch]
-   [minii-focus.core.utils.time :as time]
    [minii-focus.core.utils.toast :as toast]
    [minii-focus.core.components.focus-depth :as focus-depth]))
 
@@ -119,41 +116,16 @@
 (defn update-focus-state! [f & args]
   (apply swap! focus-state f args))
 
-(defn load-today-stats []
-  (let [dao (or (:dao @focus-state) (app-state/get-dao))
-        now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
-        today-start-ts (int (/ (- now (* 24 60 60 1000)) 1000))
-        today-end-ts (int (/ now 1000))]
-    (-> (timeline-db/query-range dao today-start-ts today-end-ts)
-        (.then (fn [events]
-                 (let [focus-events (filter #(re-find #"^focus/" (.-type %)) (or events []))
-                       start-count (count (filter #(= (.-type %) "focus/start") focus-events))
-                       complete-count (count (filter #(= (.-type %) "focus/complete") focus-events))
-                       p-count (count (filter #(= (.-type %) "focus/pause") focus-events))
-                       total-minutes (reduce + 0 (map #(or (.-duration %) 0) (filter #(= (.-type %) "focus/complete") focus-events)))]
-                   (update-focus-state!
-                    assoc :today-stats
-                    {:total-minutes total-minutes
-                     :session-count start-count
-                     :completed-count complete-count
-                     :pause-count p-count})))))))
-
-(defn load-today-forecasts []
-  (let [dao (or (:dao @focus-state) (app-state/get-dao))]
-    (update-focus-state! assoc :loading true)
-    (let [today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
-      (-> (forecast-db/watch-by-date dao today-yyyymmdd)
-          (.first)
-          (.then (fn [forecasts]
-                   (let [fs (or forecasts [])
-                         tids (distinct (map #(.-taskId %) fs))]
-                     (update-focus-state! assoc :today-forecasts fs)
-                     (-> (dart-core/Future.wait
-                          (mapv (fn [tid]
-                                  (-> (task-db/get-by-id dao tid)
-                                      (.then (fn [t] (when t (update-focus-state! update :task-titles-map assoc tid (.-title t)))))))
-                                tids))
-                         (.then (fn [_] (update-focus-state! assoc :loading false)))))))))))
+(defn calculate-today-stats [events]
+  (let [focus-events (filter #(re-find #"^focus/" (.-type %)) (or events []))
+        start-count (count (filter #(= (.-type %) "focus/start") focus-events))
+        complete-count (count (filter #(= (.-type %) "focus/complete") focus-events))
+        p-count (count (filter #(= (.-type %) "focus/pause") focus-events))
+        total-minutes (reduce + 0 (map #(or (.-duration %) 0) (filter #(= (.-type %) "focus/complete") focus-events)))]
+    {:total-minutes total-minutes
+     :session-count start-count
+     :completed-count complete-count
+     :pause-count p-count}))
 
 (defn start-focus [f ctx]
   (let [dao (or (:dao @focus-state) (app-state/get-dao))
@@ -210,16 +182,12 @@
                                    (-> s
                                        (assoc :is-focusing false)
                                        (update :focus-depth-history conj current-focus-depth))))
-                                (when timer (.cancel timer) (update-focus-state! assoc :timer nil))
-                                (load-today-forecasts)
-                                (load-today-stats))))))))))
+                                (when timer (.cancel timer) (update-focus-state! assoc :timer nil)))))))))))
 
 (defn init-focus-screen! []
   (let [dao (app-state/get-dao)
         db-ctx {:db (app-state/get-db) :dao dao}]
-    (update-focus-state! merge {:dao dao :db-ctx db-ctx})
-    (load-today-forecasts)
-    (load-today-stats)))
+    (update-focus-state! merge {:dao dao :db-ctx db-ctx})))
 
 (defn reset-focus-state! [new-val]
   (reset! focus-state new-val))
@@ -256,4 +224,3 @@
 
 (defn update-perspective-detail-state! [f & args]
   (apply swap! perspective-detail-state f args))
-

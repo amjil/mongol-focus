@@ -10,6 +10,7 @@
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.task :as task-db]
    [minii-focus.core.db.forecast :as forecast-db]
+   [minii-focus.core.db.timeline :as timeline-db]
    [minii-focus.core.utils.time :as time]
    [minii-focus.core.router.nav :as nav]
    [minii-focus.widgets.common :as widgets]))
@@ -31,19 +32,32 @@
 
 (defn today-screen [_params]
   (let [dao (app-state/get-dao)
-        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+        now-ts (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
+        today-yyyymmdd (time/ts->yyyymmdd now-ts)
+        today-start-ts (time/yyyymmdd->ts today-yyyymmdd)
+        today-end-ts (+ today-start-ts (* 24 60 60))]
 
     (f/widget
      :watch [forecasts (forecast-db/watch-by-date dao today-yyyymmdd)
+             events (timeline-db/watch-range dao today-start-ts today-end-ts)
              {:keys [task-titles-map]} ui-state/today-state]
-     :let [loading (nil? forecasts)
+     :let [loading (or (nil? forecasts) (nil? events))
            forecasts (or forecasts [])
+           stats (ui-state/calculate-today-stats events)
+           ;; Update focus-state for other screens
+           _ (when (and (not loading) (not= forecasts (:today-forecasts @ui-state/focus-state)))
+               (ui-state/update-focus-state! assoc :today-forecasts forecasts))
+           _ (when (and (not loading) (not= stats (:today-stats @ui-state/focus-state)))
+               (ui-state/update-focus-state! assoc :today-stats stats))
            _ (when (and (not loading) (coll? forecasts))
                (let [tids (distinct (map #(.-taskId %) forecasts))]
                  (doseq [tid tids]
                    (when-not (get task-titles-map tid)
                      (-> (task-db/get-by-id dao tid)
-                         (.then (fn [t] (when t (ui-state/update-today-state! update :task-titles-map assoc tid (.-title t))))))))))]
+                         (.then (fn [t] 
+                                  (when t 
+                                    (ui-state/update-today-state! update :task-titles-map assoc tid (.-title t))
+                                    (ui-state/update-focus-state! update :task-titles-map assoc tid (.-title t))))))))))]
      (m/Scaffold
       .appBar (m/AppBar)
       .body (m/Column
