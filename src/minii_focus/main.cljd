@@ -12,9 +12,6 @@
    [minii-focus.core.sync.daily-sync :as daily-sync]
    [minii-focus.screens.inbox :as inbox]
    [minii-focus.screens.focus :as focus]
-   [minii-focus.screens.timeline :as timeline]
-   [minii-focus.screens.forecast :as forecast]
-   [minii-focus.screens.review :as review]
    [minii-focus.screens.project :as project]
    [minii-focus.screens.perspective :as perspective]
    [minii-focus.screens.today :as today]
@@ -58,22 +55,16 @@
                                     :keyboard/key-container-color m/Colors.grey.shade500
                                     :keyboard/mongol-font-family "OnonSoninSans"})
                        current-index (atom 0)
-                       pages [(today/today-screen nil)
-                              (inbox/inbox-screen nil)
-                              (focus/focus-screen nil)
-                              (timeline/timeline-screen nil)
-                              (forecast/forecast-screen nil)
-                              (review/review-screen nil)
-                              (project/project-screen nil)
-                              (perspective/perspective-screen nil)]
-                       bottom-items [{:title "Today" :icon m/Icons.today :idx 0}
-                                    {:title "Inbox" :icon m/Icons.inbox :idx 1}
-                                    {:title "Focus" :icon m/Icons.timer :idx 2}
-                                    {:title "Timeline" :icon m/Icons.timeline :idx 3}
-                                    {:title "Forecast" :icon m/Icons.calendar_today :idx 4}
-                                    {:title "Review" :icon m/Icons.feedback :idx 5}
-                                    {:title "Project" :icon m/Icons.folder :idx 6}
-                                    {:title "Perspective" :icon m/Icons.explore :idx 7}]
+                      pages [(today/today-screen nil)
+                             (inbox/inbox-screen nil)
+                             (focus/focus-screen nil)
+                             (project/project-screen nil)
+                             (perspective/perspective-screen nil)]
+                      bottom-items [{:title "Today" :icon m/Icons.today :idx 0}
+                                   {:title "Inbox" :icon m/Icons.inbox :idx 1}
+                                   {:title "Focus" :icon m/Icons.timer :idx 2}
+                                   {:title "Project" :icon m/Icons.folder :idx 3}
+                                   {:title "Perspective" :icon m/Icons.explore :idx 4}]
                        set-page! (fn [idx]
                                    (when (= idx 2) (ui-state/init-focus-screen!))
                                    (reset! current-index idx))]
