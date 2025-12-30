@@ -1,0 +1,141 @@
+(ns minii-focus.core.state.ui-state
+  "UI State Management for the application")
+
+;; Focus screen state
+(defonce focus-state
+  (atom
+   {:current-forecast nil
+    :session-id nil
+    :is-focusing false
+    :is-paused false
+    :start-time nil
+    :remaining-seconds 1500 ; Default pomodoro duration
+    :today-forecasts []
+    :task-titles-map {}
+    :loading false
+    :today-stats {:total-minutes 0 :session-count 0 :completed-count 0 :pause-count 0}
+    :focus-depth-history []
+    :current-focus-depth 0.0
+    :pause-count 0}))
+
+;; Today screen state
+(defonce today-state
+  (atom
+   {:forecasts []
+    :task-titles-map {}
+    :loading false}))
+
+;; Review screen state
+(defonce review-state
+  (atom
+   {:review-data nil
+    :period-type :week
+    :loading false}))
+
+;; Forecast screen state
+(defonce forecast-state
+  (atom
+   {:forecasts-list []
+    :task-titles-map {}
+    :loading false}))
+
+;; Perspective screen state
+(defonce perspective-state
+  (atom
+   {:perspectives []
+    :all-tasks []
+    :loading false}))
+
+;; Inbox screen state
+(defonce inbox-state
+  (atom
+   {:tasks []
+    :task-tags-map {}
+    :loading false}))
+
+;; Project screen state
+(defonce project-state
+  (atom
+   {:projects []
+    :selected-project nil
+    :next-actions {}
+    :project-tasks {}
+    :loading false}))
+
+;; Timeline screen state
+(defonce timeline-state
+  (atom
+   {:events []
+    :loading false}))
+
+;; Task Detail screen state
+(defonce task-detail-state
+  (atom
+   {:task nil
+    :timeline-events []
+    :projects []
+    :perspectives []
+    :loading false
+    :editing false
+    :proj-id nil
+    :persp-ids []}))
+
+;; Settings screen state
+(defonce settings-state
+  (atom
+   {:daily-capacity 3.0
+    :loading false}))
+
+;; Forecast Detail screen state
+(defonce forecast-detail-state
+  (atom
+   {:forecasts []
+    :titles {}
+    :loading false}))
+
+;; Perspective Detail screen state
+(defonce perspective-detail-state
+  (atom
+   {:perspective nil
+    :tasks []
+    :loading false}))
+
+(defn update-focus-state! [f & args]
+  (apply swap! focus-state f args))
+
+(defn reset-focus-state! [new-val]
+  (reset! focus-state new-val))
+
+(defn update-today-state! [f & args]
+  (apply swap! today-state f args))
+
+(defn update-review-state! [f & args]
+  (apply swap! review-state f args))
+
+(defn update-forecast-state! [f & args]
+  (apply swap! forecast-state f args))
+
+(defn update-perspective-state! [f & args]
+  (apply swap! perspective-state f args))
+
+(defn update-inbox-state! [f & args]
+  (apply swap! inbox-state f args))
+
+(defn update-project-state! [f & args]
+  (apply swap! project-state f args))
+
+(defn update-timeline-state! [f & args]
+  (apply swap! timeline-state f args))
+
+(defn update-task-detail-state! [f & args]
+  (apply swap! task-detail-state f args))
+
+(defn update-settings-state! [f & args]
+  (apply swap! settings-state f args))
+
+(defn update-forecast-detail-state! [f & args]
+  (apply swap! forecast-detail-state f args))
+
+(defn update-perspective-detail-state! [f & args]
+  (apply swap! perspective-detail-state f args))
+

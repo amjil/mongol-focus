@@ -1,141 +1,29 @@
 (ns minii-focus.screens.perspective
-  "Perspective page
-  
-  Perspective = Long-term direction / Value dimension
-  - Display all Perspective list
-  - Display weight change visualization
-  - Weight is driven by behavior and Review (read-only display)"
+  "Perspective page"
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mongol]
-   ["dart:core" :as dart-core]
    ["dart:convert" :as json]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.core.db.task :as task-db]
    [minii-focus.core.event.dispatch :as dispatch]
-   [minii-focus.core.utils.toast :as toast]))
+   [minii-focus.core.utils.toast :as toast]
+   [minii-focus.widgets.common :as widgets]))
 
-;; ============================================================================
-;; Helper Functions
-;; ============================================================================
-
-(defn parse-json
-  "Parse JSON string"
-  [json-str]
-  (if json-str
-    (try
-      (json/jsonDecode json-str)
-      (catch Exception _
-        []))
-    []))
-
-(defn format-weight
-  "Format weight display (0.0 ~ 1.0 -> percentage)"
-  [weight]
+(defn format-weight [weight]
   (str (int (* weight 100)) "%"))
 
-(defn get-weight-color
-  "Get color based on weight"
-  [weight]
-  (cond
-    (>= weight 0.7) m/Colors.green
-    (>= weight 0.4) m/Colors.orange
-    :else m/Colors.grey))
-
-(defn get-perspective-tasks
-  "Get tasks associated with Perspective
-  
-  Parameters:
-  - all-tasks: List<Task>
-  - perspective-id: string
-  
-  Returns: List<Task>"
-  [all-tasks perspective-id]
-  (filter (fn [task]
-           (let [perspectives-json (.-perspectives task)]
-             (if perspectives-json
-               (try
-                 (let [perspectives-list (json/jsonDecode perspectives-json)]
-                   (some #(= % perspective-id) perspectives-list))
-                 (catch Exception _
-                   false))
-               false)))
-          all-tasks))
-
-(defn calculate-task-stats
-  "Calculate task statistics
-  
-  Parameters:
-  - tasks: List<Task>
-  
-  Returns: {:total int :completed int :active int :waiting int}"
-  [tasks]
-  {:total (count tasks)
-   :completed (count (filter #(.-completed %) tasks))
-   :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) tasks))
-   :waiting (count (filter #(and (not (.-completed %)) (some? (.-deferAt %))) tasks))})
-
-;; ============================================================================
-;; Weight History Chart Component
-;; ============================================================================
-
-(defn weight-history-chart
-  "Weight change chart component (simplified: shows last 7 data points)
-  
-  Parameters:
-  - weight-history: vector of {:timestamp int, :weight double}"
-  [{:keys [weight-history]}]
-  (let [sorted-history (sort-by :timestamp > (take 7 weight-history))
-        max-weight (if (empty? sorted-history)
-                     1.0
-                     (apply max (map :weight sorted-history)))
-        min-weight (if (empty? sorted-history)
-                     0.0
-                     (apply min (map :weight sorted-history)))
-        range-weight (- max-weight min-weight)
-        normalized-history (if (zero? range-weight)
-                            (map (fn [item] (assoc item :normalized 0.5)) sorted-history)
-                            (map (fn [item]
-                                   (assoc item
-                                          :normalized
-                                          (/ (- (:weight item) min-weight) range-weight)))
-                                 sorted-history))]
-    (m/Container
-     .height 80
-     .margin (m/EdgeInsets.symmetric
-             :vertical (tokens/space :s))
-     .child (m/Row
-            .crossAxisAlignment m/CrossAxisAlignment.end
-            .children
-            (vec (map (fn [item]
-                       (m/Expanded
-                        .child (m/Container
-                               .margin (m/EdgeInsets.symmetric
-                                       :horizontal 2)
-                               .height (* 60 (:normalized item))
-                               .decoration (m/BoxDecoration
-                                           .color (get-weight-color (:weight item))
-                                           .borderRadius (m/BorderRadius.circular 4)))))
-                     normalized-history))))))
-
-;; ============================================================================
-;; Perspective List Item Component
-;; ============================================================================
-
-(defn perspective-list-item
-  "Perspective list item component"
-  [{:keys [perspective on-tap on-long-press task-stats]}]
-  (let [weight-history (parse-json (.-weightHistory perspective))
+(defn perspective-list-item [{:keys [perspective on-tap on-long-press task-stats]}]
+  (let [weight-history (widgets/parse-json (.-weightHistory perspective))
         current-weight (.-weight perspective)
         stats (or task-stats {:total 0 :completed 0 :active 0 :waiting 0})]
     (m/Card
-     .margin (m/EdgeInsets.symmetric
-             :vertical (tokens/space :s)
-             :horizontal (tokens/space :m))
+     .margin (m/EdgeInsets.symmetric :vertical (tokens/space :s) :horizontal (tokens/space :m))
      .child (m/InkWell
             .onTap (when on-tap (fn [] (on-tap perspective)))
             .onLongPress (when on-long-press (fn [] (on-long-press perspective)))
@@ -150,351 +38,89 @@
                             [(m/Expanded
                               .child (comp/mongol-text-block
                                      {:text (.-title perspective)
-                                      :style (m/TextStyle
-                                             .fontSize (tokens/font-size :m)
-                                             .fontWeight m/FontWeight.bold)}))
+                                      :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)}))
                              (m/Container
-                              .padding (m/EdgeInsets.symmetric
-                                       :horizontal (tokens/space :s)
-                                       :vertical (tokens/space :xs))
-                              .decoration (m/BoxDecoration
-                                          .color (get-weight-color current-weight)
-                                          .borderRadius (m/BorderRadius.circular 12))
+                              .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :s) :vertical (tokens/space :xs))
+                              .decoration (m/BoxDecoration .color (widgets/get-weight-color current-weight) .borderRadius (m/BorderRadius.circular 12))
                               .child (comp/mongol-text-block
                                      {:text (format-weight current-weight)
-                                      :style (m/TextStyle
-                                             .fontSize (tokens/font-size :s)
-                                             .color m/Colors.white
-                                             .fontWeight m/FontWeight.bold)}))])
+                                      :style (m/TextStyle .fontSize (tokens/font-size :s) .color m/Colors.white .fontWeight m/FontWeight.bold)}))])
                             (m/SizedBox .height (tokens/space :s))
-                            ;; Task statistics
                             (m/Row
                              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                              .children
                              [(m/Row
                                .mainAxisSize m/MainAxisSize.min
                                .children
-                               [(m/Icon
-                                 m/Icons.task
-                                 .size 16
-                                 .color (tokens/color :text-weak))
+                               [(m/Icon m/Icons.task .size 16 .color (tokens/color :text-weak))
                                 (m/SizedBox .width (tokens/space :xs))
-                                (comp/mongol-text-block
-                                 {:text (str "Tasks: " (:total stats))
-                                  :style (m/TextStyle
-                                         .fontSize (tokens/font-size :s)
-                                         .color (tokens/color :text-weak))})])
+                                (comp/mongol-text-block {:text (str "Tasks: " (:total stats)) :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})])
                               (m/Row
                                .mainAxisSize m/MainAxisSize.min
                                .children
-                               [(m/Icon
-                                 m/Icons.check_circle
-                                 .size 14
-                                 .color m/Colors.green)
+                               [(m/Icon m/Icons.check_circle .size 14 .color m/Colors.green)
                                 (m/SizedBox .width (tokens/space :xs))
-                                (comp/mongol-text-block
-                                 {:text (str (:completed stats))
-                                  :style (m/TextStyle
-                                         .fontSize (tokens/font-size :s)
-                                         .color m/Colors.green)})])
-                              (m/Row
-                               .mainAxisSize m/MainAxisSize.min
-                               .children
-                               [(m/Icon
-                                 m/Icons.play_circle
-                                 .size 14
-                                 .color m/Colors.blue)
-                                (m/SizedBox .width (tokens/space :xs))
-                                (comp/mongol-text-block
-                                 {:text (str (:active stats))
-                                  :style (m/TextStyle
-                                         .fontSize (tokens/font-size :s)
-                                         .color m/Colors.blue)})])])
+                                (comp/mongol-text-block {:text (str (:completed stats)) :style (m/TextStyle .fontSize (tokens/font-size :s) .color m/Colors.green)})])])
                             (m/SizedBox .height (tokens/space :s))
                             (if (empty? weight-history)
-                              (comp/mongol-text-block
-                               {:text "No history data"
-                                :style (m/TextStyle
-                                       .fontSize (tokens/font-size :s)
-                                       .color (tokens/color :text-weak))})
-                              (weight-history-chart
-                               {:weight-history weight-history}))]))))))
+                              (comp/mongol-text-block {:text "No history data" :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})
+                              (widgets/weight-history-chart {:weight-history weight-history}))]))))))
 
-;; ============================================================================
-;; Rules Editor Dialog
-;; ============================================================================
-
-(defn analyze-weight-changes
-  "Analyze weight change reasons
-  
-  Parameters:
-  - weight-history: vector of {:timestamp int, :weight double}
-  - _all-tasks: List<Task> (unused, reserved for future expansion)
-  - _perspective-id: string (unused, reserved for future expansion)
-  
-  Returns: vector of {:timestamp int, :weight double, :change double, :reason string}"
-  [weight-history _all-tasks _perspective-id]
-  (let [sorted-history (sort-by :timestamp < weight-history)
-        changes (map-indexed (fn [idx item]
-                              (if (= idx 0)
-                                (assoc item :change 0.0 :reason "Initial weight")
-                                (let [prev-item (nth sorted-history (dec idx))
-                                      change (- (:weight item) (:weight prev-item))
-                                      reason (cond
-                                              (> change 0.1) "Significant increase (possibly task completion or Review adjustment)"
-                                              (> change 0.05) "Slight increase (possibly task completion)"
-                                              (< change -0.1) "Significant decrease (possibly time decay or Review adjustment)"
-                                              (< change -0.05) "Slight decrease (possibly time decay)"
-                                              :else "Relatively stable")]
-                                  (assoc item :change change :reason reason))))
-                            sorted-history)]
-    (vec changes)))
-
-(defn show-weight-analysis
-  "Show weight change analysis dialog"
-  [ctx perspective all-tasks]
-  (let [weight-history-json (.-weightHistory perspective)
-        weight-history (if weight-history-json
-                         (try
-                           (json/jsonDecode weight-history-json)
-                           (catch Exception _
-                             []))
-                         [])
-        analysis (analyze-weight-changes weight-history all-tasks (.-id perspective))]
-    (-> (m/showDialog
-         .context ctx
-         .builder (fn [_dialog-ctx]
-                   (m/AlertDialog
-                    .title (comp/mongol-text-block
-                           {:text (str "Weight Change Analysis: " (.-title perspective))
-                            :style (m/TextStyle
-                                   .fontSize (tokens/font-size :l)
-                                   .fontWeight m/FontWeight.bold)})
-                    .content (m/Container
-                             .width 400
-                             .height 500
-                             .child (m/ListView
-                                    .children
-                                    (if (empty? analysis)
-                                      [(comp/mongol-text-block
-                                        {:text "No weight change history"
-                                         :style (m/TextStyle
-                                                .fontSize (tokens/font-size :m)
-                                                .color (tokens/color :text-weak))})]
-                                      (vec (map (fn [item]
-                                                (m/Card
-                                                 .margin (m/EdgeInsets.symmetric
-                                                         :vertical (tokens/space :xs))
-                                                 .child (m/Padding
-                                                        .padding (m/EdgeInsets.all (tokens/space :s))
-                                                        .child (m/Column
-                                                               .crossAxisAlignment m/CrossAxisAlignment.start
-                                                               .children
-                                                               [(m/Row
-                                                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                                                 .children
-                                                                 [(comp/mongol-text-block
-                                                                   {:text (str "Weight: " (format-weight (:weight item)))
-                                                                    :style (m/TextStyle
-                                                                           .fontSize (tokens/font-size :m)
-                                                                           .fontWeight m/FontWeight.bold)})
-                                                                  (comp/mongol-text-block
-                                                                   {:text (let [change (:change item)]
-                                                                           (if (>= change 0)
-                                                                             (str "+" (format-weight change))
-                                                                             (format-weight change)))
-                                                                    :style (m/TextStyle
-                                                                           .fontSize (tokens/font-size :s)
-                                                                           .color (if (>= (:change item) 0)
-                                                                                   m/Colors.green
-                                                                                   m/Colors.red))})])
-                                                                (m/SizedBox .height (tokens/space :xs))
-                                                                (comp/mongol-text-block
-                                                                 {:text (:reason item)
-                                                                  :style (m/TextStyle
-                                                                         .fontSize (tokens/font-size :s)
-                                                                         .color (tokens/color :text-weak))})
-                                                                (comp/mongol-text-block
-                                                                 {:text (let [timestamp (:timestamp item)
-                                                                             date (dart-core/DateTime.fromMillisecondsSinceEpoch (* timestamp 1000))]
-                                                                         (str (.year date) "-" (.month date) "-" (.day date)))
-                                                                  :style (m/TextStyle
-                                                                         .fontSize (tokens/font-size :xs)
-                                                                         .color (tokens/color :text-weak))})]))))
-                                                              analysis)))))
-                    .actions
-                    (list (m/TextButton
-                           .onPressed (fn [] (m/Navigator.pop ctx))
-                           .child (m/Text "Close")))))))
-        (.then (fn [_] nil))
-        (.catchError (fn [error]
-                     (dart-core/print (str "Error showing weight analysis: " error))
-                     nil))))
-
-(defn show-rules-editor
-  "Show Perspective rules editor dialog"
-  [ctx _dao perspective]
-  (let [rules-json (.-rules perspective)
-        rules (if rules-json
-                (try
-                  (json/jsonDecode rules-json)
-                  (catch Exception _
-                    {:conditions [] :actions []}))
-                {:conditions [] :actions []})
-        conditions-text-controller (m/TextEditingController.)
-        actions-text-controller (m/TextEditingController.)
-        conditions-text (json/jsonEncode (or (:conditions rules) []))
-        actions-text (json/jsonEncode (or (:actions rules) []))]
-    (.text conditions-text-controller conditions-text)
-    (.text actions-text-controller actions-text)
-    (-> (m/showDialog
-         .context ctx
-         .builder (fn [dialog-ctx]
-                   (m/AlertDialog
-                    .title (comp/mongol-text-block
-                           {:text (str "Edit Rules: " (.-title perspective))
-                            :style (m/TextStyle
-                                   .fontSize (tokens/font-size :l)
-                                   .fontWeight m/FontWeight.bold)})
-                    .content (m/Column
-                             .mainAxisSize m/MainAxisSize.min
-                             .children
-                             [(comp/mongol-text-block
-                               {:text "Conditions (JSON array)"
-                                :style (m/TextStyle
-                                       .fontSize (tokens/font-size :m)
-                                       .fontWeight m/FontWeight.w500)})
-                              (m/SizedBox .height (tokens/space :s))
-                              (mongol/MongolTextField
-                               .controller conditions-text-controller
-                               .maxLines 5
-                               .minLines 3
-                               .decoration (m/InputDecoration
-                                           .hintText "[{\"field\": \"dueAt\", \"op\": \"<\", \"value\": \"today\"}]"
-                                           .border (m/OutlineInputBorder))
-                               .style (m/TextStyle
-                                      .fontSize (tokens/font-size :s)
-                                      .fontFamily "OnonSoninSans"))
-                              (m/SizedBox .height (tokens/space :m))
-                              (comp/mongol-text-block
-                               {:text "Actions (JSON array)"
-                                :style (m/TextStyle
-                                       .fontSize (tokens/font-size :m)
-                                       .fontWeight m/FontWeight.w500)})
-                              (m/SizedBox .height (tokens/space :s))
-                              (mongol/MongolTextField
-                               .controller actions-text-controller
-                               .maxLines 5
-                               .minLines 3
-                               .decoration (m/InputDecoration
-                                           .hintText "[{\"type\": \"generate-forecast\", \"date\": \"today\"}]"
-                                           .border (m/OutlineInputBorder))
-                               .style (m/TextStyle
-                                      .fontSize (tokens/font-size :s)
-                                      .fontFamily "OnonSoninSans"))])
-                    .actions
-                    (list (m/TextButton
-                           .onPressed (fn [] (m/Navigator.pop dialog-ctx))
-                           .child (m/Text "Close"))
-                          (m/TextButton
-                           .onPressed (fn []
-                                       (let [conditions-text (.text conditions-text-controller)
-                                             actions-text (.text actions-text-controller)]
-                                         (try
-                                           (let [conditions (json/jsonDecode conditions-text)
-                                                 actions (json/jsonDecode actions-text)
-                                                 new-rules {:conditions conditions :actions actions}]
-                                             (m/Navigator.pop dialog-ctx)
-                                             ;; Update rules
-                                             (-> (dispatch/dispatch-event! ctx
-                                                                          {:type :perspective/update-rules
-                                                                           :payload {:perspective-id (.-id perspective)
-                                                                                    :rules new-rules}
-                                                                           :source :ui})
-                                                 (.then (fn [_]
-                                                         (toast/show-success-toast ctx "Rules updated")))
-                                                 (.catchError (fn [error]
-                                                              (dart-core/print (str "Error updating rules: " error))
-                                                              (toast/show-error-toast ctx "Failed to update rules")))))
-                                           (catch Exception error
-                                             (dart-core/print (str "Invalid JSON: " error))
-                                             (toast/show-error-toast ctx "JSON format error")))))
-                           .child (m/Text "Save"))))))
-        (.then (fn [_] nil))
-        (.catchError (fn [error]
-                     (dart-core/print (str "Error showing rules editor: " error))
-                     nil)))))
-
-;; ============================================================================
-;; Main Screen
-;; ============================================================================
+(defn show-rules-editor [ctx perspective]
+  (let [rules (widgets/parse-json (.-rules perspective))
+        conditions-ctrl (m/TextEditingController .text (json/jsonEncode (or (:conditions rules) [])))
+        actions-ctrl (m/TextEditingController .text (json/jsonEncode (or (:actions rules) [])))]
+    (m/showDialog
+     .context ctx
+     .builder (fn [d-ctx]
+                (m/AlertDialog
+                 .title (comp/mongol-text-block {:text (str "Edit Rules: " (.-title perspective)) :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
+                 .content (m/Column
+                           .mainAxisSize m/MainAxisSize.min
+                           .children
+                           [(comp/mongol-text-block {:text "Conditions (JSON)"})
+                            (mongol/MongolTextField .controller conditions-ctrl .maxLines 3)
+                            (m/SizedBox .height (tokens/space :m))
+                            (comp/mongol-text-block {:text "Actions (JSON)"})
+                            (mongol/MongolTextField .controller actions-ctrl .maxLines 3)])
+                 .actions
+                 [(m/TextButton .onPressed (fn [] (m/Navigator.pop d-ctx)) .child (m/Text "Close"))
+                  (m/TextButton .onPressed (fn []
+                                             (try
+                                               (let [new-rules {:conditions (json/jsonDecode (.text conditions-ctrl))
+                                                                :actions (json/jsonDecode (.text actions-ctrl))}]
+                                                 (m/Navigator.pop d-ctx)
+                                                 (-> (dispatch/dispatch-event! ctx {:type :perspective/update-rules :payload {:perspective-id (.-id perspective) :rules new-rules} :source :ui})
+                                                     (.then (fn [_] (toast/show-success-toast ctx "Updated")))))
+                                               (catch Exception _ (toast/show-error-toast ctx "JSON Error"))))
+                                .child (m/Text "Save"))])))))
 
 (defn perspective-screen [_params]
-  (let [perspectives (atom [])
-        all-tasks (atom [])
-        loading (atom false)
-        dao (app-state/get-dao)]
-    ;; Load perspectives and tasks on mount
-    (reset! loading true)
-    (-> (perspective-db/watch-all dao)
-        (.then (fn [stream]
-                (-> stream
-                    (.first)
-                    (.then (fn [result]
-                            (reset! perspectives (or result []))
-                            ;; Load all tasks to calculate stats
-                            (-> (task-db/watch-all-tasks dao)
-                                (.then (fn [tasks]
-                                        (reset! all-tasks (or tasks []))
-                                        (reset! loading false)))
-                                (.catchError (fn [error]
-                                             (dart-core/print (str "Error loading tasks: " error))
-                                             (reset! loading false)))))
-                    (.catchError (fn [error]
-                                 (dart-core/print (str "Error loading perspectives: " error))
-                                 (reset! loading false))))))
-        (.catchError (fn [error]
-                     (dart-core/print (str "Error watching perspectives: " error))
-                     (reset! loading false))))
-    
-    (f/widget
-     :context ctx
-     :bind {:perspectives perspectives
-            :all-tasks all-tasks
-            :loading loading}
-     
-     (m/Scaffold
-      .appBar (m/AppBar
-               .title (comp/mongol-text-block
-                      {:text "Perspective"}))
-      .body (comp/mongol-column-layout
-             {:main-column
-              (cond
-                @loading
-                (m/Center
-                 .child (m/CircularProgressIndicator))
-                
-                (empty? @perspectives)
-                (m/Center
-                 .child (comp/mongol-text-block
-                        {:text "No Perspective"
-                         :style (m/TextStyle
-                                .color (tokens/color :text-weak))}))
-                
-                :else
-                (m/ListView
-                 .children
-                 (vec (map (fn [perspective]
-                            (let [perspective-tasks (get-perspective-tasks @all-tasks (.-id perspective))
-                                  task-stats (calculate-task-stats perspective-tasks)]
-                              (perspective-list-item
-                               {:perspective perspective
-                                :task-stats task-stats
-                                :on-tap (fn [p]
-                                        ;; Open rules editor
-                                        (show-rules-editor ctx dao p))
-                                :on-long-press (fn [p]
-                                               ;; Long press to show weight analysis
-                                               (show-weight-analysis ctx p @all-tasks))})))
-                          @perspectives))))}))))))
-
+  (let [dao (app-state/get-dao)]
+    (letfn [(load-all []
+              (ui-state/update-perspective-state! assoc :loading true)
+              (-> (perspective-db/watch-all dao)
+                  (.then (fn [s]
+                           (-> s
+                               (.first)
+                               (.then (fn [res]
+                                        (ui-state/update-perspective-state! assoc :perspectives (or res []))
+                                        (-> (task-db/watch-all-tasks dao)
+                                            (.then (fn [ts] (ui-state/update-perspective-state! assoc :all-tasks (or ts []) :loading false)))))))))))]
+      (load-all)
+      (f/widget
+       :context ctx
+       :watch [{:keys [perspectives all-tasks loading]} ui-state/perspective-state]
+       (m/Scaffold
+        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Perspective"}))
+        .body (if loading
+                (widgets/loading-indicator)
+                (if (empty? perspectives)
+                  (widgets/empty-state "No Perspective")
+                  (m/ListView
+                   .children
+                   (mapv (fn [p]
+                           (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
+                                 stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
+                             (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
+                         perspectives)))))))))

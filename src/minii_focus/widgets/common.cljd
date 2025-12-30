@@ -1,0 +1,179 @@
+(ns minii-focus.widgets.common
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
+   ["dart:convert" :as json]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]))
+
+(defn parse-json
+  "Parse JSON string safely"
+  [json-str]
+  (if (and json-str (not (empty? json-str)))
+    (try
+      (json/jsonDecode json-str)
+      (catch Exception _ []))
+    []))
+
+(defn format-yyyymmdd [yyyymmdd]
+  (let [year (int (/ yyyymmdd 10000))
+        month-day (mod yyyymmdd 10000)
+        month (int (/ month-day 100))
+        day (mod month-day 100)]
+    (str year "-" month "-" day)))
+
+(defn format-date-time
+  "Format date time (display creation time)"
+  [date-time]
+  (let [now (dart-core/DateTime.now)
+        created date-time
+        diff-days (int (/ (- (.millisecondsSinceEpoch now) (.millisecondsSinceEpoch created)) (* 1000 60 60 24)))]
+    (cond
+      (= diff-days 0) "Today"
+      (= diff-days 1) "Yesterday"
+      (< diff-days 7) (str diff-days " days ago")
+      :else (str (.month created) "/" (.day created)))))
+
+(defn format-timer
+  "Format seconds to MM:SS"
+  [seconds]
+  (let [m (int (/ seconds 60))
+        s (mod seconds 60)]
+    (str (if (< m 10) "0" "") m ":" (if (< s 10) "0" "") s)))
+
+(defn loading-indicator []
+  (m/Center
+   .child (m/CircularProgressIndicator)))
+
+(defn empty-state [text]
+  (m/Center
+   .child (comp/mongol-text-block
+           {:text text
+            :style (m/TextStyle
+                    .color (tokens/color :text-weak))})))
+
+(defn get-weight-color [weight]
+  (cond
+    (>= weight 0.7) m/Colors.green
+    (>= weight 0.4) m/Colors.orange
+    :else m/Colors.grey))
+
+(defn weight-history-chart
+  "Weight change chart component
+  
+  Parameters:
+  - weight-history: vector of {:timestamp int, :weight double}
+  - get-color-fn: (optional) fn [weight] -> Color"
+  [{:keys [weight-history get-color-fn]}]
+  (let [color-fn (or get-color-fn get-weight-color)
+        sorted-history (sort-by :timestamp > (take 7 weight-history))
+        max-weight (if (empty? sorted-history) 1.0 (apply max (map :weight sorted-history)))
+        min-weight (if (empty? sorted-history) 0.0 (apply min (map :weight sorted-history)))
+        range-weight (- max-weight min-weight)
+        normalized-history (if (zero? range-weight)
+                            (map (fn [item] (assoc item :normalized 0.5)) sorted-history)
+                            (map (fn [item]
+                                   (assoc item
+                                          :normalized
+                                          (/ (- (:weight item) min-weight) range-weight)))
+                                 sorted-history))]
+    (m/Container
+     .height 80
+     .margin (m/EdgeInsets.symmetric :vertical (tokens/space :s))
+     .child (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.end
+            .children
+            (vec (map (fn [item]
+                       (m/Expanded
+                        .child (m/Container
+                               .margin (m/EdgeInsets.symmetric :horizontal 2)
+                               .height (* 60 (:normalized item))
+                               .decoration (m/BoxDecoration
+                                           .color (color-fn (:weight item))
+                                           .borderRadius (m/BorderRadius.circular 4)))))
+                     normalized-history))))))
+
+(defn overload-warning [{:keys [count limit]}]
+  (m/Container
+   .margin (m/EdgeInsets.symmetric
+            :horizontal (tokens/space :m)
+            :vertical (tokens/space :s))
+   .padding (m/EdgeInsets.all (tokens/space :m))
+   .decoration (m/BoxDecoration
+                .color m/Colors.orange.shade50
+                .border (m/Border.all
+                         :color m/Colors.orange.shade300
+                         :width 1)
+                .borderRadius (m/BorderRadius.circular 8))
+   .child (m/Row
+           .children
+           [(m/Icon
+             m/Icons.warning
+             .color m/Colors.orange.shade700
+             .size 20)
+            (m/SizedBox .width (tokens/space :s))
+            (m/Expanded
+             .child (comp/mongol-text-block
+                     {:text (str "⚠ Overloaded: "
+                                 count
+                                 " items (limit: "
+                                 limit
+                                 ")")
+                      :style (m/TextStyle
+                              .fontSize (tokens/font-size :s)
+                              .color m/Colors.orange.shade900
+                              .fontWeight m/FontWeight.w500)}))])))
+
+(defn accuracy-card [{:keys [accuracy completed total]}]
+  (m/Container
+   .margin (m/EdgeInsets.symmetric
+            :horizontal (tokens/space :m)
+            :vertical (tokens/space :s))
+   .padding (m/EdgeInsets.all (tokens/space :m))
+   .decoration (m/BoxDecoration
+                .color (tokens/color :bg-focus)
+                .borderRadius (m/BorderRadius.circular 8))
+   .child (m/Column
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children
+           [(comp/mongol-text-block
+             {:text "Forecast Accuracy (Last 7 Days)"
+              :style (m/TextStyle
+                      .fontSize (tokens/font-size :m)
+                      .fontWeight m/FontWeight.bold)})
+            (m/SizedBox .height (tokens/space :s))
+            (m/Row
+             .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+             .children
+             [(m/Column
+               .crossAxisAlignment m/CrossAxisAlignment.start
+               .children
+               [(comp/mongol-text-block
+                 {:text (str (int (* accuracy 100)) "%")
+                  :style (m/TextStyle
+                          .fontSize (tokens/font-size :xl)
+                          .fontWeight m/FontWeight.bold
+                          .color (cond
+                                   (>= accuracy 0.7) m/Colors.green
+                                   (>= accuracy 0.5) m/Colors.orange
+                                   :else m/Colors.red))})
+                (comp/mongol-text-block
+                 {:text (str "Completed " completed " / " total)
+                  :style (m/TextStyle
+                          .fontSize (tokens/font-size :s)
+                          .color (tokens/color :text-weak))})])
+              (m/Container
+               .width 100
+               .height 8
+               .decoration (m/BoxDecoration
+                            .color (tokens/color :bg-weak)
+                            .borderRadius (m/BorderRadius.circular 4))
+               .child (m/Container
+                       .width (* 100 accuracy)
+                       .height 8
+                       .decoration (m/BoxDecoration
+                                    .color (cond
+                                             (>= accuracy 0.7) m/Colors.green
+                                             (>= accuracy 0.5) m/Colors.orange
+                                             :else m/Colors.red)
+                                    .borderRadius (m/BorderRadius.circular 4))))])])))
