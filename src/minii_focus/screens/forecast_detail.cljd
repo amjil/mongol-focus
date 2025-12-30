@@ -55,7 +55,7 @@
      :let [loading (nil? forecasts)
            forecasts (or forecasts [])]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast Detail"}))
+      .appBar (m/AppBar)
       .body (if loading (widgets/loading-indicator)
                 (m/ListView
                  .children

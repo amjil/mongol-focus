@@ -82,7 +82,7 @@
                    (-> (project-db/get-next-action dao (.-id p))
                        (.then (fn [na] (ui-state/update-project-state! update :next-actions assoc (.-id p) na)))))))]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Project"}))
+      .appBar (m/AppBar)
       .body (comp/mongol-column-layout
              {:main-width 0.3 :side-width 0.7
               :main-column (if loading (widgets/loading-indicator)

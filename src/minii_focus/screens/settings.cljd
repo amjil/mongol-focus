@@ -49,7 +49,7 @@
   (let [dao (app-state/get-dao)]
     (f/widget
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Settings"}))
+      .appBar (m/AppBar)
       .body (m/ListView
              .children
              [(if dao

@@ -112,7 +112,6 @@
                    loading today-stats focus-depth-history current-focus-depth current-forecast timer]} ui-state/focus-state]
    (m/Scaffold
     .appBar (m/AppBar
-             .title (comp/mongol-text-block {:text "Focus"})
              .actions [(m/IconButton .icon (m/Icon m/Icons.history) .onPressed (fn [] (toast/show-info-toast ctx "History in development")))]
              .backgroundColor (tokens/color :bg-focus))
     .backgroundColor (tokens/color :bg-focus)

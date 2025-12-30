@@ -104,7 +104,7 @@
            perspectives (or (:value perspectives-res) [])
            all-tasks (or (:value all-tasks-res) [])]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Perspective"}))
+      .appBar (m/AppBar)
       .body (if loading
               (widgets/loading-indicator)
               (if (empty? perspectives)

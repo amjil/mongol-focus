@@ -36,7 +36,7 @@
                      (-> (task/get-by-id dao tid)
                          (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc tid (.-title t))))))))))]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Forecast"}))
+      .appBar (m/AppBar)
       .body (if loading (widgets/loading-indicator)
                 (if (empty? forecasts) (widgets/empty-state "No forecasts")
                     (m/ListView .children (mapv (fn [f] (forecast-item-card {:forecast-item f :task-title (get task-titles-map (.-taskId f) "Loading...")})) forecasts))))))))

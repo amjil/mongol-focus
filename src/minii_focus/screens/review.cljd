@@ -48,8 +48,7 @@
              review-data (future (aggregate/aggregate-review-data! dao period-type))]
      :let [loading (nil? review-data)]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Review"})
-                       .actions [(m/PopupMenuButton
+      .appBar (m/AppBar .actions [(m/PopupMenuButton
                                   .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
                                   .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
                                                         (m/PopupMenuItem .value :week .child (m/Text "Week"))

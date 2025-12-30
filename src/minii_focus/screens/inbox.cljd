@@ -33,7 +33,7 @@
                        (-> (task-tags/get-task-tags dao tid)
                            (.then (fn [tags] (ui-state/update-inbox-state! update :task-tags-map assoc tid tags)))))))))]
      (m/Scaffold
-      .appBar (m/AppBar .title (m/Text "Inbox"))
+      .appBar (m/AppBar)
       .body (if loading
               (widgets/loading-indicator)
               (let [ins (filter #(not (.-completed %)) tasks)]

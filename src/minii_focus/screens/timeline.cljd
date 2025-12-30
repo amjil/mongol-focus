@@ -72,7 +72,7 @@
        :let [loading (nil? events)
              events (or events [])]
        (m/Scaffold
-        .appBar (m/AppBar .title (comp/mongol-text-block {:text "Timeline"}))
+        .appBar (m/AppBar)
         .body (if loading
                 (widgets/loading-indicator)
                 (let [groups (group-by-date events)]

@@ -20,7 +20,7 @@
            all-tasks (:value all-tasks-res)
            tasks (if loading [] (filter (fn [t] (some #(= % pid) (widgets/parse-json (.-perspectives t)))) (or all-tasks [])))]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text (or (some-> perspective .-title) "Perspective Detail")}))
+      .appBar (m/AppBar)
       .body (if loading
               (widgets/loading-indicator)
               (if (nil? perspective)

@@ -45,7 +45,7 @@
                      (-> (task-db/get-by-id dao tid)
                          (.then (fn [t] (when t (ui-state/update-today-state! update :task-titles-map assoc tid (.-title t))))))))))]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Today"}))
+      .appBar (m/AppBar)
       .body (m/Column
              .children
              [(m/Padding

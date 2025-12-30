@@ -50,8 +50,7 @@
                (-> (timeline-db/query-range dao 0 (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
                    (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es))))))]
      (m/Scaffold
-      .appBar (m/AppBar .title (comp/mongol-text-block {:text "Task Detail"})
-                       .actions [(m/IconButton .icon (m/Icon (if editing m/Icons.check m/Icons.edit))
+      .appBar (m/AppBar .actions [(m/IconButton .icon (m/Icon (if editing m/Icons.check m/Icons.edit))
                                                .onPressed (fn [] (if editing
                                                                    (let [updates (bridge/dart-new app-db/TasksCompanion {:title (.-text @title-ctrl) :projectId proj-id :perspectives (json/jsonEncode persp-ids)})]
                                                                      (-> (tx/with-tx db (fn [] (task-db/update-task! dao tid updates)))
