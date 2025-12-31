@@ -7,6 +7,7 @@
    [minii-focus.core.event.validator :as validator]
    [minii-focus.core.event.definitions :as event-def]
    [minii-focus.core.db.task :as task]
+   [minii-focus.core.db.task-tags :as task-tags]
    [minii-focus.core.db.timeline :as timeline]
    [minii-focus.core.db.tx :as tx]
    [clojure.string :as str]
@@ -153,12 +154,12 @@
   
   Parameters:
   - ctx: {:db AppDatabase :dao DaoBridge}
-  - payload: {:title string :note string? :source keyword :project-id string? :perspective-id string?}
+  - payload: {:title string :note string? :source keyword :project-id string? :perspective-id string? :due-at int? :defer-at int? :tags [string]?}
   
   Returns: Future<void>"
   [ctx payload]
   (let [{:keys [dao]} ctx
-        {:keys [title project-id perspective-id]} payload
+        {:keys [title project-id perspective-id due-at defer-at tags]} payload
         task-id (generate-id "task")
         now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))
         perspectives-json (when perspective-id
@@ -167,8 +168,15 @@
                    :title title
                    :project-id project-id
                    :perspectives perspectives-json
-                   :created-at now}]
-    (task/insert-task! dao task-data)))
+                   :created-at now
+                   :due-at due-at
+                   :defer-at defer-at}]
+    (-> (task/insert-task! dao task-data)
+        (.then (fn [_]
+                 (if (and tags (seq tags))
+                   (let [tag-futures (map #(task-tags/add-tag-to-task! dao task-id %) tags)]
+                     (dart-core/Future.wait (vec tag-futures)))
+                   (dart-core/Future.value nil)))))))
 
 (defn handle-task-complete
   "Handle task/complete Event
@@ -382,6 +390,20 @@
         rules-json (json-encode rules)
         now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))]
     (perspective/update-rules! dao perspective-id rules-json now)))
+
+(defn handle-perspective-update-weight
+  "Handle perspective/update-weight Event
+  
+  Parameters:
+  - ctx: {:db AppDatabase :dao DaoBridge}
+  - payload: {:perspective-id string :weight double}
+  
+  Returns: Future<void>"
+  [ctx payload]
+  (let [{:keys [dao]} ctx
+        {:keys [perspective-id weight]} payload
+        now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))]
+    (perspective/update-weight! dao perspective-id weight now)))
 
 (defn handle-task-remove-perspective
   "Handle task/remove-perspective Event
@@ -787,6 +809,9 @@
     
     event-def/perspective-update-rules
     (handle-perspective-update-rules ctx payload)
+    
+    event-def/perspective-update-weight
+    (handle-perspective-update-weight ctx payload)
     
     event-def/task-remove-perspective
     (handle-task-remove-perspective ctx payload)

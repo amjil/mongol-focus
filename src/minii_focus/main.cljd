@@ -15,6 +15,7 @@
    [minii-focus.screens.project :as project]
    [minii-focus.screens.perspective :as perspective]
    [minii-focus.screens.today :as today]
+   [minii-focus.widgets.quick-entry-dialog :as qe-dialog]
    [minii-focus.core.state.ui-state :as ui-state]))
 
 ;; Initialize application
@@ -49,6 +50,7 @@
                ;; Start Flutter application
                (f/run
                 (f/widget
+                 :context ctx
                  :let [info (merge keyboard-options/keyboard-option
                                    {:keyboard/key-cap-border-radius 6
                                     :keyboard/font-size 18
@@ -83,6 +85,9 @@
                          .body (m/IndexedStack
                                 .index @current-index
                                 .children pages)
+                         .floatingActionButton (m/FloatingActionButton
+                                                .onPressed (fn [] (qe-dialog/show-quick-entry-dialog ctx))
+                                                .child (m/Icon m/Icons.add))
                          .bottomNavigationBar (m/BottomNavigationBar
                                               .type m/BottomNavigationBarType.fixed
                                               .currentIndex (min @current-index (dec (count bottom-items)))

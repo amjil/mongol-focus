@@ -2,9 +2,7 @@
   "Task Detail page"
   (:require
    ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mongol]
    ["dart:core" :as dart-core]
-   ["dart:convert" :as json]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
@@ -14,10 +12,8 @@
    [minii-focus.core.db.timeline :as timeline-db]
    [minii-focus.core.db.project :as project-db]
    [minii-focus.core.db.perspective :as perspective-db]
-   [minii-focus.core.db.tx :as tx]
-   [minii-focus.core.infra.bridge :as bridge]
    [minii-focus.widgets.common :as widgets]
-   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
+   [minii-focus.widgets.quick_entry_dialog :as qe-dialog]))
 
 (defn detail-section [{:keys [title child]}]
   (m/Container
@@ -30,38 +26,34 @@
             child])))
 
 (defn task-detail-screen [params]
-  (let [tid (:id params)
-        title-ctrl (atom nil)
-        dao (app-state/get-dao)
-        db (app-state/get-db)]
+  (let [tid (:id params)]
     (f/widget
-     :watch [all-tasks-res (stream :as-values (task-db/watch-all-tasks dao))
-             projects-res (stream :as-values (project-db/watch-all-projects dao))
-             perspectives-res (stream (map (fn [s] (-> s (.first)))) :as-values (perspective-db/watch-all dao))
-             {:keys [editing persp-ids proj-id timeline-events]} ui-state/task-detail-state]
-     :let [all-tasks (:value all-tasks-res)
-           projects (or (:value projects-res) [])
-           perspectives (or (:value perspectives-res) [])
-           task (some #(when (= (.-id %) tid) %) (or all-tasks []))
-           loading (or (nil? all-tasks-res) (nil? projects-res) (nil? perspectives-res))
-           _ (when (and task (nil? @title-ctrl))
-               (reset! title-ctrl (m/TextEditingController. .text (.-title task)))
+     :context ctx
+     :watch [dao app-state/dao
+             all-tasks (when dao (task-db/watch-all-tasks dao))
+             projects (when dao (project-db/watch-all-projects dao))
+             perspectives (when dao (perspective-db/watch-all dao))
+             {:keys [proj-id persp-ids timeline-events]} ui-state/task-detail-state]
+     :let [all-tasks (or all-tasks [])
+           projects (or projects [])
+           perspectives (or perspectives [])
+           task (some #(when (= (.-id %) tid) %) all-tasks)
+           loading (or (nil? dao) (nil? all-tasks) (nil? projects) (nil? perspectives))
+           _ (when (and task (nil? proj-id))
                (ui-state/update-task-detail-state! assoc :proj-id (.-projectId task) :persp-ids (widgets/parse-json (.-perspectives task)))
                (-> (timeline-db/query-range dao 0 (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
                    (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es))))))]
      (m/Scaffold
-      .appBar (m/AppBar .actions [(m/IconButton .icon (m/Icon (if editing m/Icons.check m/Icons.edit))
-                                               .onPressed (fn [] (if editing
-                                                                   (let [updates (bridge/dart-new app-db/TasksCompanion {:title (.-text @title-ctrl) :projectId proj-id :perspectives (json/jsonEncode persp-ids)})]
-                                                                     (-> (tx/with-tx db (fn [] (task-db/update-task! dao tid updates)))
-                                                                         (.then (fn [_] (ui-state/update-task-detail-state! assoc :editing false)))))
-                                                                   (ui-state/update-task-detail-state! assoc :editing true))))])
-      .body (if loading (widgets/loading-indicator)
+      .appBar (m/AppBar .actions [(m/IconButton .icon (m/Icon m/Icons.edit)
+                                               .onPressed (fn [] (qe-dialog/show-edit-task-dialog ctx task)))]))
+     .body 
+     (m/SafeArea)
+     (if loading (widgets/loading-indicator)
                 (if (nil? task) (widgets/empty-state "Not found")
                     (m/ListView
+                     .scrollDirection m/Axis.horizontal
                      .children
-                     [(detail-section {:title "Title" :child (if editing (mongol/MongolTextField .controller @title-ctrl) (comp/mongol-text-block {:text (.-title task) :style (m/TextStyle .fontSize (tokens/font-size :l))}))})
-                      (detail-section {:title "Project" :child (if editing (m/DropdownButton .value proj-id .items (vec (concat [(m/DropdownMenuItem .value nil .child (m/Text "None"))] (map (fn [p] (m/DropdownMenuItem .value (.-id p) .child (m/Text (.-title p)))) projects))) .onChanged #(ui-state/update-task-detail-state! assoc :proj-id %))
-                                                                  (comp/mongol-text-block {:text (or (some #(when (= (.-id %) proj-id) (.-title %)) projects) "None")}))})
+                     [(detail-section {:title "Title" :child (comp/mongol-text-block {:text (.-title task) :style (m/TextStyle .fontSize (tokens/font-size :l))})})
+                      (detail-section {:title "Project" :child (comp/mongol-text-block {:text (or (some #(when (= (.-id %) proj-id) (.-title %)) projects) "None")})})
                       (detail-section {:title "Perspectives" :child (m/Wrap .children (mapv (fn [p] (m/FilterChip .label (m/Text (.-title p)) .selected (some #(= % (.-id p)) persp-ids) .onSelected (fn [s] (if s (ui-state/update-task-detail-state! update :persp-ids conj (.-id p)) (ui-state/update-task-detail-state! update :persp-ids (fn [ids] (remove #(= % (.-id p)) ids))))))) perspectives))})
-                      (detail-section {:title "History" :child (if (empty? timeline-events) (m/Text "No records") (m/Column .children (mapv (fn [e] (m/Card .child (m/ListTile .title (m/Text (.-title e)) .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e))))))) timeline-events)))})])))))))
+                      (detail-section {:title "History" :child (if (empty? timeline-events) (m/Text "No records") (m/Column .children (mapv (fn [e] (m/Card .child (m/ListTile .title (m/Text (.-title e)) .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e))))))) timeline-events)))})]))))))

@@ -64,7 +64,8 @@
   (atom
    {:tasks []
     :task-tags-map {}
-    :loading false}))
+    :loading false
+    :selected-task-ids #{}}))
 
 ;; Project screen state
 (defonce project-state
@@ -79,7 +80,8 @@
 (defonce timeline-state
   (atom
    {:events []
-    :loading false}))
+    :loading false
+    :filters #{"task" "forecast" "focus" "project" "perspective"}}))
 
 ;; Task Detail screen state
 (defonce task-detail-state

@@ -39,25 +39,24 @@
                      (when (.-done forecast) (m/Icon m/Icons.check_circle .color m/Colors.green))])))))
 
 (defn forecast-detail-screen [params]
-  (let [date-yyyymmdd (if-let [id (:id params)] (int id) (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))))
-        dao (app-state/get-dao)]
+  (let [date-yyyymmdd (if-let [id (:id params)] (int id) (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))))]
     (f/widget
-     :watch [forecasts (stream
-                        (map (fn [fs]
-                               (let [tids (distinct (map #(.-taskId %) (or fs [])))]
-                                 (doseq [tid tids]
-                                   (when-not (get (:titles @ui-state/forecast-detail-state) tid)
-                                     (-> (task-db/get-by-id dao tid)
-                                         (.then (fn [t] (when t (ui-state/update-forecast-detail-state! update :titles assoc tid (.-title t)))))))))
-                               fs))
-                        :as-values (forecast-db/watch-by-date dao date-yyyymmdd))
+     :watch [dao app-state/dao
+             forecasts (when dao (forecast-db/watch-by-date dao date-yyyymmdd))
              {:keys [titles]} ui-state/forecast-detail-state]
-     :let [loading (nil? forecasts)
-           forecasts (or forecasts [])]
+     :let [loading (or (nil? dao) (nil? forecasts))
+           forecasts (or forecasts [])
+           _ (when (not loading)
+               (let [tids (distinct (map #(.-taskId %) forecasts))]
+                 (doseq [tid tids]
+                   (when-not (get titles tid)
+                     (-> (task-db/get-by-id dao tid)
+                         (.then (fn [t] (when t (ui-state/update-forecast-detail-state! update :titles assoc tid (.-title t))))))))))]
      (m/Scaffold
       .appBar (m/AppBar)
       .body (if loading (widgets/loading-indicator)
                 (m/ListView
+                 .scrollDirection m/Axis.horizontal
                  .children
                  [(m/Container .padding (m/EdgeInsets.all (tokens/space :l)) .child (comp/mongol-text-block {:text (widgets/format-yyyymmdd date-yyyymmdd) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold)}))
                   (stat-card {:title "Total" :value (count forecasts)})

@@ -2,6 +2,7 @@
   "Forecast screen"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
@@ -10,33 +11,81 @@
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.forecast :as forecast]
    [minii-focus.core.db.task :as task]
+   [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.time :as time]
    [minii-focus.widgets.common :as widgets]))
 
-(defn forecast-item-card [{:keys [forecast-item task-title]}]
-  (m/Card
-   .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
-   .child (m/ListTile
-           .title (comp/mongol-text-block {:text task-title})
-           .subtitle (comp/mongol-text-block {:text (str "Confidence: " (or (.-confidence forecast-item) 0) "%")})
-           .trailing (if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green) nil))))
+(defn forecast-item-card [{:keys [forecast-item task-title on-tap]}]
+  (m/GestureDetector
+   .onTap on-tap
+   .child (m/Card
+           .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :s))
+           .child (m/Container
+                   .width 120
+                   .child (mgl/MongolListTile
+                           .title (comp/mongol-text-block {:text task-title})
+                           .subtitle (comp/mongol-text-block {:text (str "Conf: " (or (.-confidence forecast-item) 0) "%") :style (m/TextStyle .fontSize 12)})
+                           .trailing (if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green .size 16) nil))))))
 
 (defn forecast-screen [_params]
   (let [dao (app-state/get-dao)
-        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
+        today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
+        dates (mapv #(time/yyyymmdd-add-days today-yyyymmdd %) (range 7))]
     (f/widget
-     :watch [forecasts (forecast/watch-by-date dao today-yyyymmdd)
+     :watch [{:keys [daily-capacity]} ui-state/settings-state
              {:keys [task-titles-map]} ui-state/forecast-state]
-     :let [loading (nil? forecasts)
-           forecasts (or forecasts [])
-           _ (when (and (not loading) (coll? forecasts))
-               (let [tids (distinct (map #(.-taskId %) forecasts))]
-                 (doseq [tid tids]
-                   (when-not (get task-titles-map tid)
-                     (-> (task/get-by-id dao tid)
-                         (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc tid (.-title t))))))))))]
      (m/Scaffold
-      .appBar (m/AppBar)
-      .body (if loading (widgets/loading-indicator)
-                (if (empty? forecasts) (widgets/empty-state "No forecasts")
-                    (m/ListView .children (mapv (fn [f] (forecast-item-card {:forecast-item f :task-title (get task-titles-map (.-taskId f) "Loading...")})) forecasts))))))))
+      .body (m/ListView
+             .scrollDirection m/Axis.horizontal
+             .children (mapv (fn [d] 
+                               (f/widget
+                                :context ctx
+                                :watch [forecasts (forecast/watch-by-date dao d)]
+                                :let [forecasts (or forecasts [])
+                                      _ (doseq [f forecasts]
+                                          (let [tid (.-taskId f)]
+                                            (when-not (get task-titles-map tid)
+                                              (-> (task/get-by-id dao tid)
+                                                  (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc tid (.-title t)))))))))]
+                                (m/Row
+                                 .children (into [(m/Container 
+                                                   .width 80
+                                                   .margin (m/EdgeInsets.all 4)
+                                                   .decoration (m/BoxDecoration 
+                                                                .color (if (> (count forecasts) daily-capacity) m/Colors.orange.shade50 m/Colors.blue.shade50)
+                                                                .borderRadius (m/BorderRadius.circular 8))
+                                                   .padding (m/EdgeInsets.all 8)
+                                                   .child (m/Column
+                                                           .mainAxisAlignment m/MainAxisAlignment.center
+                                                           .children [(comp/mongol-text-block 
+                                                                       {:text (widgets/format-yyyymmdd d)
+                                                                        :style (m/TextStyle .fontWeight m/FontWeight.bold .fontSize 14)})
+                                                                      (m/SizedBox .height 8)
+                                                                      (comp/mongol-text-block 
+                                                                       {:text (str (count forecasts) "/" (int daily-capacity))
+                                                                        :style (m/TextStyle .color (if (> (count forecasts) daily-capacity) m/Colors.red m/Colors.blue))})
+                                                                      (when (> (count forecasts) daily-capacity)
+                                                                        (m/Icon m/Icons.warning .color m/Colors.orange .size 16))]))]
+                                                 (mapv (fn [f] 
+                                                         (forecast-item-card 
+                                                          {:forecast-item f 
+                                                           :task-title (get task-titles-map (.-taskId f) "Loading...")
+                                                           :on-tap (fn [] 
+                                                                     (let [db-ctx {:db (app-state/get-db) :dao dao}
+                                                                           initial-date (dart-core/DateTime.now)]
+                                                                       (-> (m/showDatePicker
+                                                                            .context ctx
+                                                                            .initialDate initial-date
+                                                                            .firstDate (.subtract initial-date (dart-core/Duration .days 30))
+                                                                            .lastDate (.add initial-date (dart-core/Duration .days 365)))
+                                                                           (.then (fn [selected-date]
+                                                                                    (when selected-date
+                                                                                      (let [new-date (time/ts->yyyymmdd (int (/ (.millisecondsSinceEpoch selected-date) 1000)))]
+                                                                                        (dispatch/dispatch-event! 
+                                                                                         db-ctx
+                                                                                         {:type :forecast/reschedule
+                                                                                          :payload {:forecast-id (.-id f)
+                                                                                                    :date new-date}
+                                                                                          :source :ui}))))))))})) 
+                                                       forecasts)))))
+                             dates))))))

@@ -51,7 +51,7 @@
 
    :task/create
    {:required #{:title}
-    :optional #{:note :project-id :perspective-id :source}}
+    :optional #{:note :project-id :perspective-id :source :due-at :defer-at :tags :is-flagged}}
 
    :task/complete
    {:required #{:task-id}
@@ -111,6 +111,10 @@
 
    :perspective/update-rules
    {:required #{:perspective-id :rules}
+    :optional #{}}
+
+   :perspective/update-weight
+   {:required #{:perspective-id :weight}
     :optional #{}}
 
    ;; --------------------

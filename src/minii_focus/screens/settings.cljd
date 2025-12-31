@@ -2,6 +2,7 @@
   "Settings page"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
@@ -25,40 +26,45 @@
                     .crossAxisAlignment m/CrossAxisAlignment.start
                     .children
                     [(comp/mongol-text-block {:text "Forecast Settings" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                     (m/SizedBox .height (tokens/space :m))
+                     (m/SizedBox .width (tokens/space :m))
                      (m/Column
                       .crossAxisAlignment m/CrossAxisAlignment.start
                       .children
                       [(comp/mongol-text-block {:text (str "Daily Capacity: " (int daily-capacity))})
-                       (m/Slider .value daily-capacity .min 1.0 .max 10.0 .divisions 9 .onChanged (fn [v] (ui-state/update-settings-state! assoc :daily-capacity v)))
-                       (m/ElevatedButton .onPressed (fn [] (-> (settings-db/set-value! dao "daily_capacity" (str daily-capacity)) (.then (fn [_] (on-updated))))) .child (m/Text "Save"))])])))))
+                       (m/SizedBox .width (tokens/space :m))
+                       ;; Slider in vertical column needs a container with height
+                       (m/SizedBox .height 200.0 .child (m/RotatedBox .quarterTurns 1 .child (m/Slider .value daily-capacity .min 1.0 .max 10.0 .divisions 9 .onChanged (fn [v] (ui-state/update-settings-state! assoc :daily-capacity v)))))
+                       (m/SizedBox .width (tokens/space :m))
+                       (m/ElevatedButton .onPressed (fn [] (-> (settings-db/set-value! dao "daily_capacity" (str daily-capacity)) (.then (fn [_] (on-updated))))) .child (comp/mongol-text-block {:text "Save"}))])])))))
 
 (defn app-info-section []
   (m/Card
    .margin (m/EdgeInsets.all (tokens/space :m))
    .child (m/Padding
            .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Column
+           .child (m/Row
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
                    [(comp/mongol-text-block {:text "App Information" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height (tokens/space :s))
+                    (m/SizedBox .width (tokens/space :s))
                     (comp/mongol-text-block {:text "Mongol Focus v1.0.0"})]))))
 
 (defn settings-screen [_params]
   (let [dao (app-state/get-dao)]
     (f/widget
-     (m/Scaffold
-      .appBar (m/AppBar)
-      .body (m/ListView
-             .children
-             [(if dao
-                (forecast-settings-section {:dao dao :on-updated (fn [] (toast/show-success-toast nil "Updated"))})
-                (widgets/loading-indicator))
-              (app-info-section)
-              (m/Card
-               .margin (m/EdgeInsets.all (tokens/space :m))
-               .child (m/ListTile
-                       .leading (m/Icon m/Icons.download)
-                       .title (m/Text "Export Data")
-                       .onTap (fn [] (toast/show-info-toast nil "Exporting..."))))])))))
+     (m/Scaffold)
+     .body
+     (m/SafeArea)
+     (m/ListView
+      .scrollDirection m/Axis.horizontal
+      .children
+      [(if dao
+         (forecast-settings-section {:dao dao :on-updated (fn [] (toast/show-success-toast nil "Updated"))})
+         (widgets/loading-indicator))
+       (app-info-section)
+       (m/Card
+        .margin (m/EdgeInsets.all (tokens/space :m))
+        .child (mgl/MongolListTile
+                .leading (m/Icon m/Icons.download)
+                .title (comp/mongol-text-block {:text "Export Data"})
+                .onTap (fn [] (toast/show-info-toast nil "Exporting..."))))]))))

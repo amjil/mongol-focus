@@ -1,0 +1,154 @@
+(ns minii-focus.core.utils.text-parser
+  "Text parser for quick entry - extracts dates, tags, flags, etc. from text"
+  (:require
+   ["dart:core" :as dart-core]
+   [clojure.string :as str]))
+
+;; =============================================================================
+;; Text parsing utilities
+;; =============================================================================
+
+(defn- parse-relative-date
+  "Parse relative date strings like 'tomorrow', 'next week', etc.
+  Returns DateTime or nil"
+  [text]
+  (let [lower-text (str/lower-case text)
+        today (dart-core/DateTime.now)
+        today-start (dart-core/DateTime. (.year today) (.month today) (.day today))]
+    (cond
+      ;; Today
+      (or (str/includes? lower-text "today")
+          (str/includes? lower-text "өнөөдөр"))
+      today-start
+      
+      ;; Tomorrow
+      (or (str/includes? lower-text "tomorrow")
+          (str/includes? lower-text "маргааш"))
+      (.add today-start (dart-core/Duration :days 1))
+      
+      ;; Next week
+      (or (str/includes? lower-text "next week")
+          (str/includes? lower-text "дараа долоо хоног"))
+      (.add today-start (dart-core/Duration :days 7))
+      
+      ;; Next month
+      (or (str/includes? lower-text "next month")
+          (str/includes? lower-text "дараа сар"))
+      (dart-core/DateTime. (.year today) (inc (.month today)) (.day today))
+      
+      :else nil)))
+
+(defn- parse-date-pattern
+  "Parse date patterns like '2025-01-30', '01/30/2025', etc.
+  Returns DateTime or nil"
+  [text]
+  (try
+    ;; Try ISO format: YYYY-MM-DD
+    (let [iso-pattern #"(\d{4})-(\d{1,2})-(\d{1,2})"
+          iso-match (re-find iso-pattern text)]
+      (if iso-match
+        (let [[_ year month day] iso-match]
+          (dart-core/DateTime. (dart-core/int.parse year) (dart-core/int.parse month) (dart-core/int.parse day)))
+        nil))
+    (catch Exception _ nil)))
+
+(defn- extract-date-from-text
+  "Extract date from text, returns {:defer-date DateTime? :due-date DateTime? :cleaned-text String}"
+  [text]
+  (let [;; Patterns for defer date (start date)
+        defer-patterns [#"(?i)start\s+(\d{4}-\d{1,2}-\d{1,2})"
+                        #"(?i)from\s+(\d{4}-\d{1,2}-\d{1,2})"
+                        #"(?i)begin\s+(\d{4}-\d{1,2}-\d{1,2})"]
+        ;; Patterns for due date
+        due-patterns [#"(?i)due\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"(?i)until\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"(?i)by\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"(?i)before\s+(\d{4}-\d{1,2}-\d{1,2})"]
+        defer-date (atom nil)
+        due-date (atom nil)
+        cleaned-text (atom text)]
+    
+    ;; Try to find defer date patterns
+    (doseq [pattern defer-patterns]
+      (let [match (re-find pattern text)]
+        (when match
+          (let [date-str (second match)
+                parsed-date (parse-date-pattern date-str)]
+            (when parsed-date
+              (reset! defer-date parsed-date)
+              (reset! cleaned-text (str/replace @cleaned-text pattern "")))))))
+    
+    ;; Try to find due date patterns
+    (doseq [pattern due-patterns]
+      (let [match (re-find pattern text)]
+        (when match
+          (let [date-str (second match)
+                parsed-date (parse-date-pattern date-str)]
+            (when parsed-date
+              (reset! due-date parsed-date)
+              (reset! cleaned-text (str/replace @cleaned-text pattern "")))))))
+    
+    ;; Try relative dates if no explicit dates found
+    (when (and (nil? @defer-date) (nil? @due-date))
+      (let [relative-date (parse-relative-date text)]
+        (when relative-date
+          (reset! due-date relative-date)
+          (reset! cleaned-text (str/replace @cleaned-text #"(?i)(today|tomorrow|next week|next month|өнөөдөр|маргааш|дараа долоо хоног|дараа сар)" "")))))
+    
+    {:defer-date @defer-date
+     :due-date @due-date
+     :cleaned-text (str/trim @cleaned-text)}))
+
+(defn- extract-tags-from-text
+  "Extract tags from text (format: #tag or @tag)
+  Returns {:tag-names [String] :cleaned-text String}"
+  [text]
+  (let [;; Match #tag or @tag patterns
+        tag-pattern #"[#@](\w+)"
+        matches (re-seq tag-pattern text)
+        tag-names (map second matches)
+        cleaned-text (str/replace text tag-pattern "")]
+    {:tag-names (vec tag-names)
+     :cleaned-text (str/trim cleaned-text)}))
+
+(defn- extract-flag-from-text
+  "Extract flag indicator from text (! or ⭐)
+  Returns {:is-flagged Boolean :cleaned-text String}"
+  [text]
+  (let [has-flag (or (str/includes? text "!")
+                     (str/includes? text "⭐")
+                     (str/includes? text "*"))
+        cleaned-text (str/replace text #"[!⭐*]" "")]
+    {:is-flagged has-flag
+     :cleaned-text (str/trim cleaned-text)}))
+
+;; =============================================================================
+;; Main parsing function
+;; =============================================================================
+
+(defn parse-quick-entry-text
+  "Parse quick entry text and extract all information
+  Returns map with:
+  - :content String - cleaned task content
+  - :defer-date DateTime? - start date
+  - :due-date DateTime? - due date
+  - :tag-names [String] - list of tag names to create/associate
+  - :is-flagged Boolean - whether task should be flagged"
+  [text]
+  (let [;; Step 1: Extract flag
+        flag-result (extract-flag-from-text text)
+        text-after-flag (:cleaned-text flag-result)
+        
+        ;; Step 2: Extract tags
+        tag-result (extract-tags-from-text text-after-flag)
+        text-after-tags (:cleaned-text tag-result)
+        
+        ;; Step 3: Extract dates
+        date-result (extract-date-from-text text-after-tags)]
+    
+    {:content (:cleaned-text date-result)
+     :defer-date (:defer-date date-result)
+     :due-date (:due-date date-result)
+     :tag-names (:tag-names tag-result)
+     :is-flagged (:is-flagged flag-result)}))
+

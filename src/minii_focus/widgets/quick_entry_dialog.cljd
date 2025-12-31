@@ -1,0 +1,352 @@
+(ns minii-focus.widgets.quick-entry-dialog
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [cljd.flutter :as f]
+   [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.text-parser :as text-parser]
+   [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]
+   ["package:flutter/services.dart" :as services]
+   [virtual-keyboard.keyboard :as keyboard]
+   [virtual-keyboard.options :as keyboard-options]))
+
+(defn quick-entry-dialog []
+  (let [controller (m/TextEditingController)]
+    (f/widget
+     :context ctx
+     :let [size (.-size (m/MediaQuery.of ctx))
+           h (.-height size)
+           w (.-width size)
+           info (merge keyboard-options/keyboard-option
+                       {:keyboard/key-cap-border-radius 6
+                        :keyboard/font-size 18
+                        :keyboard/key-container-color m/Colors.grey.shade500
+                        :keyboard/mongol-font-family "OnonSoninSans"})]
+     :bind {:info info}
+     (m/Dialog
+      .insetPadding m/EdgeInsets.zero
+      .child
+      (m/Container
+       .height (* h 0.9)
+       .width w
+       .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.max
+        .children
+        [(m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :s))
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children
+           [(comp/mongol-text-block {:text "Quick Entry" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+            (m/IconButton
+             .icon (m/Icon m/Icons.close)
+             .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+         (m/Expanded
+          .child
+          (m/Padding
+           .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/Expanded
+              .child
+              (m/Container
+               .decoration (m/BoxDecoration
+                            .border (m/Border.all .color m/Colors.grey.shade300)
+                            .borderRadius (m/BorderRadius.circular 8))
+               .child (mgl/MongolTextField
+                       .controller controller
+                       .autofocus true
+                       .maxLines nil
+                       .decoration (m/InputDecoration
+                                    .border m/InputBorder.none
+                                    .contentPadding (m/EdgeInsets.all (tokens/space :s))
+                                    .hintText "Capture everything... (use #tags, !flag, dates)"))))
+             (m/SizedBox .width (tokens/space :s))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(m/IconButton
+                .icon (m/Icon m/Icons.paste)
+                .onPressed (fn []
+                             (-> (services/Clipboard.getData services/Clipboard.kTextPlain)
+                                 (.then (fn [data]
+                                          (when (and data (.-text data))
+                                            (set! (.-text controller) (.-text data))))))
+                             nil))
+               (m/SizedBox .height (tokens/space :s))
+               (mgl/MongolElevatedButton
+                .onPressed (fn []
+                             (let [raw-text (.text controller)
+                                   db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
+                               (when-not (empty? raw-text)
+                                 (let [parsed (text-parser/parse-quick-entry-text raw-text)
+                                       title (:content parsed)
+                                       tags (:tag-names parsed)
+                                       due-at (when-let [d (:due-date parsed)] (.millisecondsSinceEpoch d))
+                                       defer-at (when-let [d (:defer-date parsed)] (.millisecondsSinceEpoch d))]
+                                   (-> (dispatch/dispatch-event! db-ctx
+                                                                 {:type :task/create
+                                                                  :payload {:title title
+                                                                            :tags tags
+                                                                            :due-at due-at
+                                                                            :defer-at defer-at}
+                                                                  :source :ui})
+                                       (.then (fn [_]
+                                                (-> (m/Navigator.of ctx) (.pop)))))))))
+                .child (comp/mongol-text-block {:text "Add"}))])])))
+         (m/SizedBox .height (tokens/space :m))
+         (keyboard/keyboard {:custom-fns {}})]))))))
+
+(defn show-quick-entry-dialog [context]
+  (m/showDialog
+   .context context
+   .builder (fn [_] (quick-entry-dialog))))
+
+(defn edit-task-dialog [task]
+  (let [controller (m/TextEditingController .text (.-title task))]
+    (f/widget
+     :context ctx
+     :let [size (.-size (m/MediaQuery.of ctx))
+           h (.-height size)
+           w (.-width size)
+           info (merge keyboard-options/keyboard-option
+                       {:keyboard/key-cap-border-radius 6
+                        :keyboard/font-size 18
+                        :keyboard/key-container-color m/Colors.grey.shade500
+                        :keyboard/mongol-font-family "OnonSoninSans"})]
+     :bind {:info info}
+     (m/Dialog
+      .insetPadding m/EdgeInsets.zero
+      .child
+      (m/Container
+       .height (* h 0.9)
+       .width w
+       .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.max
+        .children
+        [(m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :s))
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children
+           [(comp/mongol-text-block {:text "Edit Task" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+            (m/IconButton
+             .icon (m/Icon m/Icons.close)
+             .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+         (m/Expanded
+          .child
+          (m/Padding
+           .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/Expanded
+              .child
+              (m/Container
+               .decoration (m/BoxDecoration
+                            .border (m/Border.all .color m/Colors.grey.shade300)
+                            .borderRadius (m/BorderRadius.circular 8))
+               .child (mgl/MongolTextField
+                       .controller controller
+                       .autofocus true
+                       .maxLines nil
+                       .decoration (m/InputDecoration
+                                    .border m/InputBorder.none
+                                    .contentPadding (m/EdgeInsets.all (tokens/space :s))))))
+             (m/SizedBox .width (tokens/space :s))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(mgl/MongolElevatedButton
+                .onPressed (fn []
+                             (let [new-title (.text controller)
+                                   db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}
+                                   dao (:dao db-ctx)]
+                               (when-not (empty? new-title)
+                                 (let [updates (bridge/dart-new
+                                                app-db/TasksCompanion
+                                                {:title new-title})]
+                                   (-> (task-db/update-task! dao (.-id task) updates)
+                                       (.then (fn [_]
+                                                (-> (m/Navigator.of ctx) (.pop)))))))))
+                .child (comp/mongol-text-block {:text "Save"}))])])))
+         (m/SizedBox .height (tokens/space :m))
+         (keyboard/keyboard {:custom-fns {}})]))))))
+
+(defn show-edit-task-dialog [context task]
+  (m/showDialog
+   .context context
+   .builder (fn [_] (edit-task-dialog task))))
+
+(defn add-project-dialog []
+  (let [controller (m/TextEditingController)]
+    (f/widget
+     :context ctx
+     :let [size (.-size (m/MediaQuery.of ctx))
+           h (.-height size)
+           w (.-width size)
+           info (merge keyboard-options/keyboard-option
+                       {:keyboard/key-cap-border-radius 6
+                        :keyboard/font-size 18
+                        :keyboard/key-container-color m/Colors.grey.shade500
+                        :keyboard/mongol-font-family "OnonSoninSans"})]
+     :bind {:info info}
+     (m/Dialog
+      .insetPadding m/EdgeInsets.zero
+      .child
+      (m/Container
+       .height (* h 0.9)
+       .width w
+       .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.max
+        .children
+        [(m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :s))
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children
+           [(comp/mongol-text-block {:text "New Project" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+            (m/IconButton
+             .icon (m/Icon m/Icons.close)
+             .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+         (m/Expanded
+          .child
+          (m/Padding
+           .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/Expanded
+              .child
+              (m/Container
+               .decoration (m/BoxDecoration
+                            .border (m/Border.all .color m/Colors.grey.shade300)
+                            .borderRadius (m/BorderRadius.circular 8))
+               .child (mgl/MongolTextField
+                       .controller controller
+                       .autofocus true
+                       .decoration (m/InputDecoration
+                                    .border m/InputBorder.none
+                                    .contentPadding (m/EdgeInsets.all (tokens/space :s))
+                                    .hintText "Project Name"))))
+             (m/SizedBox .width (tokens/space :s))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(mgl/MongolElevatedButton
+                .onPressed (fn []
+                             (let [name (.text controller)
+                                   db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
+                               (when-not (empty? name)
+                                 (-> (dispatch/dispatch-event! db-ctx
+                                                                {:type :project/create
+                                                                 :payload {:name name}
+                                                                 :source :ui})
+                                      (.then (fn [_]
+                                               (-> (m/Navigator.of ctx) (.pop))))))))
+                .child (comp/mongol-text-block {:text "Create"}))])])))
+         (m/SizedBox .height (tokens/space :m))
+         (keyboard/keyboard {:custom-fns {}})]))))))
+
+(defn show-add-project-dialog [context]
+  (m/showDialog
+   .context context
+   .builder (fn [_] (add-project-dialog))))
+
+(defn add-perspective-dialog []
+  (let [controller (m/TextEditingController)]
+    (f/widget
+     :context ctx
+     :let [size (.-size (m/MediaQuery.of ctx))
+           h (.-height size)
+           w (.-width size)
+           info (merge keyboard-options/keyboard-option
+                       {:keyboard/key-cap-border-radius 6
+                        :keyboard/font-size 18
+                        :keyboard/key-container-color m/Colors.grey.shade500
+                        :keyboard/mongol-font-family "OnonSoninSans"})]
+     :bind {:info info}
+     (m/Dialog
+      .insetPadding m/EdgeInsets.zero
+      .child
+      (m/Container
+       .height (* h 0.9)
+       .width w
+       .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+       .child
+       (m/Column
+        .mainAxisSize m/MainAxisSize.max
+        .children
+        [(m/Padding
+          .padding (m/EdgeInsets.all (tokens/space :s))
+          .child
+          (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children
+           [(comp/mongol-text-block {:text "New Perspective" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+            (m/IconButton
+             .icon (m/Icon m/Icons.close)
+             .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+         (m/Expanded
+          .child
+          (m/Padding
+           .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
+           .child
+           (m/Row
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/Expanded
+              .child
+              (m/Container
+               .decoration (m/BoxDecoration
+                            .border (m/Border.all .color m/Colors.grey.shade300)
+                            .borderRadius (m/BorderRadius.circular 8))
+               .child (mgl/MongolTextField
+                       .controller controller
+                       .autofocus true
+                       .decoration (m/InputDecoration
+                                    .border m/InputBorder.none
+                                    .contentPadding (m/EdgeInsets.all (tokens/space :s))
+                                    .hintText "Perspective Name"))))
+             (m/SizedBox .width (tokens/space :s))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(mgl/MongolElevatedButton
+                .onPressed (fn []
+                             (let [name (.text controller)
+                                   db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
+                               (when-not (empty? name)
+                                 (-> (dispatch/dispatch-event! db-ctx
+                                                                {:type :perspective/create
+                                                                 :payload {:name name :type "custom" :rules {}}
+                                                                 :source :ui})
+                                      (.then (fn [_]
+                                               (-> (m/Navigator.of ctx) (.pop))))))))
+                .child (comp/mongol-text-block {:text "Create"}))])])))
+         (m/SizedBox .height (tokens/space :m))
+         (keyboard/keyboard {:custom-fns {}})]))))))
+
+(defn show-add-perspective-dialog [context]
+  (m/showDialog
+   .context context
+   .builder (fn [_] (add-perspective-dialog))))
+

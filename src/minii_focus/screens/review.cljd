@@ -7,60 +7,132 @@
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.domain.review.aggregate :as aggregate]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.common :as widgets]))
 
 (defn stat-item [{:keys [label value color]}]
   (m/Column
+   .mainAxisSize m/MainAxisSize.min
    .children
-   [(comp/mongol-text-block {:text (str value) :style (m/TextStyle .fontSize (tokens/font-size :xl) .fontWeight m/FontWeight.bold .color (or color (tokens/color :text-main)))})
-    (comp/mongol-text-block {:text label :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})]))
+   [(comp/mongol-text-block {:text (str value) :style (m/TextStyle .fontSize 24 .fontWeight m/FontWeight.bold .color (or color (tokens/color :text-main)))})
+    (m/SizedBox .height 8)
+    (comp/mongol-text-block {:text label :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})]))
 
 (defn overview-card [{:keys [overview]}]
   (m/Card
    .margin (m/EdgeInsets.all (tokens/space :m))
    .child (m/Padding
            .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Column
-                   .crossAxisAlignment m/CrossAxisAlignment.start
+           .child (m/Row
                    .children
-                   [(comp/mongol-text-block {:text "Overview" :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height (tokens/space :m))
-                    (m/Row
-                     .mainAxisAlignment m/MainAxisAlignment.spaceAround
-                     .children
-                     [(stat-item {:label "Completed" :value (:task-completed overview) :color m/Colors.green})
-                      (stat-item {:label "Forecast Done" :value (:forecast-completed overview)})
-                      (stat-item {:label "Skipped" :value (:forecast-skipped overview) :color m/Colors.orange})])]))))
+                   [(m/Column
+                     .mainAxisAlignment m/MainAxisAlignment.center
+                     .children [(comp/mongol-text-block {:text "Overview" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})])
+                    (m/SizedBox .width 24)
+                    (stat-item {:label "Completed" :value (:task-completed overview) :color m/Colors.green})
+                    (m/SizedBox .width 16)
+                    (stat-item {:label "Forecast" :value (:forecast-completed overview)})
+                    (m/SizedBox .width 16)
+                    (stat-item {:label "Skipped" :value (:forecast-skipped overview) :color m/Colors.orange})]))))
 
-(defn perspective-review-item [{:keys [data]}]
-  (let [p (:perspective data)]
-    (m/Card
-     .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
-     .child (m/ListTile
-             .title (comp/mongol-text-block {:text (.-title p)})
-             .subtitle (m/Text (str "Done: " (:done-count data) " | Focus: " (:focus-minutes data) "m"))
-             .trailing (comp/mongol-text-block {:text (str (int (* (.-weight p) 100)) "%")})))))
+(defn perspective-review-item [{:keys [my-ctx db-ctx data]}]
+  (let [p (:perspective data)
+        pid (.-id p)
+        initial-weight (.-weight p)
+        w-atom (atom initial-weight)]
+    (m/GestureDetector
+     .onTap (fn []
+              (m/showDialog
+               .context my-ctx
+               .builder (fn [ctx]
+                          (m/AlertDialog
+                           .title (comp/mongol-text-block {:text (str "Adjust Weight: " (.-title p))})
+                           .content (m/Column
+                                     .mainAxisSize m/MainAxisSize.min
+                                     .children [(f/widget
+                                                 :watch [current-w w-atom]
+                                                 (comp/mongol-text-block {:text (str "Weight: " (int (* current-w 100)) "%")}))
+                                                (f/widget
+                                                 :watch [current-w w-atom]
+                                                 (m/Slider
+                                                  .value current-w
+                                                  .onChanged (fn [new-w] (reset! w-atom new-w))
+                                                  .min 0.0
+                                                  .max 1.0))])
+                           .actions [(m/TextButton
+                                      .child (m/Text "Cancel")
+                                      .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                                     (m/TextButton
+                                      .child (m/Text "Apply")
+                                      .onPressed (fn []
+                                                   (dispatch/dispatch-event! 
+                                                    db-ctx
+                                                    {:type :perspective/update-weight
+                                                     :payload {:perspective-id pid
+                                                               :weight @w-atom}
+                                                     :source :ui})
+                                                   (-> (m/Navigator.of ctx) (.pop))))]))))
+     .child (m/Card
+             .margin (m/EdgeInsets.symmetric :horizontal (tokens/space :xs) :vertical (tokens/space :s))
+             .child (m/Container
+                     .width 100
+                     .padding (m/EdgeInsets.all 8)
+                     .child (m/Column
+                             .mainAxisAlignment m/MainAxisAlignment.center
+                             .children
+                             [(comp/mongol-text-block {:text (.-title p) :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                              (m/SizedBox .height 8)
+                              (comp/mongol-text-block {:text (str (:done-count data) " done") :style (m/TextStyle .fontSize 12)})
+                              (comp/mongol-text-block {:text (str (:focus-minutes data) "m") :style (m/TextStyle .fontSize 12)})
+                              (m/Divider)
+                              (comp/mongol-text-block {:text (str (int (* (.-weight p) 100)) "%")})]))))))
 
 (defn review-screen [_params]
-  (let [dao (app-state/get-dao)]
+  (let [dao (app-state/get-dao)
+        db-ctx {:db (app-state/get-db) :dao dao}]
     (f/widget
+     :context my-ctx
      :watch [{:keys [period-type]} ui-state/review-state
              review-data (future (aggregate/aggregate-review-data! dao period-type))]
      :let [loading (nil? review-data)]
      (m/Scaffold
-      .appBar (m/AppBar .actions [(m/PopupMenuButton
-                                  .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
-                                  .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
-                                                        (m/PopupMenuItem .value :week .child (m/Text "Week"))
-                                                        (m/PopupMenuItem .value :month .child (m/Text "Month"))]))])
+      .appBar (m/AppBar 
+               .actions [(m/IconButton 
+                          .icon (m/Icon m/Icons.check)
+                          .onPressed (fn [] 
+                                       (when review-data
+                                         (let [overview (:overview review-data)
+                                               perspectives (:perspectives review-data)
+                                               total-focus (reduce + 0 (map :focus-minutes perspectives))
+                                               payload {:period (:period review-data)
+                                                        :stats {:expected-count (or (:forecast-completed overview) 0)
+                                                                :actual-count (or (:task-completed overview) 0)
+                                                                :expected-duration (* (count perspectives) 30)
+                                                                :actual-duration total-focus
+                                                                :mood-score 0.0 ; Default
+                                                                :focus-score 0.0 ; Default
+                                                                }}]
+                                           (-> (dispatch/dispatch-event! db-ctx
+                                                                         {:type :review/submit
+                                                                          :payload payload
+                                                                          :source :ui})
+                                               (.then (fn [_] 
+                                                        (toast/show-success-toast nil "Review submitted!"))))))))
+                         (m/PopupMenuButton
+                          .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
+                          .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
+                                                (m/PopupMenuItem .value :week .child (m/Text "Week"))
+                                                (m/PopupMenuItem .value :month .child (m/Text "Month"))]))])
       .body (if loading
               (widgets/loading-indicator)
               (if (nil? review-data)
                 (widgets/empty-state "No data for this period")
                 (m/ListView
+                 .scrollDirection m/Axis.horizontal
                  .children
                  [(overview-card {:overview (:overview review-data)})
-                  (m/Padding
-                   .padding (m/EdgeInsets.all (tokens/space :m))
-                   .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)}))
-                  (m/Column .children (mapv (fn [p-data] (perspective-review-item {:data p-data})) (:perspectives review-data)))])))))))
+                  (m/Container 
+                   .padding (m/EdgeInsets.all 16)
+                   .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)}))
+                  (m/Row .children (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))])))))))

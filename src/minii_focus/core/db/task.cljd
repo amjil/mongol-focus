@@ -21,9 +21,11 @@
   - priority: int (0-5, default 3)
   - postpone-count: int (default 0)
   - abandoned: boolean (default false)
+  - due-at: int (millisecond timestamp, nullable)
+  - defer-at: int (millisecond timestamp, nullable)
   
   ⚠️ Companion building must be centralized, only change here when schema changes"
-  [{:keys [id title project-id perspectives completed created-at priority postpone-count abandoned]}]
+  [{:keys [id title project-id perspectives completed created-at priority postpone-count abandoned due-at defer-at]}]
   (let [now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))] ; Timestamp in seconds
     (bridge/dart-new
      app-db/TasksCompanion
@@ -35,7 +37,9 @@
       :createdAt (or created-at now)
       :priority priority  ; nullable, nil will use default value 3
       :postponeCount postpone-count  ; nullable, nil will use default value 0
-      :abandoned abandoned})))  ; nullable, nil will use default value false
+      :abandoned abandoned
+      :dueAt due-at
+      :deferAt defer-at})))  ; nullable, nil will use default value false
 
 (defn mark-completed!
   "Mark task as completed

@@ -2,29 +2,59 @@
   "Focus page"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.components.focus-depth :as focus-depth]
+   [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
-   [minii-focus.core.utils.toast :as toast]
+   [minii-focus.core.db.timeline :as timeline]
    [minii-focus.widgets.common :as widgets]))
 
 (defn stats-item [{:keys [label value color]}]
   (m/Column
+   .mainAxisSize m/MainAxisSize.min
    .crossAxisAlignment m/CrossAxisAlignment.center
    .children
    [(comp/mongol-text-block
      {:text (str value)
       :style (m/TextStyle
-              .fontSize (tokens/font-size :xl)
+              .fontSize 24
               .fontWeight m/FontWeight.bold
               .color (or color (tokens/color :accent)))})
+    (m/SizedBox .height 8)
     (comp/mongol-text-block
      {:text label
       :style (m/TextStyle
-              .fontSize (tokens/font-size :s)
+              .fontSize 12
               .color (tokens/color :text-weak))})]))
+
+(defn focus-history-list [{:keys [events]}]
+  (let [focus-events (filter #(re-find #"^focus/(complete|abort)" (.-type %)) (reverse (or events [])))]
+    (m/Container
+     .width 150
+     .padding (m/EdgeInsets.symmetric :horizontal 16)
+     .child (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children [(comp/mongol-text-block {:text "History" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                        (m/SizedBox .height 8)
+                        (m/Expanded
+                         .child (m/ListView
+                                 .scrollDirection m/Axis.horizontal
+                                 .children (mapv (fn [e]
+                                                   (m/Card
+                                                    .margin (m/EdgeInsets.symmetric :horizontal 4 :vertical 8)
+                                                    .child (m/Container
+                                                            .width 100
+                                                            .padding (m/EdgeInsets.all 8)
+                                                            .child (m/Column
+                                                                    .mainAxisAlignment m/MainAxisAlignment.center
+                                                                    .children [(comp/mongol-text-block {:text (.-title e) :style (m/TextStyle .fontSize 12)})
+                                                                               (m/SizedBox .height 4)
+                                                                               (comp/mongol-text-block {:text (str (or (.-duration e) 0) "m") :style (m/TextStyle .fontSize 12 .color m/Colors.blue)})]))))
+                                                 (take 10 focus-events))))]))))
 
 (defn today-stats-card [{:keys [stats depth-history]}]
   (m/Card
@@ -39,13 +69,13 @@
                       :style (m/TextStyle
                               .fontSize (tokens/font-size :m)
                               .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height (tokens/space :s))
+                    (m/SizedBox .width (tokens/space :s))
                     (m/Row
                      .mainAxisAlignment m/MainAxisAlignment.spaceAround
                      .children
                      (filterv some?
                       [(stats-item {:label "minutes" :value (:total-minutes stats)})
-                       (m/SizedBox .width (tokens/space :m))
+                       (m/SizedBox .height (tokens/space :m))
                        (when (seq depth-history)
                          (focus-depth/focus-depth-chart
                           {:depths depth-history :max-items 7}))
@@ -55,7 +85,7 @@
 
 (defn focus-active-session [{:keys [task-title remaining-seconds current-focus-depth is-paused on-resume on-pause on-complete on-abort]}]
   (m/Center
-   .child (m/Column
+   .child (m/Row
            .mainAxisAlignment m/MainAxisAlignment.center
            .crossAxisAlignment m/CrossAxisAlignment.center
            .children
@@ -64,75 +94,82 @@
               :style (m/TextStyle
                       .fontSize (tokens/font-size :xl)
                       .fontWeight m/FontWeight.bold)})
-            (m/SizedBox .height (tokens/space :l))
+            (m/SizedBox .width (tokens/space :l))
             (comp/mongol-text-block
              {:text (widgets/format-timer remaining-seconds)
               :style (m/TextStyle
                       .fontSize (tokens/font-size :xxl)
                       .fontWeight m/FontWeight.bold)})
-            (m/SizedBox .height (tokens/space :l))
+            (m/SizedBox .width (tokens/space :l))
             (focus-depth/focus-depth-bar
              {:depth current-focus-depth
               :max-depth 1.0
-              :width 250.0
-              :height 24.0})
-            (m/SizedBox .height (tokens/space :xl))
+              :width 24.0
+              :height 250.0})
+            (m/SizedBox .width (tokens/space :xl))
             (if is-paused
-              (m/ElevatedButton .onPressed on-resume .child (m/Text "Resume"))
-              (m/OutlinedButton .onPressed on-pause .child (m/Text "Pause")))
-            (m/SizedBox .height (tokens/space :m))
-            (m/Row
+              (m/ElevatedButton .onPressed on-resume .child (comp/mongol-text-block {:text "Resume"}))
+              (m/OutlinedButton .onPressed on-pause .child (comp/mongol-text-block {:text "Pause"})))
+            (m/SizedBox .width (tokens/space :m))
+            (m/Column
              .mainAxisAlignment m/MainAxisAlignment.center
              .children
-             [(m/ElevatedButton .onPressed on-complete .child (m/Text "Complete"))
-              (m/SizedBox .width (tokens/space :m))
-              (m/OutlinedButton .onPressed on-abort .child (m/Text "Abort"))])])))
+             [(mgl/MongolElevatedButton .onPressed on-complete .child (comp/mongol-text-block {:text "Complete"}))
+              (m/SizedBox .height (tokens/space :m))
+              (mgl/MongolOutlinedButton .onPressed on-abort .child (comp/mongol-text-block {:text "Abort"}))])])))
 
 (defn forecast-list [{:keys [forecasts task-titles-map on-start]}]
   (if (empty? forecasts)
     (widgets/empty-state "No Forecast for today")
     (m/ListView
+     .scrollDirection m/Axis.horizontal
      .children
      (mapv (fn [f]
              (let [tid (.-taskId f)
                    title (get task-titles-map tid "Loading...")]
                (m/Card
                 .margin (m/EdgeInsets.symmetric :vertical (tokens/space :s) :horizontal (tokens/space :m))
-                .child (m/ListTile
+                .child (mgl/MongolListTile
                         .title (comp/mongol-text-block {:text title})
-                        .trailing (m/ElevatedButton
+                        .trailing (mgl/MongolElevatedButton
                                    .onPressed (fn [] (on-start f))
-                                   .child (m/Text "Start"))))))
+                                   .child (comp/mongol-text-block {:text "Start"}))))))
            forecasts))))
 
 (defn focus-screen [_params]
-  (f/widget
-   :context ctx
-   :watch [{:keys [is-focusing is-paused remaining-seconds today-forecasts task-titles-map
-                   loading today-stats focus-depth-history current-focus-depth current-forecast timer]} ui-state/focus-state]
-   (m/Scaffold
-    .appBar (m/AppBar
-             .actions [(m/IconButton .icon (m/Icon m/Icons.history) .onPressed (fn [] (toast/show-info-toast ctx "History in development")))]
-             .backgroundColor (tokens/color :bg-focus))
-    .backgroundColor (tokens/color :bg-focus)
-    .body (m/Column
-           .children
-           [(today-stats-card {:stats today-stats :depth-history focus-depth-history})
-            (m/Expanded
-             .child (if is-focusing
-                      (focus-active-session
-                       {:task-title (get task-titles-map (.-taskId current-forecast) "Unknown task")
-                        :remaining-seconds remaining-seconds
-                        :current-focus-depth current-focus-depth
-                        :is-paused is-paused
-                        :on-resume (fn [] (ui-state/update-focus-state! assoc :is-paused false))
-                        :on-pause (fn []
-                                    (ui-state/update-focus-state!
-                                     (fn [s] (-> s (assoc :is-paused true) (update :pause-count inc)))))
-                        :on-complete (fn [] (ui-state/complete-focus ctx))
-                        :on-abort (fn []
-                                    (ui-state/update-focus-state! assoc :is-focusing false)
-                                    (when timer (.cancel timer) (ui-state/update-focus-state! assoc :timer nil)))})
-                      (if loading
-                        (widgets/loading-indicator)
-                        (forecast-list {:forecasts today-forecasts :task-titles-map task-titles-map :on-start (fn [f] (ui-state/start-focus f ctx))}))))]))))
+  (let [dao (app-state/get-dao)
+        now (dart-core/DateTime.now)
+        today-start (dart-core/DateTime. (.year now) (.month now) (.day now))
+        start-ts (int (/ (.millisecondsSinceEpoch today-start) 1000))]
+    (f/widget
+     :context ctx
+     :watch [{:keys [is-focusing is-paused remaining-seconds today-forecasts task-titles-map
+                     loading today-stats focus-depth-history current-focus-depth current-forecast timer]} ui-state/focus-state
+             events (timeline/watch-range dao start-ts (+ start-ts 86399))]
+     :let [effective-stats (if (seq events) (ui-state/calculate-today-stats events) today-stats)]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .backgroundColor (tokens/color :bg-focus))
+      .backgroundColor (tokens/color :bg-focus)
+      .body (m/Row
+             .children
+             [(today-stats-card {:stats effective-stats :depth-history focus-depth-history})
+              (focus-history-list {:events events})
+              (m/Expanded
+               .child (if is-focusing
+                        (focus-active-session
+                         {:task-title (get task-titles-map (.-taskId current-forecast) "Unknown task")
+                          :remaining-seconds remaining-seconds
+                          :current-focus-depth current-focus-depth
+                          :is-paused is-paused
+                          :on-resume (fn [] (ui-state/update-focus-state! assoc :is-paused false))
+                          :on-pause (fn []
+                                      (ui-state/update-focus-state!
+                                       (fn [s] (-> s (assoc :is-paused true) (update :pause-count inc)))))
+                          :on-complete (fn [] (ui-state/complete-focus ctx))
+                          :on-abort (fn []
+                                      (ui-state/update-focus-state! assoc :is-focusing false)
+                                      (when timer (.cancel timer) (ui-state/update-focus-state! assoc :timer nil)))})
+                        (if loading
+                          (widgets/loading-indicator)
+                          (forecast-list {:forecasts today-forecasts :task-titles-map task-titles-map :on-start (fn [f] (ui-state/start-focus f ctx))}))))])))))

@@ -1,31 +1,67 @@
 (ns minii-focus.screens.perspective-detail
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.common :as widgets]))
 
+(defn rules-editor-card [db-ctx perspective controller]
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+           .padding (m/EdgeInsets.all (tokens/space :m))
+           .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children [(comp/mongol-text-block {:text "Rules (JSON)" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                              (m/SizedBox .height (tokens/space :s))
+                              (m/Expanded
+                               .child (mgl/MongolTextField
+                                       .controller controller
+                                       .maxLines nil
+                                       .style (m/TextStyle .fontSize 14 .fontFamily "monospace")
+                                       .decoration (m/InputDecoration .border (m/OutlineInputBorder))))
+                              (m/SizedBox .height (tokens/space :s))
+                              (m/ElevatedButton
+                               .onPressed (fn [] 
+                                            (let [rules-json (.text controller)]
+                                              (-> (dispatch/dispatch-event! db-ctx
+                                                                            {:type :perspective/update-rules
+                                                                             :payload {:perspective-id (.-id perspective)
+                                                                                       :rules rules-json}
+                                                                             :source :ui})
+                                                  (.then (fn [_] 
+                                                           (toast/show-success-toast nil "Rules updated"))))))
+                               .child (comp/mongol-text-block {:text "Save Rules"}))]))))
+
 (defn perspective-detail-screen [params]
-  (let [pid (:id params)
-        dao (app-state/get-dao)]
+  (let [pid (:id params)]
     (f/widget
-     :watch [perspective-res (stream :as-values (perspective-db/get-by-id dao pid))
-             all-tasks-res (stream :as-values (task-db/watch-all-tasks dao))]
-     :let [loading (or (nil? perspective-res) (nil? all-tasks-res))
-           perspective (:value perspective-res)
-           all-tasks (:value all-tasks-res)
+     :watch [dao app-state/dao
+             perspective-res (when dao (future (-> (perspective-db/get-by-id dao pid)
+                                                  (.then (fn [p] {:data p})))))
+             all-tasks (when dao (task-db/watch-all-tasks dao))]
+     :managed [rules-controller (m/TextEditingController)]
+     :let [loading (or (nil? dao) (nil? perspective-res) (nil? all-tasks))
+           perspective (:data perspective-res)
+           db-ctx {:db (app-state/get-db) :dao dao}
+           _ (when (and (not loading) perspective)
+               (when (empty? (.text rules-controller))
+                 (set! (.-text rules-controller) (or (.-rules perspective) "[]"))))
            tasks (if loading [] (filter (fn [t] (some #(= % pid) (widgets/parse-json (.-perspectives t)))) (or all-tasks [])))]
      (m/Scaffold
-      .appBar (m/AppBar)
       .body (if loading
               (widgets/loading-indicator)
               (if (nil? perspective)
                 (widgets/empty-state "Perspective not found")
                 (m/ListView
+                 .scrollDirection m/Axis.horizontal
                  .children
                  [(m/Padding
                    .padding (m/EdgeInsets.all (tokens/space :m))
@@ -36,6 +72,7 @@
                             (widgets/weight-history-chart {:weight-history (widgets/parse-json (.-weightHistory perspective))})
                             (m/SizedBox .height (tokens/space :m))
                             (comp/mongol-text-block {:text (str "Current Weight: " (int (* (.-weight perspective) 100)) "%")})]))
+                  (rules-editor-card db-ctx perspective rules-controller)
                   (m/Padding
                    .padding (m/EdgeInsets.all (tokens/space :m))
                    .child (comp/mongol-text-block {:text "Tasks" :style (m/TextStyle .fontWeight m/FontWeight.bold)}))

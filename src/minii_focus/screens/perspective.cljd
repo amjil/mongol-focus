@@ -2,7 +2,7 @@
   "Perspective page"
   (:require
    ["package:flutter/material.dart" :as m]
-   ["package:mongol/mongol.dart" :as mongol]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:convert" :as json]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
@@ -12,6 +12,7 @@
    [minii-focus.core.db.task :as task-db]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
+   [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.widgets.common :as widgets]))
 
 (defn format-weight [weight]
@@ -28,10 +29,9 @@
             .onLongPress (when on-long-press (fn [] (on-long-press perspective)))
             .child (m/Padding
                    .padding (m/EdgeInsets.all (tokens/space :m))
-                   .child (m/Column
-                          .crossAxisAlignment m/CrossAxisAlignment.start
+                   .child (m/Row
                           .children
-                          [(m/Row
+                          [(m/Column
                             .mainAxisSize m/MainAxisSize.min
                             .children
                             [(m/Expanded
@@ -44,23 +44,23 @@
                               .child (comp/mongol-text-block
                                      {:text (format-weight current-weight)
                                       :style (m/TextStyle .fontSize (tokens/font-size :s) .color m/Colors.white .fontWeight m/FontWeight.bold)}))])
-                            (m/SizedBox .height (tokens/space :s))
-                            (m/Row
+                            (m/SizedBox .width (tokens/space :s))
+                            (m/Column
                              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                              .children
                              [(m/Row
                                .mainAxisSize m/MainAxisSize.min
                                .children
                                [(m/Icon m/Icons.task .size 16 .color (tokens/color :text-weak))
-                                (m/SizedBox .width (tokens/space :xs))
+                                (m/SizedBox .height (tokens/space :xs))
                                 (comp/mongol-text-block {:text (str "Tasks: " (:total stats)) :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})])
                               (m/Row
                                .mainAxisSize m/MainAxisSize.min
                                .children
                                [(m/Icon m/Icons.check_circle .size 14 .color m/Colors.green)
-                                (m/SizedBox .width (tokens/space :xs))
+                                (m/SizedBox .height (tokens/space :xs))
                                 (comp/mongol-text-block {:text (str (:completed stats)) :style (m/TextStyle .fontSize (tokens/font-size :s) .color m/Colors.green)})])])
-                            (m/SizedBox .height (tokens/space :s))
+                            (m/SizedBox .width (tokens/space :s))
                             (if (empty? weight-history)
                               (comp/mongol-text-block {:text "No history data" :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})
                               (widgets/weight-history-chart {:weight-history weight-history}))]))))))
@@ -78,13 +78,13 @@
                            .mainAxisSize m/MainAxisSize.min
                            .children
                            [(comp/mongol-text-block {:text "Conditions (JSON)"})
-                            (mongol/MongolTextField .controller conditions-ctrl .maxLines 3)
-                            (m/SizedBox .height (tokens/space :m))
+                            (mgl/MongolTextField .controller conditions-ctrl .maxLines 3)
+                            (m/SizedBox .width (tokens/space :m))
                             (comp/mongol-text-block {:text "Actions (JSON)"})
-                            (mongol/MongolTextField .controller actions-ctrl .maxLines 3)])
+                            (mgl/MongolTextField .controller actions-ctrl .maxLines 3)])
                  .actions
-                 [(m/TextButton .onPressed (fn [] (m/Navigator.pop d-ctx)) .child (m/Text "Close"))
-                  (m/TextButton .onPressed (fn []
+                 [(mgl/MongolTextButton .onPressed (fn [] (m/Navigator.pop d-ctx)) .child (comp/mongol-text-block {:text "Close"}))
+                  (mgl/MongolTextButton .onPressed (fn []
                                              (try
                                                (let [new-rules {:conditions (json/jsonDecode (.text conditions-ctrl))
                                                                 :actions (json/jsonDecode (.text actions-ctrl))}]
@@ -92,27 +92,29 @@
                                                  (-> (dispatch/dispatch-event! ctx {:type :perspective/update-rules :payload {:perspective-id (.-id perspective) :rules new-rules} :source :ui})
                                                      (.then (fn [_] (toast/show-success-toast ctx "Updated")))))
                                                (catch Exception _ (toast/show-error-toast ctx "JSON Error"))))
-                                .child (m/Text "Save"))])))))
+                                .child (comp/mongol-text-block {:text "Save"}))])))))
 
 (defn perspective-screen [_params]
-  (let [dao (app-state/get-dao)]
-    (f/widget
-     :context ctx
-     :watch [perspectives-res (stream :as-values (perspective-db/watch-all dao))
-             all-tasks-res (stream :as-values (task-db/watch-all-tasks dao))]
-     :let [loading (or (nil? perspectives-res) (nil? all-tasks-res))
-           perspectives (or (:value perspectives-res) [])
-           all-tasks (or (:value all-tasks-res) [])]
-     (m/Scaffold
-      .appBar (m/AppBar)
-      .body (if loading
-              (widgets/loading-indicator)
-              (if (empty? perspectives)
-                (widgets/empty-state "No Perspective")
-                (m/ListView
-                 .children
-                 (mapv (fn [p]
-                         (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
-                               stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
-                           (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
-                       perspectives))))))))
+  (f/widget
+   :context ctx
+   :watch [dao app-state/dao
+           perspectives (when dao (perspective-db/watch-all dao))
+           all-tasks (when dao (task-db/watch-all-tasks dao))]
+   :let [loading (or (nil? dao) (nil? perspectives) (nil? all-tasks))
+         perspectives (or perspectives [])
+         all-tasks (or all-tasks [])]
+   (m/Scaffold
+    .appBar (m/AppBar 
+             .actions [(m/IconButton .icon (m/Icon m/Icons.add) .onPressed (fn [] (qe-dialog/show-add-perspective-dialog ctx)))])
+    .body (if loading
+            (widgets/loading-indicator)
+            (if (empty? perspectives)
+              (widgets/empty-state "No Perspective")
+              (m/ListView
+               .scrollDirection m/Axis.horizontal
+               .children
+               (mapv (fn [p]
+                       (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
+                             stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
+                         (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
+                     perspectives)))))))

@@ -3,10 +3,12 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["dart:core" :as dart-core]
+   ["dart:collection" :as dart-coll]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
+   [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.timeline :as timeline]
    [minii-focus.widgets.common :as widgets]))
 
@@ -33,7 +35,7 @@
                      .crossAxisAlignment m/CrossAxisAlignment.start
                      .children
                      [(m/Icon (get-event-icon type) .color (get-event-color type) .size 24)
-                      (m/SizedBox .width (tokens/space :s))
+                      (m/SizedBox .height (tokens/space :s))
                       (m/Expanded
                        .child (m/Column
                                .crossAxisAlignment m/CrossAxisAlignment.start
@@ -66,18 +68,37 @@
               (reduce (fn [acc e]
                         (let [d (widgets/format-yyyymmdd (int (/ (.-timestamp e) 86400)))]
                           (update acc d (fnil conj []) e)))
-                      {} es))]
+                      (dart-coll/LinkedHashMap) es)) ; Preserve order
+            (filter-events [es filters]
+              (filter (fn [e] (some #(.startsWith (.-type e) (str % "/")) filters)) es))]
       (f/widget
-       :watch [events (future (timeline/query-range dao start-ts end-ts))]
+       :watch [events (future (timeline/query-range dao start-ts end-ts))
+               {:keys [filters]} ui-state/timeline-state]
        :let [loading (nil? events)
-             events (or events [])]
+             all-events (or events [])
+             filtered-events (filter-events all-events filters)]
        (m/Scaffold
-        .appBar (m/AppBar)
-        .body (if loading
-                (widgets/loading-indicator)
-                (let [groups (group-by-date events)]
-                  (if (empty? groups)
-                    (widgets/empty-state "No events")
-                    (m/ListView
-                     .children
-                     (mapv (fn [[d es]] (day-section {:date-str d :events es})) groups))))))))))
+        .appBar (m/AppBar
+                 .actions [(m/PopupMenuButton
+                            .icon (m/Icon m/Icons.filter_list)
+                            .onSelected (fn [v]
+                                          (ui-state/update-timeline-state!
+                                           (fn [s] (update s :filters (fn [fs] (if (contains? fs v) (disj fs v) (conj fs v)))))))
+                            .itemBuilder (fn [_]
+                                           (mapv (fn [t]
+                                                   (m/CheckedPopupMenuItem
+                                                    .value t
+                                                    .checked (contains? filters t)
+                                                    .child (m/Text t)))
+                                                 ["task" "forecast" "focus" "project" "perspective"])))]))
+       .body
+       (m/SafeArea)
+       (if loading
+         (widgets/loading-indicator)
+         (let [groups (group-by-date filtered-events)]
+           (if (empty? groups)
+             (widgets/empty-state "No events matching filters")
+             (m/ListView
+              .scrollDirection m/Axis.horizontal
+              .children
+              (mapv (fn [d] (day-section {:date-str d :events (get groups d)})) (keys groups))))))))))

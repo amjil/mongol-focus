@@ -36,6 +36,7 @@
 ;; 3️⃣ Perspective Page Events
 (def perspective-create "perspective/create")
 (def perspective-update-rules "perspective/update-rules")
+(def perspective-update-weight "perspective/update-weight")
 (def task-remove-perspective "task/remove-perspective")
 
 ;; 4️⃣ Forecast Page Events
@@ -72,14 +73,22 @@
   - source: keyword (optional, default :inbox)
   - project-id: string (optional)
   - perspective-id: string (optional)
+  - due-at: int (optional, millisecond timestamp)
+  - defer-at: int (optional, millisecond timestamp)
+  - tags: vector of strings (optional)
+  - is-flagged: boolean (optional)
   
   Returns: map"
-  [{:keys [title note source project-id perspective-id]}]
+  [{:keys [title note source project-id perspective-id due-at defer-at tags is-flagged]}]
   {:title title
    :note note
    :source (or source :inbox)
    :project-id project-id
-   :perspective-id perspective-id})
+   :perspective-id perspective-id
+   :due-at due-at
+   :defer-at defer-at
+   :tags tags
+   :is-flagged is-flagged})
 
 (defn task-complete-payload
   "Build task/complete Event Payload
