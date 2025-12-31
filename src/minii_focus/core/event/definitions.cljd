@@ -13,7 +13,8 @@
 ;;   - Examples: task/create, task/complete, forecast/add
 ;;   - System auto-generated Events use system prefix: system/forecast-auto-add")
   (:require
-   ["dart:convert" :as json]))
+   ["dart:convert" :as json]
+   [minii-focus.core.utils.conversion :as conversion]))
 
 ;; ============================================================================
 ;; Event Type Constants
@@ -380,7 +381,7 @@
   
   Returns: string"
   [payload]
-  (json/jsonEncode payload))
+  (json/jsonEncode (conversion/clj-to-dart payload)))
 
 (defn json-to-payload
   "Deserialize JSON string to Payload map

@@ -55,15 +55,15 @@
 (defn- extract-date-from-text
   "Extract date from text, returns {:defer-date DateTime? :due-date DateTime? :cleaned-text String}"
   [text]
-  (let [;; Patterns for defer date (start date)
-        defer-patterns [#"(?i)start\s+(\d{4}-\d{1,2}-\d{1,2})"
-                        #"(?i)from\s+(\d{4}-\d{1,2}-\d{1,2})"
-                        #"(?i)begin\s+(\d{4}-\d{1,2}-\d{1,2})"]
-        ;; Patterns for due date
-        due-patterns [#"(?i)due\s+(\d{4}-\d{1,2}-\d{1,2})"
-                      #"(?i)until\s+(\d{4}-\d{1,2}-\d{1,2})"
-                      #"(?i)by\s+(\d{4}-\d{1,2}-\d{1,2})"
-                      #"(?i)before\s+(\d{4}-\d{1,2}-\d{1,2})"]
+  (let [;; Patterns for defer date (start date) - using character classes for case-insensitive matching
+        defer-patterns [#"[Ss][Tt][Aa][Rr][Tt]\s+(\d{4}-\d{1,2}-\d{1,2})"
+                        #"[Ff][Rr][Oo][Mm]\s+(\d{4}-\d{1,2}-\d{1,2})"
+                        #"[Bb][Ee][Gg][Ii][Nn]\s+(\d{4}-\d{1,2}-\d{1,2})"]
+        ;; Patterns for due date - using character classes for case-insensitive matching
+        due-patterns [#"[Dd][Uu][Ee]\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"[Uu][Nn][Tt][Ii][Ll]\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"[Bb][Yy]\s+(\d{4}-\d{1,2}-\d{1,2})"
+                      #"[Bb][Ee][Ff][Oo][Rr][Ee]\s+(\d{4}-\d{1,2}-\d{1,2})"]
         defer-date (atom nil)
         due-date (atom nil)
         cleaned-text (atom text)]
@@ -93,7 +93,9 @@
       (let [relative-date (parse-relative-date text)]
         (when relative-date
           (reset! due-date relative-date)
-          (reset! cleaned-text (str/replace @cleaned-text #"(?i)(today|tomorrow|next week|next month|өнөөдөр|маргааш|дараа долоо хоног|дараа сар)" "")))))
+          ;; Remove relative date keywords using character classes for case-insensitive matching
+          (let [relative-pattern #"([Tt][Oo][Dd][Aa][Yy]|[Tt][Oo][Mm][Oo][Rr][Rr][Oo][Ww]|[Nn][Ee][Xx][Tt]\s+[Ww][Ee][Ee][Kk]|[Nn][Ee][Xx][Tt]\s+[Mm][Oo][Nn][Tt][Hh]|өнөөдөр|маргааш|дараа долоо хоног|дараа сар)"]
+            (reset! cleaned-text (str/replace @cleaned-text relative-pattern ""))))))
     
     {:defer-date @defer-date
      :due-date @due-date
