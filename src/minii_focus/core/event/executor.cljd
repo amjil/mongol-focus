@@ -86,7 +86,13 @@
   Returns: TimelineEvent map"
   [event]
   (let [{:keys [id type payload created-at]} event
-        type-str (name type)
+        ;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         {:keys [entity-type entity-id]} (extract-entity-info event)
         title (extract-title event)
         duration (extract-duration event)
@@ -129,7 +135,13 @@
         ;; Ensure Event is validated
         validated-event (validator/validate-event! event)
         {:keys [type payload]} validated-event
-        type-str (name type)
+        ;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         timeline-event (event-to-timeline-event validated-event)]
     ;; Execute in transaction:
     ;; 1. Handler processes business logic (database operations)
@@ -137,13 +149,14 @@
     (tx/with-tx db
       (fn []
         ;; Execute business logic first
-        (-> (handler/handle-event! ctx {:type type-str :payload payload})
-            (.then (fn [_]
-                    ;; Then record Event
-                    (timeline/insert-event! dao timeline-event)))
-            (.catchError (fn [error]
-                          (dart-core/print (str "Error executing event: " error))
-                          (throw error))))))))
+        (let [result (-> (handler/handle-event! ctx {:type type-str :payload payload})
+                         (.then (fn [_]
+                                 ;; Then record Event
+                                 (timeline/insert-event! dao timeline-event)))
+                         (.catchError (fn [error]
+                                       (dart-core/print (str "Error executing event: " error))
+                                       (throw error))))]
+          result)))))
 
 (defn execute-event-with-validation!
   "Execute Event (with validation)

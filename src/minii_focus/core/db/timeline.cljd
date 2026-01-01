@@ -26,17 +26,16 @@
   
   ⚠️ Companion building must be centralized, only change here when schema changes"
   [{:keys [id timestamp type entity-type entity-id title duration perspectives payload]}]
-  (bridge/dart-new
-   app-db/TimelineEventsCompanion
-   {:id id
-    :timestamp timestamp
-    :type type
-    :entity-type entity-type
-    :entity-id entity-id
-    :title title
-    :duration duration
-    :perspectives perspectives
-    :payload payload}))
+  (app-db/TimelineEventsCompanion
+   .id (bridge/dart-value-string id)
+   .timestamp (bridge/dart-value-int timestamp)
+   .type (bridge/dart-value-string type)
+   .entityType (bridge/dart-value-string entity-type)
+   .entityId (if entity-id (bridge/dart-value-string-nullable entity-id) (bridge/absent-value))
+   .title (bridge/dart-value-string title)
+   .duration (if duration (bridge/dart-value-int-nullable duration) (bridge/absent-value))
+   .perspectives (if perspectives (bridge/dart-value-string-nullable perspectives) (bridge/absent-value))
+   .payload (if payload (bridge/dart-value-string-nullable payload) (bridge/absent-value))))
 
 (defn insert-event!
   "Insert Timeline Event

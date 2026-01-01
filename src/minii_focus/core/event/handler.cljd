@@ -773,6 +773,7 @@
   
   Returns: Future<void>"
   [ctx {:keys [type payload]}]
+  (dart-core/print (str "Handling event: " type))
   (case type
     event-def/task-create
     (handle-task-create ctx payload)

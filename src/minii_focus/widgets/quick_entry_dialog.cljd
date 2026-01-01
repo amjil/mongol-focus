@@ -2,6 +2,7 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
@@ -88,21 +89,23 @@
                 .onPressed (fn []
                              (let [raw-text (.text controller)
                                    db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
-                               (when-not (empty? raw-text)
+                               (if (empty? raw-text)
+                                 (dart-core/Future.value nil)
                                  (let [parsed (text-parser/parse-quick-entry-text raw-text)
                                        title (:content parsed)
                                        tags (:tag-names parsed)
                                        due-at (when-let [d (:due-date parsed)] (.millisecondsSinceEpoch d))
                                        defer-at (when-let [d (:defer-date parsed)] (.millisecondsSinceEpoch d))]
                                    (-> (dispatch/dispatch-event! db-ctx
-                                                                 {:type :task/create
+                                                                 {:type "task/create"
                                                                   :payload {:title title
                                                                             :tags tags
                                                                             :due-at due-at
                                                                             :defer-at defer-at}
                                                                   :source :ui})
                                        (.then (fn [_]
-                                                (-> (m/Navigator.of ctx) (.pop)))))))))
+                                                (-> (m/Navigator.of ctx) (.pop))))))))
+                             nil)
                 .child (comp/mongol-text-block {:text "Add"}))])])))
          (m/SizedBox .height (tokens/space :m))
          (keyboard/keyboard {:custom-fns {}})]))))))
@@ -176,13 +179,15 @@
                              (let [new-title (.text controller)
                                    db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}
                                    dao (:dao db-ctx)]
-                               (when-not (empty? new-title)
+                               (if (empty? new-title)
+                                 (dart-core/Future.value nil)
                                  (let [updates (bridge/dart-new
                                                 app-db/TasksCompanion
                                                 {:title new-title})]
                                    (-> (task-db/update-task! dao (.-id task) updates)
                                        (.then (fn [_]
-                                                (-> (m/Navigator.of ctx) (.pop)))))))))
+                                                (-> (m/Navigator.of ctx) (.pop))))))))
+                             nil)
                 .child (comp/mongol-text-block {:text "Save"}))])])))
          (m/SizedBox .height (tokens/space :m))
          (keyboard/keyboard {:custom-fns {}})]))))))
@@ -255,13 +260,15 @@
                 .onPressed (fn []
                              (let [name (.text controller)
                                    db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
-                               (when-not (empty? name)
+                               (if (empty? name)
+                                 (dart-core/Future.value nil)
                                  (-> (dispatch/dispatch-event! db-ctx
                                                                 {:type :project/create
                                                                  :payload {:name name}
                                                                  :source :ui})
                                       (.then (fn [_]
-                                               (-> (m/Navigator.of ctx) (.pop))))))))
+                                               (-> (m/Navigator.of ctx) (.pop)))))))
+                             nil)
                 .child (comp/mongol-text-block {:text "Create"}))])])))
          (m/SizedBox .height (tokens/space :m))
          (keyboard/keyboard {:custom-fns {}})]))))))
@@ -334,13 +341,15 @@
                 .onPressed (fn []
                              (let [name (.text controller)
                                    db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
-                               (when-not (empty? name)
+                               (if (empty? name)
+                                 (dart-core/Future.value nil)
                                  (-> (dispatch/dispatch-event! db-ctx
                                                                 {:type :perspective/create
                                                                  :payload {:name name :type "custom" :rules {}}
                                                                  :source :ui})
                                       (.then (fn [_]
-                                               (-> (m/Navigator.of ctx) (.pop))))))))
+                                               (-> (m/Navigator.of ctx) (.pop)))))))
+                             nil)
                 .child (comp/mongol-text-block {:text "Create"}))])])))
          (m/SizedBox .height (tokens/space :m))
          (keyboard/keyboard {:custom-fns {}})]))))))

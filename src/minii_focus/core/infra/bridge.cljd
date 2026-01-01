@@ -10,7 +10,9 @@
    - nil → null
    - vector → JSON string"
   (:require
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   ["package:drift/drift.dart" :as drift]
+   ["package:cljd_mongol_focus/db/bridge/value_helpers.dart" :as value-helpers]))
 
 (defn camel-case
   "Convert kebab-case keyword to camelCase string
@@ -50,6 +52,38 @@
                      (fn [m k v]
                        (assoc m (name (camel-case k)) v))
                      {}
-                     params)]
-    (apply companion-class (mapcat identity dart-params))))
+                     params)
+        ;; In ClojureDart, constructors with named parameters can be called
+        ;; by converting the map to keyword arguments using apply
+        args (mapcat (fn [[k v]] [(keyword k) v]) dart-params)]
+    (apply companion-class args)))
 
+(defn dart-value [v]
+  (drift/Value v))
+
+(defn dart-value-string
+  "Create Value<String> for string values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueString (str v)))
+
+(defn dart-value-int
+  "Create Value<int> for int values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueInt (int v)))
+
+(defn dart-value-string-nullable
+  "Create Value<String?> for nullable string values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueStringNullable (if v (str v) nil)))
+
+(defn dart-value-int-nullable
+  "Create Value<int?> for nullable int values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueIntNullable (if v (int v) nil)))
+
+(defn absent-value []
+  (drift/Value. nil))
