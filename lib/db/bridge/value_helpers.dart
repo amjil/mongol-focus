@@ -17,3 +17,16 @@ Value<String?> valueStringNullable(String? v) => v == null ? const Value.absent(
 /// Create Value<int?> for nullable int values
 Value<int?> valueIntNullable(int? v) => v == null ? const Value.absent() : Value(v);
 
+/// Create Value<bool> for boolean values
+Value<bool> valueBool(bool v) => Value(v);
+
+/// Create Value<bool> that is absent (for optional boolean fields)
+Value<bool> valueBoolAbsent() {
+  return const Value<bool>.absent();
+}
+
+/// Create Value<int> that is absent (for optional int fields)
+Value<int> valueIntAbsent() {
+  return const Value<int>.absent();
+}
+

@@ -4,12 +4,13 @@
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
+   [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.task :as task]
    [minii-focus.core.db.task-tags :as task-tags]
    [minii-focus.core.event.dispatch :as dispatch]
-   [minii-focus.core.router.nav :as nav]
+   [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.widgets.common :as widgets]))
 
@@ -24,12 +25,22 @@
                               (m/SizedBox .height 8)
                               (comp/mongol-text-block {:text "Quick Entry"})]))))
 
-(defn task-item-card [{:keys [task-item task-tags-map selected? on-toggle-select on-complete]}]
-  (let [tid (.-id task-item)]
+(defn task-item-card [{:keys [ctx task-item task-tags-map selected? on-toggle-select on-complete]}]
+  (let [tid (.-id task-item)
+        color-scheme (.-colorScheme (m/Theme.of ctx))
+        card-color (if selected?
+                     (-> (.-primary color-scheme) (.withOpacity 0.12))
+                     (.-surface color-scheme))]
     (m/InkWell
-     .onTap (fn [] (nav/navigate! :task-detail {:id tid}))
+     .onTap (fn []
+              (let [navigator (m/Navigator.of ctx)
+                    task-detail-page (m/MaterialPageRoute
+                                      .builder (fn [_build-ctx]
+                                                (task-detail/task-detail-screen {:id tid})))]
+                (-> navigator (.push task-detail-page)))
+              nil)
      .child (m/Card
-             .color (if selected? m/Colors.blue.shade50 m/Colors.white)
+             .color card-color
              .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 8)
              .child (mgl/MongolListTile
                      .leading (m/Checkbox .value selected? .onChanged (fn [_] (on-toggle-select tid)))
@@ -101,7 +112,8 @@
                           (seq selected-task-ids) (conj (batch-action-bar db-ctx selected-task-ids)))
                         (mapv (fn [t]
                                 (task-item-card
-                                 {:task-item t
+                                 {:ctx ctx
+                                  :task-item t
                                   :task-tags-map task-tags-map
                                   :selected? (contains? selected-task-ids (.-id t))
                                   :on-toggle-select (fn [tid]
