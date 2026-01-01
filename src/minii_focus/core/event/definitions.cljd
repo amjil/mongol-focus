@@ -21,45 +21,45 @@
 ;; ============================================================================
 
 ;; 1️⃣ Inbox Page Events
-(def task-create "task/create")
-(def task-complete "task/complete")
-(def task-archive "task/archive")
-(def task-assign-project "task/assign-project")
-(def task-assign-perspective "task/assign-perspective")
+(def task-create :task/create)
+(def task-complete :task/complete)
+(def task-archive :task/archive)
+(def task-assign-project :task/assign-project)
+(def task-assign-perspective :task/assign-perspective)
 
 ;; 2️⃣ Project Page Events
-(def project-create "project/create")
-(def project-rename "project/rename")
-(def project-archive "project/archive")
-(def project-restore "project/restore")
-(def task-remove-project "task/remove-project")
+(def project-create :project/create)
+(def project-rename :project/rename)
+(def project-archive :project/archive)
+(def project-restore :project/restore)
+(def task-remove-project :task/remove-project)
 
 ;; 3️⃣ Perspective Page Events
-(def perspective-create "perspective/create")
-(def perspective-update-rules "perspective/update-rules")
-(def perspective-update-weight "perspective/update-weight")
-(def task-remove-perspective "task/remove-perspective")
+(def perspective-create :perspective/create)
+(def perspective-update-rules :perspective/update-rules)
+(def perspective-update-weight :perspective/update-weight)
+(def task-remove-perspective :task/remove-perspective)
 
 ;; 4️⃣ Forecast Page Events
-(def forecast-add "forecast/add")
-(def forecast-remove "forecast/remove")
-(def forecast-reschedule "forecast/reschedule")
-(def forecast-complete "forecast/complete")
+(def forecast-add :forecast/add)
+(def forecast-remove :forecast/remove)
+(def forecast-reschedule :forecast/reschedule)
+(def forecast-complete :forecast/complete)
 
 ;; 5️⃣ Focus Page Events
-(def focus-start "focus/start")
-(def focus-pause "focus/pause")
-(def focus-complete "focus/complete")
-(def focus-abort "focus/abort")
+(def focus-start :focus/start)
+(def focus-pause :focus/pause)
+(def focus-complete :focus/complete)
+(def focus-abort :focus/abort)
 
 ;; 6️⃣ Review Page Events
-(def review-submit "review/submit")
-(def task-defer "task/defer")
-(def forecast-cancel "forecast/cancel")
+(def review-submit :review/submit)
+(def task-defer :task/defer)
+(def forecast-cancel :forecast/cancel)
 
 ;; 7️⃣ System Auto-generated Events
-(def forecast-auto-add "system/forecast-auto-add")
-(def forecast-auto-adjust "system/forecast-auto-adjust")
+(def forecast-auto-add :system/forecast-auto-add)
+(def forecast-auto-adjust :system/forecast-auto-adjust)
 
 ;; ============================================================================
 ;; Event Payload Builder Functions

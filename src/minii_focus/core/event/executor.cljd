@@ -19,6 +19,7 @@
    [minii-focus.core.db.timeline :as timeline]
    [minii-focus.core.db.tx :as tx]
    [minii-focus.core.event.definitions :as event-def]
+   [minii-focus.core.utils.logger :as logger]
    ["dart:core" :as dart-core]))
 
 ;; ============================================================================
@@ -29,11 +30,17 @@
   "Extract entity-type and entity-id from Event
   
   Parameters:
-  - event: {:type keyword :payload map}
+  - event: {:type keyword|string :payload map}
   
   Returns: {:entity-type string :entity-id string?}"
   [{:keys [type payload]}]
-  (let [type-str (name type)
+  (let [;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         entity-type (case (first (str/split type-str #"/"))
                       "task" "task"
                       "project" "project"
@@ -58,13 +65,18 @@
   "Extract title from Event payload (for Timeline display)
   
   Parameters:
-  - event: {:type keyword :payload map}
+  - event: {:type keyword|string :payload map}
   
   Returns: string"
   [{:keys [type payload]}]
   (or (:title payload)
       (:name payload)
-      (str (name type) " event")))
+      (let [type-str (if (keyword? type)
+                       (if-let [ns (namespace type)]
+                         (str ns "/" (name type))
+                         (name type))
+                       type)]
+        (str type-str " event"))))
 
 (defn extract-duration
   "Extract duration from payload (write to TimelineEvents.duration)
@@ -143,6 +155,10 @@
                      (name type))
                    type)
         timeline-event (event-to-timeline-event validated-event)]
+    (logger/debug "event/executor" "Executing event" {:original-type (:type event)
+                                                       :validated-type type
+                                                       :type-str type-str
+                                                       :event-id (:id validated-event)})
     ;; Execute in transaction:
     ;; 1. Handler processes business logic (database operations)
     ;; 2. Record Event to TimelineEvents
@@ -154,7 +170,9 @@
                                  ;; Then record Event
                                  (timeline/insert-event! dao timeline-event)))
                          (.catchError (fn [error]
-                                       (dart-core/print (str "Error executing event: " error))
+                                       (logger/error "event/executor" "Error executing event" {:error (str error)
+                                                                                                :event-id (:id validated-event)
+                                                                                                :event-type type-str})
                                        (throw error))))]
           result)))))
 

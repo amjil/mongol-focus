@@ -9,6 +9,7 @@
    [minii-focus.core.db.task :as task]
    [minii-focus.core.db.task-tags :as task-tags]
    [minii-focus.core.event.dispatch :as dispatch]
+   [minii-focus.core.router.nav :as nav]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.widgets.common :as widgets]))
 
@@ -25,21 +26,24 @@
 
 (defn task-item-card [{:keys [task-item task-tags-map selected? on-toggle-select on-complete]}]
   (let [tid (.-id task-item)]
-    (m/Card
-     .color (if selected? m/Colors.blue.shade50 m/Colors.white)
-     .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 8)
-     .child (mgl/MongolListTile
-             .leading (m/Checkbox .value selected? .onChanged (fn [_] (on-toggle-select tid)))
-             .title (comp/mongol-text-block {:text (.-title task-item)})
-             .trailing (m/IconButton 
-                        .icon (m/Icon m/Icons.check_circle_outline) 
-                        .onPressed (fn [] (on-complete tid)))
-            .subtitle (m/Column .children (filterv some? [(comp/mongol-text-block {:text (widgets/format-date-time (.-createdAt task-item))})
-                                                           (let [ts (get task-tags-map tid [])] 
-                                                             (when (seq ts) 
-                                                               (m/Wrap 
-                                                                .direction m/Axis.vertical
-                                                                .children (mapv #(m/Chip .label (comp/mongol-text-block {:text %})) ts))))]))))))
+    (m/InkWell
+     .onTap (fn [] (nav/navigate! :task-detail {:id tid}))
+     .child (m/Card
+             .color (if selected? m/Colors.blue.shade50 m/Colors.white)
+             .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 8)
+             .child (mgl/MongolListTile
+                     .leading (m/Checkbox .value selected? .onChanged (fn [_] (on-toggle-select tid)))
+                     .title (comp/mongol-text-block {:text (.-title task-item)})
+                     .trailing (m/IconButton 
+                                .icon (m/Icon m/Icons.check_circle_outline) 
+                                .onPressed (fn [] (on-complete tid)))
+                    .subtitle (m/Column .children (filterv some? [(when-let [created-at (.-createdAt task-item)]
+                                                                     (comp/mongol-text-block {:text (widgets/format-date-time created-at)}))
+                                                                   (let [ts (get task-tags-map tid [])] 
+                                                                     (when (seq ts) 
+                                                                       (m/Wrap 
+                                                                        .direction m/Axis.vertical
+                                                                        .children (mapv #(m/Chip .label (comp/mongol-text-block {:text %})) ts))))])))))))
 
 (defn batch-action-bar [db-ctx selected-ids]
   (m/Container

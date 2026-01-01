@@ -27,19 +27,19 @@
   ⚠️ Companion building must be centralized, only change here when schema changes"
   [{:keys [id title project-id perspectives completed created-at priority postpone-count abandoned due-at defer-at]}]
   (let [now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))] ; Timestamp in seconds
-    (bridge/dart-new
-     app-db/TasksCompanion
-     {:id id
-      :title title
-      :projectId project-id  ; nullable, nil will be handled automatically
-      :perspectives perspectives  ; nullable, nil will be handled automatically
-      :completed completed  ; nullable, nil will be handled automatically
-      :createdAt (or created-at now)
-      :priority priority  ; nullable, nil will use default value 3
-      :postponeCount postpone-count  ; nullable, nil will use default value 0
-      :abandoned abandoned
-      :dueAt due-at
-      :deferAt defer-at})))  ; nullable, nil will use default value false
+    ;; Direct call to named constructor - cannot use apply for named parameters in ClojureDart
+    (app-db/TasksCompanion.insert
+     :id id
+     :title title
+     :projectId (bridge/dart-value-string-nullable project-id)
+     :perspectives (bridge/dart-value-string-nullable perspectives)
+     :completed (if (some? completed) (bridge/dart-value-bool completed) (bridge/dart-value-bool-absent))
+     :createdAt (or created-at now)
+     :priority (if (some? priority) (bridge/dart-value-int priority) (bridge/dart-value-int-absent))
+     :postponeCount (if (some? postpone-count) (bridge/dart-value-int postpone-count) (bridge/dart-value-int-absent))
+     :abandoned (if (some? abandoned) (bridge/dart-value-bool abandoned) (bridge/dart-value-bool-absent))
+     :dueAt (bridge/dart-value-int-nullable due-at)
+     :deferAt (bridge/dart-value-int-nullable defer-at))))
 
 (defn mark-completed!
   "Mark task as completed

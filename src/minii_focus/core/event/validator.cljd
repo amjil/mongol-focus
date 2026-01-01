@@ -13,7 +13,8 @@
 ;;   Usage:
 ;;   (validate-event! event)  ;; Validate and return event, throw exception on failure")
   (:require
-   [minii-focus.core.event.schema :as schema]))
+   [minii-focus.core.event.schema :as schema]
+   [minii-focus.core.utils.logger :as logger]))
 
 (defn- missing-keys
   "Calculate missing required fields
@@ -83,7 +84,15 @@
                        (keyword type)
                        type)
         schema (get schema/event-schemas type-keyword)]
+    (logger/debug "event/validator" "Validating event payload" {:original-type type
+                                                                :type-keyword type-keyword
+                                                                :is-keyword (keyword? type)
+                                                                :is-string (string? type)
+                                                                :has-schema (some? schema)})
     (when-not schema
+      (logger/error "event/validator" "Unknown event type" {:type type
+                                                            :type-keyword type-keyword
+                                                            :available-types (keys schema/event-schemas)})
       (throw (ex-info "Unknown event type"
                       {:type type
                        :type-keyword type-keyword
@@ -124,12 +133,18 @@
   
   Note: If event type is a string, it will be converted to keyword in the returned event."
   [event]
+  (logger/debug "event/validator" "Starting validation" {:event-id (:id event)
+                                                          :event-type (:type event)})
   (validate-event-shape event)
   (validate-event-payload event)
   ;; Normalize type to keyword format for consistency
   (let [{:keys [type]} event
         normalized-type (if (string? type)
                           (keyword type)
-                          type)]
-    (assoc event :type normalized-type)))
+                          type)
+        result (assoc event :type normalized-type)]
+    (logger/debug "event/validator" "Validation completed" {:event-id (:id event)
+                                                            :original-type type
+                                                            :normalized-type normalized-type})
+    result))
 

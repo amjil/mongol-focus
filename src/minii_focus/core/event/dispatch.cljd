@@ -23,7 +23,8 @@
 ;;   - payload must conform to schema
 ;;   - source must be :ui, :system, or :migration")
   (:require
-   [minii-focus.core.event.executor :as executor]))
+   [minii-focus.core.event.executor :as executor]
+   [minii-focus.core.utils.logger :as logger]))
 
 (defn dispatch-event!
   "Dispatch Event (enforced validation + transaction execution)
@@ -43,5 +44,7 @@
   
   This is the recommended usage, will automatically handle all details."
   [ctx event]
+  (let [{:keys [type payload source]} event]
+    (logger/log-event "event/dispatch" "Dispatching" type {:payload payload :source source}))
   (executor/execute-event-with-validation! ctx event))
 

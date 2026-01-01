@@ -39,24 +39,25 @@
   (apply dart-fn args))
 
 (defn dart-new
-  "Create Dart Companion object
+  "Create Dart Companion object using named constructor
   
   Example:
-   (dart-new TimelineEventsCompanion {:id id :timestamp ts :entity-type \"task\"})
+   (dart-new TasksCompanion.insert {:id id :title title :createdAt now})
   
   Parameter map keys are automatically converted to camelCase (e.g., :entity-type → entityType)
   
-  Note: companion-class should be an actual Dart class, e.g., app-db/TimelineEventsCompanion"
-  [companion-class params]
-  (let [dart-params (reduce-kv
-                     (fn [m k v]
-                       (assoc m (name (camel-case k)) v))
-                     {}
-                     params)
-        ;; In ClojureDart, constructors with named parameters can be called
-        ;; by converting the map to keyword arguments using apply
-        args (mapcat (fn [[k v]] [(keyword k) v]) dart-params)]
-    (apply companion-class args)))
+  Note: In ClojureDart, named constructors with named parameters cannot use 'apply'.
+  This function uses a workaround by calling the constructor with keyword arguments directly.
+  
+  companion-constructor should be a named constructor, e.g., app-db/TasksCompanion.insert"
+  [companion-constructor params]
+  ;; Note: ClojureDart cannot use 'apply' for Dart named parameters.
+  ;; This function is kept for backward compatibility but will throw an error.
+  ;; For new code, use direct constructor calls with named parameters.
+  (throw (ex-info "dart-new cannot dynamically call named constructors in ClojureDart. Please use direct constructor calls."
+                  {:constructor companion-constructor
+                   :params params
+                   :suggestion "Use direct constructor call like: (TasksCompanion.insert :id id :title title ...)"})))
 
 (defn dart-value [v]
   (drift/Value v))
@@ -84,6 +85,22 @@
   [v]
   ;; Use Dart helper function to ensure correct type
   (value-helpers/valueIntNullable (if v (int v) nil)))
+
+(defn dart-value-bool
+  "Create Value<bool> for boolean values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueBool (boolean v)))
+
+(defn dart-value-bool-absent
+  "Create Value<bool> that is absent (for optional boolean fields)"
+  []
+  (value-helpers/valueBoolAbsent))
+
+(defn dart-value-int-absent
+  "Create Value<int> that is absent (for optional int fields)"
+  []
+  (value-helpers/valueIntAbsent))
 
 (defn absent-value []
   (drift/Value. nil))

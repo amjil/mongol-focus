@@ -39,7 +39,7 @@
           (m/Row
            .mainAxisAlignment m/MainAxisAlignment.spaceBetween
            .children
-           [(comp/mongol-text-block {:text "Quick Entry" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+           [(m/SizedBox.shrink)
             (m/IconButton
              .icon (m/Icon m/Icons.close)
              .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
@@ -51,7 +51,8 @@
            (m/Row
             .crossAxisAlignment m/CrossAxisAlignment.start
             .children
-            [(m/Expanded
+            [(comp/mongol-text-block {:text "Quick Entry" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+             (m/Expanded
               .child
               (m/Container
                .decoration (m/BoxDecoration
@@ -90,7 +91,7 @@
                                        due-at (when-let [d (:due-date parsed)] (.millisecondsSinceEpoch d))
                                        defer-at (when-let [d (:defer-date parsed)] (.millisecondsSinceEpoch d))]
                                    (-> (dispatch/dispatch-event! db-ctx
-                                                                 {:type "task/create"
+                                                                 {:type :task/create
                                                                   :payload {:title title
                                                                             :tags tags
                                                                             :due-at due-at

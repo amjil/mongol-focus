@@ -4,7 +4,8 @@
    ["dart:core" :as dart-core]
    ["dart:convert" :as json]
    [minii-focus.core.components.core :as comp]
-   [minii-focus.core.components.tokens :as tokens]))
+   [minii-focus.core.components.tokens :as tokens]
+   [minii-focus.core.utils.logger :as logger]))
 
 (defn parse-json
   "Parse JSON string safely"
@@ -23,16 +24,69 @@
     (str year "-" month "-" day)))
 
 (defn format-date-time
-  "Format date time (display creation time)"
+  "Format date time (display creation time)
+  Accepts either DateTime object or int timestamp (in seconds or milliseconds)
+  Note: Task.createdAt is in seconds"
   [date-time]
-  (let [now (dart-core/DateTime.now)
-        created date-time
-        diff-days (int (/ (- (.millisecondsSinceEpoch now) (.millisecondsSinceEpoch created)) (* 1000 60 60 24)))]
-    (cond
-      (= diff-days 0) "Today"
-      (= diff-days 1) "Yesterday"
-      (< diff-days 7) (str diff-days " days ago")
-      :else (str (.month created) "/" (.day created)))))
+  (if (nil? date-time)
+    "Unknown"
+    (try
+      (let [is-num (number? date-time)
+            now (dart-core/DateTime.now)
+            now-ms (.millisecondsSinceEpoch now)
+            ;; Convert date-time to milliseconds
+            created-ms (if is-num
+                         ;; It's a number (timestamp)
+                         (if (>= date-time 1000000000000)
+                           ;; Already in milliseconds
+                           date-time
+                           ;; In seconds, convert to milliseconds (Task.createdAt is in seconds)
+                           (* date-time 1000))
+                         ;; Assume it's already a DateTime object
+                         (try
+                           (.millisecondsSinceEpoch date-time)
+                           (catch Exception e
+                             (logger/error "widgets/common" "Failed to get millisecondsSinceEpoch from DateTime"
+                                           {:date-time-str (str date-time)
+                                            :error (str e)})
+                             (throw e))))
+            ;; Create DateTime object for accessing .month and .day
+            created-dt (try
+                         (dart-core/DateTime.fromMillisecondsSinceEpoch created-ms)
+                         (catch Exception e
+                           (logger/error "widgets/common" "Failed to create DateTime from milliseconds"
+                                         {:created-ms created-ms
+                                          :error (str e)})
+                           (throw e)))
+            diff-ms (- now-ms created-ms)
+            ms-per-day 86400000
+            diff-days (int (/ diff-ms ms-per-day))
+            result (cond
+                     (= diff-days 0) "Today"
+                     (= diff-days 1) "Yesterday"
+                     (< diff-days 7) (str diff-days " days ago")
+                     :else (try
+                             (str (.month created-dt) "/" (.day created-dt))
+                             (catch Exception e
+                               (logger/error "widgets/common" "Failed to access month/day from DateTime"
+                                             {:created-dt-str (str created-dt)
+                                              :error (str e)})
+                               "Unknown")))]
+        (logger/debug "widgets/common" "format-date-time result"
+                      {:date-time date-time
+                       :is-number is-num
+                       :now-ms now-ms
+                       :created-ms created-ms
+                       :diff-ms diff-ms
+                       :diff-days diff-days
+                       :result result})
+        result)
+      (catch Exception e
+        (logger/error "widgets/common" "format-date-time error"
+                      {:date-time date-time
+                       :date-time-str (str date-time)
+                       :error (str e)})
+        "Unknown"))))
 
 (defn format-timer
   "Format seconds to MM:SS"

@@ -18,6 +18,7 @@
    [minii-focus.core.domain.calibration.review-to-forecast :as calib]
    [minii-focus.core.infra.bridge :as bridge]
    [minii-focus.core.utils.time :as time]
+   [minii-focus.core.utils.logger :as logger]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]
    ["package:cljd_mongol_focus/db/bridge/forecast_bridge.dart" :as forecast-bridge]
    ["dart:core" :as dart-core]
@@ -36,7 +37,13 @@
 (defn- extract-entity-info
   "Extract entity-type and entity-id from Event (internal use, avoids circular dependencies)"
   [{:keys [type payload]}]
-  (let [type-str (name type)
+  (let [;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         entity-type (case (first (str/split type-str #"/"))
                       "task" "task"
                       "project" "project"
@@ -62,7 +69,12 @@
   [{:keys [type payload]}]
   (or (:title payload)
       (:name payload)
-      (str (name type) " event")))
+      (let [type-str (if (keyword? type)
+                       (if-let [ns (namespace type)]
+                         (str ns "/" (name type))
+                         (name type))
+                       type)]
+        (str type-str " event"))))
 
 (defn- extract-duration
   "Extract duration from payload (internal use)"
@@ -76,7 +88,13 @@
   "Convert Event to TimelineEvent format (internal use, avoids circular dependencies)"
   [event]
   (let [{:keys [id type payload created-at]} event
-        type-str (name type)
+        ;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         {:keys [entity-type entity-id]} (extract-entity-info event)
         title (extract-title event)
         duration (extract-duration event)
@@ -114,7 +132,13 @@
         ;; Validate event
         validated-event (validator/validate-event! full-event)
         {:keys [type payload]} validated-event
-        type-str (name type)
+        ;; Convert keyword to string: :task/create -> "task/create"
+        ;; If already string, keep as is
+        type-str (if (keyword? type)
+                   (if-let [ns (namespace type)]
+                     (str ns "/" (name type))
+                     (name type))
+                   type)
         timeline-event (event-to-timeline-event validated-event)]
     ;; Execute in transaction:
     ;; 1. Handler processes business logic (database operations)
@@ -773,8 +797,19 @@
   
   Returns: Future<void>"
   [ctx {:keys [type payload]}]
-  (dart-core/print (str "Handling event: " type))
-  (case type
+  (logger/log-event "event/handler" "Handling" type {:payload payload})
+  ;; Normalize type to keyword for comparison (definitions use keywords)
+  (let [type-keyword (if (string? type)
+                      (keyword type)
+                      type)]
+    (logger/debug "event/handler" "Event type details" {:type type
+                                                         :type-keyword type-keyword
+                                                         :is-keyword (keyword? type)
+                                                         :is-string (string? type)
+                                                         :namespace (when (keyword? type) (namespace type))
+                                                         :name (when (keyword? type) (name type))
+                                                         :expected-task-create event-def/task-create})
+    (condp = type-keyword
     event-def/task-create
     (handle-task-create ctx payload)
     
@@ -856,8 +891,17 @@
     event-def/forecast-auto-add
     (handle-forecast-auto-add ctx payload)
     
-    ;; Unknown Event type
-    (do
-      (dart-core/print (str "Unknown event type: " type))
-      (dart-core/Future.value nil))))
+      ;; Unknown Event type
+      (do
+        (logger/error "event/handler" "Unknown event type" {:type type
+                                                            :type-keyword type-keyword
+                                                            :is-keyword (keyword? type)
+                                                            :is-string (string? type)
+                                                            :namespace (when (keyword? type) (namespace type))
+                                                            :name (when (keyword? type) (name type))
+                                                            :available-types [event-def/task-create
+                                                                               event-def/task-complete
+                                                                               event-def/project-create
+                                                                               event-def/perspective-create]})
+        (dart-core/Future.value nil)))))
 
