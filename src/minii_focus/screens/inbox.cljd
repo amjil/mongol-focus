@@ -13,9 +13,8 @@
    [minii-focus.widgets.common :as widgets]))
 
 (defn quick-input-button [ctx]
-  (m/Container
-   .width 100
-   .margin (m/EdgeInsets.all 8)
+  (m/Padding
+   .padding (m/EdgeInsets.all 8)
    .child (mgl/MongolElevatedButton
            .onPressed (fn [] (qe-dialog/show-quick-entry-dialog ctx))
            .child (m/Column
@@ -86,26 +85,28 @@
                    (when-not (contains? task-tags-map tid)
                      (-> (task-tags/get-task-tags dao tid)
                          (.then (fn [tags] (ui-state/update-inbox-state! update :task-tags-map assoc tid tags)))))))))]
-   (m/Scaffold
-    .body (if loading
-            (widgets/loading-indicator)
-            (let [ins (filter #(not (.-completed %)) tasks)]
-              (m/ListView
-               .scrollDirection m/Axis.horizontal
-               .children (into (cond-> [(quick-input-button ctx)]
-                                 (seq selected-task-ids) (conj (batch-action-bar db-ctx selected-task-ids)))
-                               (mapv (fn [t] 
-                                       (task-item-card 
-                                        {:task-item t 
-                                         :task-tags-map task-tags-map
-                                         :selected? (contains? selected-task-ids (.-id t))
-                                         :on-toggle-select (fn [tid] 
-                                                             (ui-state/update-inbox-state! 
-                                                              update :selected-task-ids 
-                                                              (fn [ids] (if (contains? ids tid) (disj ids tid) (conj ids tid)))))
-                                         :on-complete (fn [tid]
-                                                        (dispatch/dispatch-event! db-ctx
-                                                                                  {:type :task/complete
-                                                                                   :payload {:task-id tid}
-                                                                                   :source :ui}))})) 
-                                     ins))))))))
+   (m/Scaffold)
+   .body
+   (m/SafeArea)
+   (if loading
+     (widgets/loading-indicator)
+     (let [ins (filter #(not (.-completed %)) tasks)]
+       (m/ListView
+        .scrollDirection m/Axis.horizontal
+        .children (into (cond-> [(quick-input-button ctx)]
+                          (seq selected-task-ids) (conj (batch-action-bar db-ctx selected-task-ids)))
+                        (mapv (fn [t]
+                                (task-item-card
+                                 {:task-item t
+                                  :task-tags-map task-tags-map
+                                  :selected? (contains? selected-task-ids (.-id t))
+                                  :on-toggle-select (fn [tid]
+                                                      (ui-state/update-inbox-state!
+                                                       update :selected-task-ids
+                                                       (fn [ids] (if (contains? ids tid) (disj ids tid) (conj ids tid)))))
+                                  :on-complete (fn [tid]
+                                                 (dispatch/dispatch-event! db-ctx
+                                                                           {:type :task/complete
+                                                                            :payload {:task-id tid}
+                                                                            :source :ui}))}))
+                              ins)))))))

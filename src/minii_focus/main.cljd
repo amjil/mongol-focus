@@ -55,7 +55,7 @@
                                    {:keyboard/key-cap-border-radius 6
                                     :keyboard/font-size 18
                                     :keyboard/key-container-color m/Colors.grey.shade500
-                                    :keyboard/mongol-font-family "OnonSoninSans"})
+                                    :keyboard/mongol-font-family "OyunQaganTig"})
                        current-index (atom 0)
                       pages [(today/today-screen nil)
                              (inbox/inbox-screen nil)

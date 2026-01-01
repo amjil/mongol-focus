@@ -13,8 +13,7 @@
    [minii-focus.core.infra.bridge :as bridge]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]
    ["package:flutter/services.dart" :as services]
-   [virtual-keyboard.keyboard :as keyboard]
-   [virtual-keyboard.options :as keyboard-options]))
+   [virtual-keyboard.keyboard :as keyboard]))
 
 (defn quick-entry-dialog []
   (let [controller (m/TextEditingController)]
@@ -22,13 +21,7 @@
      :context ctx
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
-           w (.-width size)
-           info (merge keyboard-options/keyboard-option
-                       {:keyboard/key-cap-border-radius 6
-                        :keyboard/font-size 18
-                        :keyboard/key-container-color m/Colors.grey.shade500
-                        :keyboard/mongol-font-family "OnonSoninSans"})]
-     :bind {:info info}
+           w (.-width size)]
      (m/Dialog
       .insetPadding m/EdgeInsets.zero
       .child
@@ -121,13 +114,7 @@
      :context ctx
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
-           w (.-width size)
-           info (merge keyboard-options/keyboard-option
-                       {:keyboard/key-cap-border-radius 6
-                        :keyboard/font-size 18
-                        :keyboard/key-container-color m/Colors.grey.shade500
-                        :keyboard/mongol-font-family "OnonSoninSans"})]
-     :bind {:info info}
+           w (.-width size)]
      (m/Dialog
       .insetPadding m/EdgeInsets.zero
       .child
@@ -203,13 +190,7 @@
      :context ctx
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
-           w (.-width size)
-           info (merge keyboard-options/keyboard-option
-                       {:keyboard/key-cap-border-radius 6
-                        :keyboard/font-size 18
-                        :keyboard/key-container-color m/Colors.grey.shade500
-                        :keyboard/mongol-font-family "OnonSoninSans"})]
-     :bind {:info info}
+           w (.-width size)]
      (m/Dialog
       .insetPadding m/EdgeInsets.zero
       .child
@@ -284,13 +265,7 @@
      :context ctx
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
-           w (.-width size)
-           info (merge keyboard-options/keyboard-option
-                       {:keyboard/key-cap-border-radius 6
-                        :keyboard/font-size 18
-                        :keyboard/key-container-color m/Colors.grey.shade500
-                        :keyboard/mongol-font-family "OnonSoninSans"})]
-     :bind {:info info}
+           w (.-width size)]
      (m/Dialog
       .insetPadding m/EdgeInsets.zero
       .child

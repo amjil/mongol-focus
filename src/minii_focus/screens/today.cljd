@@ -56,7 +56,7 @@
                 [(comp/mongol-text-block
                   {:text (str "Today's Forecast: " (count forecasts))
                    :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
-                 (m/ElevatedButton
+                 (mgl/MongolElevatedButton
                   .onPressed (fn []
                                (ui-state/init-focus-screen!)
                                (nav/navigate! :focus {}))
