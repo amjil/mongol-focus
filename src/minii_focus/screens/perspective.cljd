@@ -74,7 +74,7 @@
      .builder (fn [d-ctx]
                 (m/AlertDialog
                  .title (comp/mongol-text-block {:text (str "Edit Rules: " (.-title perspective)) :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                 .content (m/Column
+                 .content (m/Row
                            .mainAxisSize m/MainAxisSize.min
                            .children
                            [(comp/mongol-text-block {:text "Conditions (JSON)"})

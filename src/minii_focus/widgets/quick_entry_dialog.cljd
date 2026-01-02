@@ -10,99 +10,239 @@
    [minii-focus.core.utils.text-parser :as text-parser]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.inbox :as inbox-db]
    [minii-focus.core.infra.bridge :as bridge]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]
    ["package:flutter/services.dart" :as services]
+   ["package:flutter/src/widgets/focus_manager.dart" :as focus-manager]
+   [clojure.string :as str]
    [virtual-keyboard.keyboard :as keyboard]))
 
+(defn get-suggestions
+  "Get autocomplete suggestions based on input text, history, and existing tasks"
+  [input-text history-items tasks]
+  (let [input-lower (str/lower-case input-text)
+        history-suggestions (filter (fn [item]
+                                      (and (not (empty? (.-content item)))
+                                           (str/includes? (str/lower-case (.-content item)) input-lower)))
+                                    (take 5 history-items))
+        task-suggestions (filter (fn [task]
+                                   (and (not (empty? (.-title task)))
+                                        (str/includes? (str/lower-case (.-title task)) input-lower)))
+                                 (take 5 tasks))]
+    (vec (concat (map (fn [item] {:text (.-content item) :type :history}) history-suggestions)
+                 (map (fn [task] {:text (.-title task) :type :task}) task-suggestions)))))
+
 (defn quick-entry-dialog []
-  (let [controller (m/TextEditingController)]
+  (let [controller (m/TextEditingController)
+        input-text-atom (atom "")
+        suggestions-atom (atom [])
+        selected-index-atom (atom -1)
+        show-suggestions-atom (atom false)
+        dao (app-state/get-dao)]
     (f/widget
      :context ctx
+     :watch [history-items (future (inbox-db/watch-all-new dao))
+             tasks (future (-> (task-db/watch-all-tasks dao)
+                               (.then (fn [ts] (if (seq? ts) (if (vector? ts) (first ts) ts) ts)))))]
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
-           w (.-width size)]
-     (m/Dialog
-      .insetPadding m/EdgeInsets.zero
-      .child
-      (m/Container
-       .height (* h 0.9)
-       .width w
-       .color (.-surface (.-colorScheme (m/Theme.of ctx)))
-       .child
-       (m/Column
-        .mainAxisSize m/MainAxisSize.max
-        .children
-        [(m/Padding
-          .padding (m/EdgeInsets.all (tokens/space :s))
-          .child
-          (m/Row
-           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-           .children
-           [(m/SizedBox.shrink)
-            (m/IconButton
-             .icon (m/Icon m/Icons.close)
-             .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
-         (m/Expanded
-          .child
-          (m/Padding
-           .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
-           .child
-           (m/Row
-            .crossAxisAlignment m/CrossAxisAlignment.start
-            .children
-            [(comp/mongol-text-block {:text "Quick Entry" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
-             (m/Expanded
+           w (.-width size)
+           history-list (or history-items [])
+           tasks-list (or tasks [])]
+     (m/Focus
+      .onKeyEvent (fn [_ event]
+                   (cond
+                    (and (= (.-key event) services/LogicalKeyboardKey.arrowDown)
+                         (not (empty? @suggestions-atom)))
+                    (do
+                     (swap! selected-index-atom (fn [idx] (min (inc idx) (dec (count @suggestions-atom)))))
+                     focus-manager/KeyEventResult.handled)
+                    (and (= (.-key event) services/LogicalKeyboardKey.arrowUp)
+                         (not (empty? @suggestions-atom)))
+                    (do
+                     (swap! selected-index-atom (fn [idx] (max (dec idx) -1)))
+                     focus-manager/KeyEventResult.handled)
+                    (and (= (.-key event) services/LogicalKeyboardKey.enter)
+                         (>= @selected-index-atom 0)
+                         (< @selected-index-atom (count @suggestions-atom)))
+                    (do
+                     (let [selected (nth @suggestions-atom @selected-index-atom)]
+                       (set! (.-text controller) (:text selected))
+                       (reset! input-text-atom (:text selected))
+                       (reset! show-suggestions-atom false)
+                       (reset! selected-index-atom -1))
+                     focus-manager/KeyEventResult.handled)
+                    (= (.-key event) services/LogicalKeyboardKey.escape)
+                    (do
+                     (-> (m/Navigator.of ctx) (.pop))
+                     focus-manager/KeyEventResult.handled)
+                    :else focus-manager/KeyEventResult.ignored))
+      .child (m/Dialog
+              .insetPadding m/EdgeInsets.zero
               .child
               (m/Container
-               .decoration (m/BoxDecoration
-                            .border (m/Border.all .color m/Colors.grey.shade300)
-                            .borderRadius (m/BorderRadius.circular 8))
-               .child (mgl/MongolTextField
-                       .controller controller
-                       .autofocus true
-                       .maxLines nil
-                       .decoration (m/InputDecoration
-                                    .border m/InputBorder.none
-                                    .contentPadding (m/EdgeInsets.all (tokens/space :s))
-                                    .hintText "Capture everything... (use #tags, !flag, dates)"))))
-             (m/SizedBox .width (tokens/space :s))
-             (m/Column
-              .mainAxisSize m/MainAxisSize.min
-              .children
-              [(m/IconButton
-                .icon (m/Icon m/Icons.paste)
-                .onPressed (fn []
-                             (-> (services/Clipboard.getData services/Clipboard.kTextPlain)
-                                 (.then (fn [data]
-                                          (when (and data (.-text data))
-                                            (set! (.-text controller) (.-text data))))))
-                             nil))
-               (m/SizedBox .height (tokens/space :s))
-               (mgl/MongolElevatedButton
-                .onPressed (fn []
-                             (let [raw-text (.text controller)
-                                   db-ctx {:db (app-state/get-db) :dao (app-state/get-dao)}]
-                               (if (empty? raw-text)
-                                 (dart-core/Future.value nil)
-                                 (let [parsed (text-parser/parse-quick-entry-text raw-text)
-                                       title (:content parsed)
-                                       tags (:tag-names parsed)
-                                       due-at (when-let [d (:due-date parsed)] (.millisecondsSinceEpoch d))
-                                       defer-at (when-let [d (:defer-date parsed)] (.millisecondsSinceEpoch d))]
-                                   (-> (dispatch/dispatch-event! db-ctx
-                                                                 {:type :task/create
-                                                                  :payload {:title title
-                                                                            :tags tags
-                                                                            :due-at due-at
-                                                                            :defer-at defer-at}
-                                                                  :source :ui})
-                                       (.then (fn [_]
-                                                (-> (m/Navigator.of ctx) (.pop))))))))
-                             nil)
-                .child (comp/mongol-text-block {:text "Add"}))])])))
-         (m/SizedBox .height (tokens/space :m))
-         (keyboard/keyboard {:custom-fns {}})]))))))
+               .height (* h 0.9)
+               .width w
+               .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+               .child
+               (m/Column
+                .mainAxisSize m/MainAxisSize.max
+                .children
+                [(m/Padding
+                  .padding (m/EdgeInsets.all (tokens/space :s))
+                  .child
+                  (m/Row
+                   .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                   .children
+                   [(comp/mongol-text-block {:text "Quick Entry (Enter提交, Esc关闭)" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                    (m/IconButton
+                     .icon (m/Icon m/Icons.close)
+                     .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+                 (m/Expanded
+                  .child
+                  (m/Padding
+                   .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :m))
+                   .child
+                   (m/Column
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(m/Row
+                      .crossAxisAlignment m/CrossAxisAlignment.start
+                      .children
+                      [(comp/mongol-text-block {:text "Quick Entry" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                       (m/Expanded
+                        .child
+                        (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(m/Container
+                           .decoration (m/BoxDecoration
+                                        .border (m/Border.all .color m/Colors.grey.shade300)
+                                        .borderRadius (m/BorderRadius.circular 8))
+                           .child (mgl/MongolTextField
+                                   .controller controller
+                                   .autofocus true
+                                   .maxLines nil
+                                   .decoration (m/InputDecoration
+                                                .border m/InputBorder.none
+                                                .contentPadding (m/EdgeInsets.all (tokens/space :s))
+                                                .hintText "Capture everything... (use #tags, !flag, dates)")
+                                   .onChanged (fn [text]
+                                               (reset! input-text-atom text)
+                                               (reset! selected-index-atom -1)
+                                               (reset! show-suggestions-atom (not (empty? text)))
+                                               (reset! suggestions-atom (get-suggestions text history-list tasks-list)))
+                                   .onSubmitted (fn [text]
+                                                 (when (not (empty? text))
+                                                   (let [db-ctx {:db (app-state/get-db) :dao dao}]
+                                                     (-> (dispatch/dispatch-event! db-ctx
+                                                                                   {:type :task/create
+                                                                                    :payload {:title text}
+                                                                                    :source :ui})
+                                                         (.then (fn [_]
+                                                                  ;; Save to history
+                                                                  (let [inbox-id (str "inbox-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))]
+                                                                    (inbox-db/insert-inbox-item! dao {:id inbox-id :content text :source "quick"}))
+                                                                  (-> (m/Navigator.of ctx) (.pop))))))))))
+                          (if (and @show-suggestions-atom (not (empty? @suggestions-atom)))
+                            (m/Container
+                             .margin (m/EdgeInsets.only :top (tokens/space :s))
+                             .decoration (m/BoxDecoration
+                                          .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+                                          .border (m/Border.all .color m/Colors.grey.shade300)
+                                          .borderRadius (m/BorderRadius.circular 8))
+                             .child (m/Column
+                                     .mainAxisSize m/MainAxisSize.min
+                                     .children (vec (map-indexed
+                                                    (fn [idx suggestion]
+                                                      (m/InkWell
+                                                       .onTap (fn []
+                                                               (set! (.-text controller) (:text suggestion))
+                                                               (reset! input-text-atom (:text suggestion))
+                                                               (reset! show-suggestions-atom false))
+                                                       .child (m/Container
+                                                               .color (if (= idx @selected-index-atom) m/Colors.blue.shade50 m/Colors.transparent)
+                                                               .padding (m/EdgeInsets.all (tokens/space :s))
+                                                               .child (m/Row
+                                                                       .children [(m/Icon (if (= (:type suggestion) :history) m/Icons.history m/Icons.task) .size 16 .color (tokens/color :text-weak))
+                                                                                 (m/SizedBox .width (tokens/space :s))
+                                                                                 (comp/mongol-text-block {:text (:text suggestion) :style (m/TextStyle .fontSize 14)})]))))
+                                                    @suggestions-atom))))
+                                                    (m/SizedBox.shrink))]))
+                       (m/SizedBox .width (tokens/space :s))
+                       (m/Column
+                        .mainAxisSize m/MainAxisSize.min
+                        .children
+                        [(m/IconButton
+                          .icon (m/Icon m/Icons.paste)
+                          .tooltip "Paste"
+                          .onPressed (fn []
+                                       (-> (services/Clipboard.getData services/Clipboard.kTextPlain)
+                                           (.then (fn [data]
+                                                    (when (and data (.-text data))
+                                                      (set! (.-text controller) (.-text data))
+                                                      (reset! input-text-atom (.-text data))))))
+                                       nil))
+                         (m/SizedBox .height (tokens/space :s))
+                         (m/IconButton
+                          .icon (m/Icon m/Icons.history)
+                          .tooltip "History"
+                          .onPressed (fn []
+                                       (reset! show-suggestions-atom (not @show-suggestions-atom))
+                                       (reset! suggestions-atom (get-suggestions @input-text-atom history-list tasks-list))
+                                       nil))
+                         (m/SizedBox .height (tokens/space :s))
+                         (mgl/MongolElevatedButton
+                          .onPressed (fn []
+                                       (let [raw-text (.text controller)
+                                             db-ctx {:db (app-state/get-db) :dao dao}]
+                                         (if (empty? raw-text)
+                                           (dart-core/Future.value nil)
+                                           (let [parsed (text-parser/parse-quick-entry-text raw-text)
+                                                 title (:content parsed)
+                                                 tags (:tag-names parsed)
+                                                 due-at (when-let [d (:due-date parsed)] (.millisecondsSinceEpoch d))
+                                                 defer-at (when-let [d (:defer-date parsed)] (.millisecondsSinceEpoch d))
+                                                 inbox-id (str "inbox-" (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)))]
+                                             (-> (dispatch/dispatch-event! db-ctx
+                                                                           {:type :task/create
+                                                                            :payload {:title title
+                                                                                      :tags tags
+                                                                                      :due-at due-at
+                                                                                      :defer-at defer-at}
+                                                                            :source :ui})
+                                                 (.then (fn [_]
+                                                          ;; Save to history
+                                                          (inbox-db/insert-inbox-item! dao {:id inbox-id :content raw-text :source "quick"})
+                                                          (-> (m/Navigator.of ctx) (.pop))))))))
+                                       nil)
+                          .child (comp/mongol-text-block {:text "Add"}))])])
+                    (if (seq history-list)
+                      (m/Column
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .children
+                       [(m/SizedBox .height (tokens/space :s))
+                        (comp/mongol-text-block {:text "Recent History" :style (m/TextStyle .fontSize 12 .fontWeight m/FontWeight.bold .color (tokens/color :text-weak))})
+                        (m/Container
+                         .height 100
+                         .child (m/ListView
+                                 .scrollDirection m/Axis.horizontal
+                                 .children (vec (map (fn [item]
+                                                     (m/InkWell
+                                                      .onTap (fn []
+                                                             (set! (.-text controller) (.-content item))
+                                                             (reset! input-text-atom (.-content item)))
+                                                      .child (m/Card
+                                                              .margin (m/EdgeInsets.all 4)
+                                                              .child (m/Container
+                                                                      .width 120
+                                                                      .padding (m/EdgeInsets.all 8)
+                                                                      .child (comp/mongol-text-block {:text (subs (.-content item) 0 (min 30 (count (.-content item)))) :style (m/TextStyle .fontSize 12)})))))
+                                                   (take 5 (reverse history-list))))))])
+                                                   (m/SizedBox.shrink))])))
+                 (m/SizedBox .height (tokens/space :m))
+                 (keyboard/keyboard {:custom-fns {}})])))))))
 
 (defn show-quick-entry-dialog [context]
   (m/showDialog

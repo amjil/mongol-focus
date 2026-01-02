@@ -141,3 +141,22 @@
      forecast-id
      updates)))
 
+(defn update-created-at!
+  "Update Forecast's createdAt timestamp to change order
+  
+  Parameters:
+  - dao-bridge: DaoBridge instance
+  - forecast-id: string
+  - new-created-at: int (timestamp in milliseconds)
+  
+  Returns: Future<void>"
+  [dao-bridge forecast-id new-created-at]
+  (let [updates (bridge/dart-new
+                 app-db/ForecastsCompanion
+                 {:createdAt new-created-at})]
+    (bridge/dart-call
+     forecast-bridge/updateForecast
+     dao-bridge
+     forecast-id
+     updates)))
+

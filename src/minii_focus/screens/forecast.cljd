@@ -13,6 +13,7 @@
    [minii-focus.core.db.task :as task]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.time :as time]
+   [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.common :as widgets]))
 
 (defn forecast-item-card [{:keys [forecast-item task-title on-tap]}]
@@ -26,6 +27,95 @@
                            .title (comp/mongol-text-block {:text task-title})
                            .subtitle (comp/mongol-text-block {:text (str "Conf: " (or (.-confidence forecast-item) 0) "%") :style (m/TextStyle .fontSize 12)})
                            .trailing (if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green .size 16) nil))))))
+
+(defn reorderable-forecast-list
+  "Reorderable list of forecasts with drag and drop support"
+  [{:keys [forecasts task-titles-map ctx db-ctx on-reorder]}]
+  (if (empty? forecasts)
+    (comp/mongol-text-block {:text "暂无任务" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+    (m/ReorderableListView
+     .scrollDirection m/Axis.horizontal
+     .onReorder on-reorder
+     .children (vec (map (fn [f]
+                          (m/Container
+                           .key (m/ValueKey (.-id f))
+                           .child (forecast-item-card
+                                   {:forecast-item f
+                                    :task-title (get task-titles-map (.-taskId f) "Loading...")
+                                    :on-tap (fn []
+                                             (let [initial-date (dart-core/DateTime.now)]
+                                               (-> (m/showDatePicker
+                                                    .context ctx
+                                                    .initialDate initial-date
+                                                    .firstDate (.subtract initial-date (dart-core/Duration .days 30))
+                                                    .lastDate (.add initial-date (dart-core/Duration .days 365)))
+                                                   (.then (fn [selected-date]
+                                                            (when selected-date
+                                                              (let [new-date (time/ts->yyyymmdd (int (/ (.millisecondsSinceEpoch selected-date) 1000)))]
+                                                                (dispatch/dispatch-event!
+                                                                 db-ctx
+                                                                 {:type :forecast/reschedule
+                                                                  :payload {:forecast-id (.-id f)
+                                                                            :date new-date}
+                                                                  :source :ui}))))))))})))
+                        forecasts)))))
+
+(defn optimize-overload
+  "Optimize overloaded forecasts by redistributing to future dates
+   
+   Parameters:
+   - db-ctx: {:db AppDatabase :dao DaoBridge}
+   - forecasts: List of Forecast items for the date
+   - date: yyyyMMdd format date string
+   - daily-capacity: number of forecasts allowed per day
+   
+   Returns: Future<void>"
+  [db-ctx forecasts date daily-capacity]
+  (let [overload-count (- (count forecasts) daily-capacity)
+        sorted-forecasts (sort-by #(or (.-confidence %) 0) > forecasts)
+        forecasts-to-move (take overload-count sorted-forecasts)
+        date-int (int date)]
+    (if (<= overload-count 0)
+      (dart-core/Future.value nil)
+      (let [futures (map-indexed
+                     (fn [idx f]
+                       (let [days-to-add (+ 1 (int (/ idx daily-capacity)))
+                             new-date-int (+ date-int days-to-add)
+                             new-date-str (str new-date-int)]
+                         (dispatch/dispatch-event! db-ctx
+                                                   {:type :forecast/reschedule
+                                                    :payload {:forecast-id (.-id f)
+                                                              :date new-date-str}
+                                                    :source :ui})))
+                     forecasts-to-move)]
+        (-> (dart-core/Future.wait (vec futures))
+            (.then (fn [_] (dart-core/print (str "Optimized " (count forecasts-to-move) " forecasts")))))))))
+
+(defn overload-warning-dialog [ctx date forecasts daily-capacity db-ctx]
+  (let [overload-count (- (count forecasts) daily-capacity)
+        suggestion (str "建议将 " overload-count " 个任务移到未来几天")]
+    (m/AlertDialog
+     .title (comp/mongol-text-block {:text "Forecast 超载警告" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+     .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children [(comp/mongol-text-block {:text (str "日期: " (widgets/format-yyyymmdd date))})
+                           (m/SizedBox .height 8)
+                           (comp/mongol-text-block {:text (str "当前任务数: " (count forecasts))})
+                           (comp/mongol-text-block {:text (str "每日容量: " (int daily-capacity)) :style (m/TextStyle .color m/Colors.blue)})
+                           (comp/mongol-text-block {:text (str "超载数量: " overload-count) :style (m/TextStyle .color m/Colors.red .fontWeight m/FontWeight.bold)})
+                           (m/SizedBox .height 16)
+                           (comp/mongol-text-block {:text suggestion :style (m/TextStyle .fontSize 14)})])
+     .actions [(m/TextButton
+                .child (m/Text "取消")
+                .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+               (m/TextButton
+                .child (m/Text "自动优化")
+                .onPressed (fn []
+                             (-> (optimize-overload db-ctx forecasts date daily-capacity)
+                                 (.then (fn [_]
+                                          (toast/show-success-toast ctx (str "已优化 " overload-count " 个任务"))
+                                          (-> (m/Navigator.of ctx) (.pop)))))
+                             nil))])))
 
 (defn forecast-screen [_params]
   (let [dao (app-state/get-dao)
@@ -48,44 +138,49 @@
                                               (-> (task/get-by-id dao tid)
                                                   (.then (fn [t] (when t (ui-state/update-forecast-state! update :task-titles-map assoc tid (.-title t)))))))))]
                                 (m/Row
-                                 .children (into [(m/Container 
-                                                   .width 80
-                                                   .margin (m/EdgeInsets.all 4)
-                                                   .decoration (m/BoxDecoration 
-                                                                .color (if (> (count forecasts) daily-capacity) m/Colors.orange.shade50 m/Colors.blue.shade50)
-                                                                .borderRadius (m/BorderRadius.circular 8))
-                                                   .padding (m/EdgeInsets.all 8)
-                                                   .child (m/Column
-                                                           .mainAxisAlignment m/MainAxisAlignment.center
-                                                           .children [(comp/mongol-text-block 
-                                                                       {:text (widgets/format-yyyymmdd d)
-                                                                        :style (m/TextStyle .fontWeight m/FontWeight.bold .fontSize 14)})
-                                                                      (m/SizedBox .height 8)
-                                                                      (comp/mongol-text-block 
-                                                                       {:text (str (count forecasts) "/" (int daily-capacity))
-                                                                        :style (m/TextStyle .color (if (> (count forecasts) daily-capacity) m/Colors.red m/Colors.blue))})
-                                                                      (when (> (count forecasts) daily-capacity)
-                                                                        (m/Icon m/Icons.warning .color m/Colors.orange .size 16))]))]
-                                                 (mapv (fn [f] 
-                                                         (forecast-item-card 
-                                                          {:forecast-item f 
-                                                           :task-title (get task-titles-map (.-taskId f) "Loading...")
-                                                           :on-tap (fn [] 
-                                                                     (let [db-ctx {:db (app-state/get-db) :dao dao}
-                                                                           initial-date (dart-core/DateTime.now)]
-                                                                       (-> (m/showDatePicker
-                                                                            .context ctx
-                                                                            .initialDate initial-date
-                                                                            .firstDate (.subtract initial-date (dart-core/Duration .days 30))
-                                                                            .lastDate (.add initial-date (dart-core/Duration .days 365)))
-                                                                           (.then (fn [selected-date]
-                                                                                    (when selected-date
-                                                                                      (let [new-date (time/ts->yyyymmdd (int (/ (.millisecondsSinceEpoch selected-date) 1000)))]
-                                                                                        (dispatch/dispatch-event! 
-                                                                                         db-ctx
-                                                                                         {:type :forecast/reschedule
-                                                                                          :payload {:forecast-id (.-id f)
-                                                                                                    :date new-date}
-                                                                                          :source :ui}))))))))})) 
-                                                       forecasts)))))
+                                 .children (into [(m/GestureDetector
+                                                   .onTap (fn []
+                                                            (when (> (count forecasts) daily-capacity)
+                                                              (m/showDialog
+                                                               .context ctx
+                                                               .builder (fn [_] (overload-warning-dialog ctx d forecasts daily-capacity {:db (app-state/get-db) :dao dao})))))
+                                                   .child (m/Container 
+                                                           .width 80
+                                                           .margin (m/EdgeInsets.all 4)
+                                                           .decoration (m/BoxDecoration 
+                                                                        .color (if (> (count forecasts) daily-capacity) m/Colors.orange.shade50 m/Colors.blue.shade50)
+                                                                        .borderRadius (m/BorderRadius.circular 8))
+                                                           .padding (m/EdgeInsets.all 8)
+                                                           .child (m/Column
+                                                                   .mainAxisAlignment m/MainAxisAlignment.center
+                                                                   .children [(comp/mongol-text-block 
+                                                                              {:text (widgets/format-yyyymmdd d)
+                                                                               :style (m/TextStyle .fontWeight m/FontWeight.bold .fontSize 14)})
+                                                                             (m/SizedBox .height 8)
+                                                                             (comp/mongol-text-block 
+                                                                              {:text (str (count forecasts) "/" (int daily-capacity))
+                                                                               :style (m/TextStyle .color (if (> (count forecasts) daily-capacity) m/Colors.red m/Colors.blue))})
+                                                                             (when (> (count forecasts) daily-capacity)
+                                                                               (m/Row
+                                                                                .mainAxisAlignment m/MainAxisAlignment.center
+                                                                                .children [(m/Icon m/Icons.warning .color m/Colors.orange .size 16)
+                                                                                          (m/SizedBox .width 4)
+                                                                                          (comp/mongol-text-block {:text "超载" :style (m/TextStyle .fontSize 10 .color m/Colors.orange)})]))])))]
+                                                 [(reorderable-forecast-list
+                                                   {:forecasts forecasts
+                                                    :task-titles-map task-titles-map
+                                                    :ctx ctx
+                                                    :db-ctx {:db (app-state/get-db) :dao dao}
+                                                    :on-reorder (fn [old-index new-index]
+                                                                 (when (not= old-index new-index)
+                                                                   (let [sorted-forecasts (vec (sort-by (fn [f] (.-createdAt f)) < forecasts))
+                                                                         moved-item (nth sorted-forecasts old-index)
+                                                                         without-moved (vec (concat (take old-index sorted-forecasts) (drop (inc old-index) sorted-forecasts)))
+                                                                         new-sorted (vec (concat (take new-index without-moved)
+                                                                                                [moved-item]
+                                                                                                (drop new-index without-moved)))
+                                                                         base-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))]
+                                                                     (doseq [[idx f] (map-indexed vector new-sorted)]
+                                                                       (let [new-created-at (+ base-time (* idx 1000))]
+                                                                         (forecast/update-created-at! dao (.-id f) new-created-at))))))})]))))
                              dates))))))

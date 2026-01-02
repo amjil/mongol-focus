@@ -7,6 +7,8 @@
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.domain.review.aggregate :as aggregate]
+   [minii-focus.core.domain.calibration.review-to-forecast :as calibration]
+   [minii-focus.core.db.review :as review-db]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.common :as widgets]))
@@ -88,37 +90,315 @@
                               (m/Divider)
                               (comp/mongol-text-block {:text (str (int (* (.-weight p) 100)) "%")})]))))))
 
+(defn review-submit-dialog [ctx review-data db-ctx]
+  (let [mood-atom (atom 5.0)
+        focus-atom (atom 5.0)]
+    (f/widget
+     :watch [mood-score mood-atom
+             focus-score focus-atom]
+     (m/AlertDialog
+      .title (comp/mongol-text-block {:text "Submit Review" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+      .content (m/Column
+                 .mainAxisSize m/MainAxisSize.min
+                 .children (vec (concat [(comp/mongol-text-block {:text "Review Statistics" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                                        (m/SizedBox .height 8)
+                                        (let [overview (:overview review-data)
+                                              perspectives (:perspectives review-data)
+                                              total-focus (reduce + 0 (map :focus-minutes perspectives))]
+                                          (m/Column
+                                           .mainAxisSize m/MainAxisSize.min
+                                           .children [(comp/mongol-text-block {:text (str "Expected Tasks: " (or (:forecast-completed overview) 0))})
+                                                      (comp/mongol-text-block {:text (str "Actual Tasks: " (or (:task-completed overview) 0))})
+                                                      (comp/mongol-text-block {:text (str "Focus Minutes: " total-focus)})
+                                                      (m/Divider)
+                                                      (m/SizedBox .height 8)]))
+                                        (comp/mongol-text-block {:text "Your Ratings" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                                        (m/SizedBox .height 8)
+                                        (comp/mongol-text-block {:text (str "Mood Score: " (int mood-score) "/10")})
+                                        (m/Slider
+                                         .value mood-score
+                                         .onChanged (fn [v] (reset! mood-atom v))
+                                         .min 0.0
+                                         .max 10.0
+                                         .divisions 10)
+                                        (m/SizedBox .height 16)
+                                        (comp/mongol-text-block {:text (str "Focus Score: " (int focus-score) "/10")})
+                                        (m/Slider
+                                         .value focus-score
+                                         .onChanged (fn [v] (reset! focus-atom v))
+                                         .min 0.0
+                                         .max 10.0
+                                         .divisions 10)])))
+      .actions [(m/TextButton
+                 .child (m/Text "Cancel")
+                 .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                (m/TextButton
+                 .child (m/Text "Submit")
+                 .onPressed (fn []
+                              (when review-data
+                                (let [overview (:overview review-data)
+                                      perspectives (:perspectives review-data)
+                                      total-focus (reduce + 0 (map :focus-minutes perspectives))
+                                      payload {:period (:period review-data)
+                                               :stats {:expected-count (or (:forecast-completed overview) 0)
+                                                       :actual-count (or (:task-completed overview) 0)
+                                                       :expected-duration (* (count perspectives) 30)
+                                                       :actual-duration total-focus
+                                                       :mood-score (/ @mood-atom 10.0)
+                                                       :focus-score (/ @focus-atom 10.0)}}]
+                                  (-> (dispatch/dispatch-event! db-ctx
+                                                                {:type :review/submit
+                                                                 :payload payload
+                                                                 :source :ui})
+                                      (.then (fn [_]
+                                               (toast/show-success-toast ctx "Review submitted!")
+                                               (-> (m/Navigator.of ctx) (.pop)))))))))]))))
+
+(defn calibration-suggestion-dialog [ctx review-data]
+  (let [overview (:overview review-data)
+        perspectives (:perspectives review-data)
+        total-focus (reduce + 0 (map :focus-minutes perspectives))
+        current-daily-capacity (or (:daily-capacity @ui-state/settings-state) 3.0)
+        current-forecast {:target-count current-daily-capacity
+                          :target-duration (* (count perspectives) 30)
+                          :confidence 0.7
+                          :volatility 0.2}
+        review-stats {:expected-count (or (:forecast-completed overview) 0)
+                      :actual-count (or (:task-completed overview) 0)
+                      :expected-duration (* (count perspectives) 30)
+                      :actual-duration total-focus
+                      :mood-score 0.0
+                      :focus-score 0.5}
+        calibrated (calibration/calibrate-forecast {:review review-stats :forecast current-forecast})
+        has-changes (or (not= (int (:target-count current-forecast)) (int (:target-count calibrated)))
+                        (not= (int (:target-duration current-forecast)) (int (:target-duration calibrated)))
+                        (not= (int (* (:confidence current-forecast) 100)) (int (* (:confidence calibrated) 100)))
+                        (not= (int (* (:volatility current-forecast) 100)) (int (* (:volatility calibrated) 100))))]
+    (m/AlertDialog
+     .title (comp/mongol-text-block {:text "Forecast 校准建议" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+     .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children (vec (concat [(comp/mongol-text-block {:text "校准前后对比" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                                       (m/SizedBox .height 8)
+                                       (m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children [(comp/mongol-text-block {:text "当前" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                                   (comp/mongol-text-block {:text "建议" :style (m/TextStyle .fontWeight m/FontWeight.bold)})])
+                                       (m/Divider)
+                                       (m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children [(comp/mongol-text-block {:text (str "每日容量: " (int (:target-count current-forecast)))})
+                                                   (comp/mongol-text-block {:text (str (int (:target-count calibrated))) :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
+                                       (m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children [(comp/mongol-text-block {:text (str "目标时长: " (int (:target-duration current-forecast)) "m")})
+                                                   (comp/mongol-text-block {:text (str (int (:target-duration calibrated)) "m") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
+                                       (m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children [(comp/mongol-text-block {:text (str "置信度: " (int (* (:confidence current-forecast) 100)) "%")})
+                                                   (comp/mongol-text-block {:text (str (int (* (:confidence calibrated) 100)) "%") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
+                                       (m/Row
+                                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                                        .children [(comp/mongol-text-block {:text (str "波动性: " (int (* (:volatility current-forecast) 100)) "%")})
+                                                   (comp/mongol-text-block {:text (str (int (* (:volatility calibrated) 100)) "%") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
+                                       (m/Divider)
+                                       (m/SizedBox .height 8)
+                                       (comp/mongol-text-block {:text "基于本次Review的统计数据自动计算" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})])))
+     .actions [(m/TextButton
+                .child (m/Text "取消")
+                .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+               (m/TextButton
+                .child (m/Text "应用校准")
+                .onPressed (fn []
+                             ;; Update daily capacity in settings
+                             (ui-state/update-settings-state! assoc :daily-capacity (:target-count calibrated))
+                             (toast/show-success-toast ctx "Forecast校准已应用")
+                             (-> (m/Navigator.of ctx) (.pop))))])))
+
+(defn completion-rate-chart
+  "Completion rate trend chart
+  Parameters:
+  - reviews: vector of Review objects with expectedCount, actualCount, createdAt"
+  [{:keys [reviews]}]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > (take 7 reviews))
+        chart-data (map (fn [r]
+                         (let [expected (.-expectedCount r)
+                               actual (.-actualCount r)
+                               rate (if (zero? expected) 0.0 (/ actual expected))]
+                           {:timestamp (.-createdAt r)
+                            :rate rate
+                            :expected expected
+                            :actual actual}))
+                       sorted-reviews)]
+    (m/Container
+     .height 120
+     .margin (m/EdgeInsets.all (tokens/space :s))
+     .child (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(comp/mongol-text-block {:text "完成率趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+              (m/SizedBox .height 8)
+              (if (empty? chart-data)
+                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (m/Row
+                 .crossAxisAlignment m/CrossAxisAlignment.end
+                 .children
+                 (vec (map (fn [item]
+                            (m/Expanded
+                             .child (m/Column
+                                    .crossAxisAlignment m/CrossAxisAlignment.center
+                                    .children
+                                    [(m/Container
+                                      .margin (m/EdgeInsets.symmetric :horizontal 2)
+                                      .height (* 60 (:rate item))
+                                      .decoration (m/BoxDecoration
+                                                   .color (if (>= (:rate item) 0.8) m/Colors.green
+                                                           (if (>= (:rate item) 0.5) m/Colors.orange m/Colors.red))
+                                                   .borderRadius (m/BorderRadius.circular 4)))
+                                     (m/SizedBox .height 4)
+                                     (comp/mongol-text-block {:text (str (int (* (:rate item) 100)) "%") :style (m/TextStyle .fontSize 10)})
+                                     (comp/mongol-text-block {:text (str (:actual item) "/" (:expected item)) :style (m/TextStyle .fontSize 8 .color (tokens/color :text-weak))})])))
+                          chart-data))))]))))
+
+(defn focus-duration-chart
+  "Focus duration trend chart
+  Parameters:
+  - reviews: vector of Review objects with actualDuration, createdAt"
+  [{:keys [reviews]}]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > (take 7 reviews))
+        max-duration (if (empty? sorted-reviews)
+                      1.0
+                      (apply max (map (fn [r] (.-actualDuration r)) sorted-reviews)))
+        chart-data (map (fn [r]
+                         {:timestamp (.-createdAt r)
+                          :duration (.-actualDuration r)})
+                       sorted-reviews)]
+    (m/Container
+     .height 120
+     .margin (m/EdgeInsets.all (tokens/space :s))
+     .child (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(comp/mongol-text-block {:text "专注时长趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+              (m/SizedBox .height 8)
+              (if (empty? chart-data)
+                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (m/Row
+                 .crossAxisAlignment m/CrossAxisAlignment.end
+                 .children
+                 (vec (map (fn [item]
+                            (m/Expanded
+                             .child (m/Column
+                                    .crossAxisAlignment m/CrossAxisAlignment.center
+                                    .children
+                                    [(m/Container
+                                      .margin (m/EdgeInsets.symmetric :horizontal 2)
+                                      .height (* 60 (if (zero? max-duration) 0.0 (/ (:duration item) max-duration)))
+                                      .decoration (m/BoxDecoration
+                                                   .color m/Colors.blue
+                                                   .borderRadius (m/BorderRadius.circular 4)))
+                                     (m/SizedBox .height 4)
+                                     (comp/mongol-text-block {:text (str (:duration item) "m") :style (m/TextStyle .fontSize 10)})])))
+                          chart-data))))]))))
+
+(defn mood-score-chart
+  "Mood score trend chart
+  Parameters:
+  - reviews: vector of Review objects with moodScore, createdAt"
+  [{:keys [reviews]}]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > (take 7 (filter (fn [r] (some? (.-moodScore r))) reviews)))
+        chart-data (map (fn [r]
+                         (let [score (or (.-moodScore r) 50)]
+                           {:timestamp (.-createdAt r)
+                            :score score}))
+                       sorted-reviews)]
+    (m/Container
+     .height 120
+     .margin (m/EdgeInsets.all (tokens/space :s))
+     .child (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(comp/mongol-text-block {:text "情绪评分趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+              (m/SizedBox .height 8)
+              (if (empty? chart-data)
+                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (m/Row
+                 .crossAxisAlignment m/CrossAxisAlignment.end
+                 .children
+                 (vec (map (fn [item]
+                            (m/Expanded
+                             .child (m/Column
+                                    .crossAxisAlignment m/CrossAxisAlignment.center
+                                    .children
+                                    [(m/Container
+                                      .margin (m/EdgeInsets.symmetric :horizontal 2)
+                                      .height (* 60 (/ (:score item) 100.0))
+                                      .decoration (m/BoxDecoration
+                                                   .color (cond
+                                                           (>= (:score item) 70) m/Colors.green
+                                                           (>= (:score item) 50) m/Colors.orange
+                                                           :else m/Colors.red)
+                                                   .borderRadius (m/BorderRadius.circular 4)))
+                                     (m/SizedBox .height 4)
+                                     (comp/mongol-text-block {:text (str (:score item)) :style (m/TextStyle .fontSize 10)})])))
+                          chart-data))))]))))
+
+(defn visualization-section [{:keys [reviews]}]
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+           .padding (m/EdgeInsets.all (tokens/space :m))
+           .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [(comp/mongol-text-block {:text "统计趋势" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height 16)
+                    (completion-rate-chart {:reviews reviews})
+                    (m/SizedBox .height 16)
+                    (focus-duration-chart {:reviews reviews})
+                    (m/SizedBox .height 16)
+                    (mood-score-chart {:reviews reviews})]))))
+
+(defn get-historical-reviews
+  "Get historical reviews for visualization
+  Returns: Future<List<Review>>"
+  [dao]
+  (-> (review-db/watch-all-reviews dao)
+      (.then (fn [reviews-stream]
+               ;; Convert Stream to Future by taking first value
+               (if (seq? reviews-stream)
+                 (if (vector? reviews-stream)
+                   (first reviews-stream)
+                   reviews-stream)
+                 reviews-stream)))))
+
 (defn review-screen [_params]
   (let [dao (app-state/get-dao)
         db-ctx {:db (app-state/get-db) :dao dao}]
     (f/widget
      :context my-ctx
      :watch [{:keys [period-type]} ui-state/review-state
-             review-data (future (aggregate/aggregate-review-data! dao period-type))]
-     :let [loading (nil? review-data)]
+             review-data (future (aggregate/aggregate-review-data! dao period-type))
+             historical-reviews (future (get-historical-reviews dao))]
+     :let [loading (nil? review-data)
+           reviews-list (or historical-reviews [])]
      (m/Scaffold
       .appBar (m/AppBar 
                .actions [(m/IconButton 
                           .icon (m/Icon m/Icons.check)
                           .onPressed (fn [] 
                                        (when review-data
-                                         (let [overview (:overview review-data)
-                                               perspectives (:perspectives review-data)
-                                               total-focus (reduce + 0 (map :focus-minutes perspectives))
-                                               payload {:period (:period review-data)
-                                                        :stats {:expected-count (or (:forecast-completed overview) 0)
-                                                                :actual-count (or (:task-completed overview) 0)
-                                                                :expected-duration (* (count perspectives) 30)
-                                                                :actual-duration total-focus
-                                                                :mood-score 0.0 ; Default
-                                                                :focus-score 0.0 ; Default
-                                                                }}]
-                                           (-> (dispatch/dispatch-event! db-ctx
-                                                                         {:type :review/submit
-                                                                          :payload payload
-                                                                          :source :ui})
-                                               (.then (fn [_] 
-                                                        (toast/show-success-toast nil "Review submitted!"))))))))
+                                         (m/showDialog
+                                          .context my-ctx
+                                          .builder (fn [ctx] (review-submit-dialog ctx review-data db-ctx))))))
+                         (m/IconButton
+                          .icon (m/Icon m/Icons.tune)
+                          .tooltip "Calibration"
+                          .onPressed (fn []
+                                       (when review-data
+                                         (m/showDialog
+                                          .context my-ctx
+                                          .builder (fn [ctx] (calibration-suggestion-dialog ctx review-data))))))
                          (m/PopupMenuButton
                           .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
                           .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
@@ -135,4 +415,5 @@
                   (m/Container 
                    .padding (m/EdgeInsets.all 16)
                    .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)}))
-                  (m/Row .children (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))])))))))
+                  (m/Row .children (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))
+                  (visualization-section {:reviews reviews-list})])))))))

@@ -13,7 +13,9 @@
    [minii-focus.core.db.project :as project-db]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.widgets.common :as widgets]
-   [minii-focus.widgets.quick_entry_dialog :as qe-dialog]))
+   [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
+   [minii-focus.core.infra.bridge :as bridge]
+   ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
 
 (defn detail-section [{:keys [title child]}]
   (m/Container
@@ -24,6 +26,83 @@
            [(comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
             (m/SizedBox .height (tokens/space :s))
             child])))
+
+(defn format-date
+  "Format timestamp (milliseconds) to YYYY-MM-DD string"
+  [timestamp-ms]
+  (when timestamp-ms
+    (let [dt (dart-core/DateTime.fromMillisecondsSinceEpoch timestamp-ms)
+          year (.year dt)
+          month (.month dt)
+          day (.day dt)
+          month-str (if (< month 10) (str "0" month) (str month))
+          day-str (if (< day 10) (str "0" day) (str day))]
+      (str year "-" month-str "-" day-str))))
+
+(defn date-section [{:keys [ctx task dao]}]
+  (let [due-at (.-dueAt task)
+        defer-at (.-deferAt task)
+        due-date-str (format-date due-at)
+        defer-date-str (format-date defer-at)
+        show-date-picker (fn [date-type]
+                           (let [current-date (case date-type
+                                                :due due-at
+                                                :defer defer-at
+                                                nil)
+                                 initial-date (if current-date
+                                                (dart-core/DateTime.fromMillisecondsSinceEpoch current-date)
+                                                (dart-core/DateTime.now))]
+                             (-> (m/showDatePicker
+                                  .context ctx
+                                  .initialDate initial-date
+                                  .firstDate (.subtract initial-date (dart-core/Duration .days 30))
+                                  .lastDate (.add initial-date (dart-core/Duration .days 365)))
+                                 (.then (fn [selected-date]
+                                          (when selected-date
+                                            (let [date-ms (.millisecondsSinceEpoch selected-date)
+                                                  updates (case date-type
+                                                            :due (app-db/TasksCompanion
+                                                                  :dueAt (bridge/dart-value-int-nullable date-ms))
+                                                            :defer (app-db/TasksCompanion
+                                                                    :deferAt (bridge/dart-value-int-nullable date-ms))
+                                                            nil)]
+                                              (when updates
+                                                (task-db/update-task! dao (.-id task) updates)))))))
+                             nil))]
+    (detail-section
+     {:title "日期"
+      :child (m/Column
+              .crossAxisAlignment m/CrossAxisAlignment.start
+              .children
+              [(m/Row
+                .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                .children
+                [(m/Column
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [(comp/mongol-text-block {:text "截止日期" :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                   (comp/mongol-text-block {:text (or due-date-str "未设置")
+                                            :style (m/TextStyle .fontSize (tokens/font-size :m)
+                                                               .color (if due-date-str m/Colors.blue.shade700 m/Colors.grey))})])
+                 (m/IconButton
+                  .icon (m/Icon m/Icons.calendar_today)
+                  .tooltip "设置截止日期"
+                  .onPressed (fn [] (show-date-picker :due) nil))])
+               (m/SizedBox .height (tokens/space :s))
+               (m/Row
+                .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                .children
+                [(m/Column
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [(comp/mongol-text-block {:text "推迟日期" :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                   (comp/mongol-text-block {:text (or defer-date-str "未设置")
+                                            :style (m/TextStyle .fontSize (tokens/font-size :m)
+                                                               .color (if defer-date-str m/Colors.orange.shade700 m/Colors.grey))})])
+                 (m/IconButton
+                  .icon (m/Icon m/Icons.calendar_today)
+                  .tooltip "设置推迟日期"
+                  .onPressed (fn [] (show-date-picker :defer) nil))])])})))
 
 (defn task-detail-screen [params]
   (let [tid (:id params)]
@@ -54,6 +133,7 @@
                      .scrollDirection m/Axis.horizontal
                      .children
                      [(detail-section {:title "Title" :child (comp/mongol-text-block {:text (.-title task) :style (m/TextStyle .fontSize (tokens/font-size :l))})})
+                      (date-section {:ctx ctx :task task :dao dao})
                       (detail-section {:title "Project" :child (comp/mongol-text-block {:text (or (some #(when (= (.-id %) proj-id) (.-title %)) projects) "None")})})
-                      (detail-section {:title "Perspectives" :child (m/Wrap .children (mapv (fn [p] (m/FilterChip .label (m/Text (.-title p)) .selected (some #(= % (.-id p)) persp-ids) .onSelected (fn [s] (if s (ui-state/update-task-detail-state! update :persp-ids conj (.-id p)) (ui-state/update-task-detail-state! update :persp-ids (fn [ids] (remove #(= % (.-id p)) ids))))))) perspectives))})
+                      (detail-section {:title "Perspectives" :child (m/Wrap .children (mapv (fn [p] (m/RotatedBox .quarterTurns 1 .child (m/FilterChip .label (m/Text (.-title p)) .selected (some #(= % (.-id p)) persp-ids) .onSelected (fn [s] (if s (ui-state/update-task-detail-state! update :persp-ids conj (.-id p)) (ui-state/update-task-detail-state! update :persp-ids (fn [ids] (remove #(= % (.-id p)) ids)))))))) perspectives))})
                       (detail-section {:title "History" :child (if (empty? timeline-events) (m/Text "No records") (m/Column .children (mapv (fn [e] (m/Card .child (m/ListTile .title (m/Text (.-title e)) .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e))))))) timeline-events)))})]))))))

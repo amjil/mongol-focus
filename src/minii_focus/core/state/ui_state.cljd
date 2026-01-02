@@ -29,7 +29,8 @@
     :pause-count 0
     :timer nil
     :dao nil
-    :db-ctx nil}))
+    :db-ctx nil
+    :history-filter :all}))
 
 ;; Today screen state
 (defonce today-state
@@ -65,7 +66,12 @@
    {:tasks []
     :task-tags-map {}
     :loading false
-    :selected-task-ids #{}}))
+    :selected-task-ids #{}
+    :search-text ""
+    :selected-tags #{}
+    :selected-project-id nil
+    :sort-by :created-at  ; :created-at, :title
+    :sort-desc true}))
 
 ;; Project screen state
 (defonce project-state
@@ -81,7 +87,9 @@
   (atom
    {:events []
     :loading false
-    :filters #{"task" "forecast" "focus" "project" "perspective"}}))
+    :filters #{"task" "forecast" "focus" "project" "perspective"}
+    :search-text ""
+    :days-range 7}))
 
 ;; Task Detail screen state
 (defonce task-detail-state

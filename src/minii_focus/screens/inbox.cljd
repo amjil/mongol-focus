@@ -2,13 +2,16 @@
   (:require
    ["package:flutter/material.dart" :as m]
    ["package:mongol/mongol.dart" :as mgl]
+   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
+   [clojure.string :as str]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.task :as task]
    [minii-focus.core.db.task-tags :as task-tags]
+   [minii-focus.core.db.project :as project]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.screens.task-detail :as task-detail]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
@@ -56,7 +59,59 @@
                                                                         .direction m/Axis.vertical
                                                                         .children (mapv #(m/Chip .label (comp/mongol-text-block {:text %})) ts))))])))))))
 
-(defn batch-action-bar [db-ctx selected-ids]
+(defn project-select-dialog [ctx projects selected-ids db-ctx on-close]
+  (m/AlertDialog
+   .title (comp/mongol-text-block {:text "Select Project"})
+   .content (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children (vec (concat [(m/ListTile
+                                       .title (comp/mongol-text-block {:text "No Project"})
+                                       .onTap (fn []
+                                                (doseq [tid selected-ids]
+                                                  (dispatch/dispatch-event! db-ctx {:type :task/remove-project :payload {:task-id tid} :source :ui}))
+                                                (on-close)))]
+                                     (mapv (fn [p]
+                                             (m/ListTile
+                                              .title (comp/mongol-text-block {:text (.-title p)})
+                                              .onTap (fn []
+                                                       (doseq [tid selected-ids]
+                                                         (dispatch/dispatch-event! db-ctx {:type :task/assign-project :payload {:task-id tid :project-id (.-id p)} :source :ui}))
+                                                       (on-close))))
+                                           projects))))
+   .actions [(m/TextButton
+              .child (m/Text "Cancel")
+              .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+
+(defn tag-select-dialog [ctx all-tags selected-ids db-ctx on-close]
+  (let [selected-tags-atom (atom #{})]
+    (m/StatefulBuilder
+     .builder (fn [_build-ctx set-state]
+                (m/AlertDialog
+                 .title (comp/mongol-text-block {:text "Select Tags"})
+                 .content (m/Column
+                            .mainAxisSize m/MainAxisSize.min
+                            .children (vec (concat [(comp/mongol-text-block {:text "Select tags to add to all selected tasks"})]
+                                                   (mapv (fn [tag]
+                                                           (m/CheckboxListTile
+                                                            .title (comp/mongol-text-block {:text tag})
+                                                            .value (contains? @selected-tags-atom tag)
+                                                            .onChanged (fn [checked]
+                                                                         (swap! selected-tags-atom (fn [tags] (if checked (conj tags tag) (disj tags tag))))
+                                                                         (set-state (fn [_])))))
+                                                         all-tags))))
+                 .actions [(m/TextButton
+                            .child (m/Text "Cancel")
+                            .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                           (m/TextButton
+                            .child (m/Text "Add")
+                            .onPressed (fn []
+                                         (doseq [tid selected-ids]
+                                           (doseq [tag @selected-tags-atom]
+                                             (-> (task-tags/add-tag-to-task! (:dao db-ctx) tid tag)
+                                                 (.catchError (fn [e] (dart-core/print (str "Error adding tag: " e)))))))
+                                         (on-close)))])))))
+
+(defn batch-action-bar [{:keys [ctx db-ctx selected-ids projects all-tags]}]
   (m/Container
    .width 80
    .padding (m/EdgeInsets.all 8)
@@ -70,28 +125,148 @@
                       (m/SizedBox .height 16)
                       (m/IconButton 
                        .icon (m/Icon m/Icons.done_all)
+                       .tooltip "Complete All"
                        .onPressed (fn [] 
                                     (doseq [tid selected-ids]
                                       (dispatch/dispatch-event! db-ctx {:type :task/complete :payload {:task-id tid} :source :ui}))
                                     (ui-state/update-inbox-state! assoc :selected-task-ids #{})))
                       (m/IconButton 
                        .icon (m/Icon m/Icons.archive)
+                       .tooltip "Archive All"
                        .onPressed (fn [] 
                                     (doseq [tid selected-ids]
                                       (dispatch/dispatch-event! db-ctx {:type :task/archive :payload {:task-id tid} :source :ui}))
                                     (ui-state/update-inbox-state! assoc :selected-task-ids #{})))
                       (m/IconButton 
+                       .icon (m/Icon m/Icons.folder)
+                       .tooltip "Assign Project"
+                       .onPressed (fn []
+                                    (m/showDialog
+                                     .context ctx
+                                     .builder (fn [_] (project-select-dialog ctx projects selected-ids db-ctx
+                                                                              (fn [] (-> (m/Navigator.of ctx) (.pop))
+                                                                                   (ui-state/update-inbox-state! assoc :selected-task-ids #{})))))
+                                    nil))
+                      (m/IconButton 
+                       .icon (m/Icon m/Icons.label)
+                       .tooltip "Add Tags"
+                       .onPressed (fn []
+                                    (m/showDialog
+                                     .context ctx
+                                     .builder (fn [_] (tag-select-dialog ctx all-tags selected-ids db-ctx
+                                                                          (fn [] (-> (m/Navigator.of ctx) (.pop))
+                                                                               (ui-state/update-inbox-state! assoc :selected-task-ids #{})))))
+                                    nil))
+                      (m/IconButton 
                        .icon (m/Icon m/Icons.close)
+                       .tooltip "Clear Selection"
                        .onPressed (fn [] (ui-state/update-inbox-state! assoc :selected-task-ids #{})))])))
+
+(defn search-bar [search-text on-search-change]
+  (let [controller (m/TextEditingController .text search-text)]
+    (m/Container
+     .padding (m/EdgeInsets.all (tokens/space :s))
+     .child (mgl/MongolTextField
+             .decoration (m/InputDecoration
+                          .hintText "Search tasks..."
+                          .prefixIcon (m/Icon m/Icons.search)
+                          .suffixIcon (when (seq search-text)
+                                       (m/IconButton
+                                        .icon (m/Icon m/Icons.clear)
+                                        .onPressed (fn [] 
+                                                    (set! (.-text controller) "")
+                                                    (on-search-change ""))))
+                          .border (m/OutlineInputBorder
+                                   .borderRadius (m/BorderRadius.circular 8)))
+             .onChanged on-search-change
+             .controller controller))))
+
+(defn filter-chips [{:keys [all-tags selected-tags on-tag-toggle projects selected-project-id on-project-select]}]
+  (m/Container
+   .height 60
+   .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :s))
+   .child (m/Row
+           .children (vec (concat [(m/RotatedBox
+                                     .quarterTurns 1
+                                     .child (m/FilterChip
+                                             .label (m/Text "All Projects")
+                                             .selected (= selected-project-id nil)
+                                             .onSelected (fn [_] (on-project-select nil))))]
+                                  (mapv (fn [p]
+                                          (m/RotatedBox
+                                           .quarterTurns 1
+                                           .child (m/FilterChip
+                                                   .label (m/Text (.-title p))
+                                                   .selected (= selected-project-id (.-id p))
+                                                   .onSelected (fn [_] (on-project-select (.-id p))))))
+                                        projects)
+                                  [(m/Divider .height 30)]
+                                  (mapv (fn [tag]
+                                          (m/RotatedBox
+                                           .quarterTurns 1
+                                           .child (m/FilterChip
+                                                   .label (m/Text tag)
+                                                   .selected (contains? selected-tags tag)
+                                                   .onSelected (fn [_] (on-tag-toggle tag)))))
+                                        all-tags))))))
+
+(defn sort-button [sort-by sort-desc on-sort-change]
+  (m/PopupMenuButton
+   .icon (m/Icon m/Icons.sort)
+   .itemBuilder (fn [_]
+                  (into [] [(m/CheckedPopupMenuItem
+                             .value :created-at
+                             .checked (= sort-by :created-at)
+                             .child (m/Text "Created Date")
+                             .onTap (fn [] (on-sort-change :created-at sort-desc)))
+                           (m/CheckedPopupMenuItem
+                            .value :title
+                            .checked (= sort-by :title)
+                            .child (m/Text "Title")
+                            .onTap (fn [] (on-sort-change :title sort-desc)))
+                           (m/Divider)
+                           (m/PopupMenuItem
+                            .value :toggle-desc
+                            .child (m/Row
+                                    .children [(m/Text (if sort-desc "Descending" "Ascending"))
+                                               (m/Icon (if sort-desc m/Icons.arrow_downward m/Icons.arrow_upward))])
+                            .onTap (fn [] (on-sort-change sort-by (not sort-desc))))]))))
+
+(defn filter-and-sort-tasks [tasks task-tags-map search-text selected-tags selected-project-id sort-by sort-desc]
+  (let [filtered (filter (fn [t]
+                          (and (not (.-completed t))
+                               ;; Search filter
+                               (or (empty? search-text)
+                                   (str/includes? (str/lower-case (.-title t)) (str/lower-case search-text)))
+                               ;; Project filter
+                               (or (nil? selected-project-id)
+                                   (= (.-projectId t) selected-project-id))
+                               ;; Tag filter
+                               (or (empty? selected-tags)
+                                   (let [task-tags (get task-tags-map (.-id t) [])]
+                                     (some #(contains? selected-tags %) task-tags)))))
+                        tasks)
+        sorted (sort (fn [a b]
+                      (let [cmp (case sort-by
+                                  :created-at (compare (.-createdAt a) (.-createdAt b))
+                                  :title (compare (.-title a) (.-title b))
+                                  0)]
+                        (if sort-desc (- cmp) cmp)))
+                    filtered)]
+    sorted))
 
 (defn inbox-screen [_params]
   (f/widget
    :context ctx
    :watch [dao app-state/dao
            tasks (when dao (task/watch-all-tasks dao))
-           {:keys [task-tags-map selected-task-ids]} ui-state/inbox-state]
+           projects (when dao (project/watch-all-projects dao))
+           all-tags (when dao (future (task-tags/get-all-tags dao)))
+           {:keys [task-tags-map selected-task-ids search-text selected-tags selected-project-id sort-by sort-desc]} ui-state/inbox-state]
    :let [loading (or (nil? dao) (nil? tasks))
          tasks (or tasks [])
+         projects (or projects [])
+         all-tags (or all-tags [])
          db-ctx {:db (app-state/get-db) :dao dao}
          _ (when (and (not loading) (coll? tasks))
              (let [ins (filter #(not (.-completed %)) tasks)]
@@ -99,30 +274,52 @@
                  (let [tid (.-id t)]
                    (when-not (contains? task-tags-map tid)
                      (-> (task-tags/get-task-tags dao tid)
-                         (.then (fn [tags] (ui-state/update-inbox-state! update :task-tags-map assoc tid tags)))))))))]
-   (m/Scaffold)
-   .body
-   (m/SafeArea)
-   (if loading
-     (widgets/loading-indicator)
-     (let [ins (filter #(not (.-completed %)) tasks)]
-       (m/ListView
-        .scrollDirection m/Axis.horizontal
-        .children (into (cond-> [(quick-input-button ctx)]
-                          (seq selected-task-ids) (conj (batch-action-bar db-ctx selected-task-ids)))
-                        (mapv (fn [t]
-                                (task-item-card
-                                 {:ctx ctx
-                                  :task-item t
-                                  :task-tags-map task-tags-map
-                                  :selected? (contains? selected-task-ids (.-id t))
-                                  :on-toggle-select (fn [tid]
-                                                      (ui-state/update-inbox-state!
-                                                       update :selected-task-ids
-                                                       (fn [ids] (if (contains? ids tid) (disj ids tid) (conj ids tid)))))
-                                  :on-complete (fn [tid]
-                                                 (dispatch/dispatch-event! db-ctx
-                                                                           {:type :task/complete
-                                                                            :payload {:task-id tid}
-                                                                            :source :ui}))}))
-                              ins)))))))
+                         (.then (fn [tags] (ui-state/update-inbox-state! update :task-tags-map assoc tid tags)))))))))
+         filtered-tasks (filter-and-sort-tasks tasks task-tags-map search-text selected-tags selected-project-id sort-by sort-desc)]
+   (m/Scaffold
+    .appBar (m/AppBar
+             .actions [(sort-button sort-by sort-desc
+                                    (fn [new-sort-by new-sort-desc]
+                                      (ui-state/update-inbox-state! assoc :sort-by new-sort-by :sort-desc new-sort-desc)))])
+    .body (m/SafeArea
+           .child (if loading
+                    (widgets/loading-indicator)
+                    (m/Row
+                     .children (vec (concat [(search-bar search-text
+                                                         (fn [text]
+                                                           (ui-state/update-inbox-state! assoc :search-text text)))
+                                              (filter-chips {:all-tags all-tags
+                                                             :selected-tags selected-tags
+                                                             :on-tag-toggle (fn [tag]
+                                                                              (ui-state/update-inbox-state!
+                                                                               update :selected-tags
+                                                                               (fn [tags] (if (contains? tags tag) (disj tags tag) (conj tags tag)))))
+                                                             :projects projects
+                                                             :selected-project-id selected-project-id
+                                                             :on-project-select (fn [pid]
+                                                                                  (ui-state/update-inbox-state! assoc :selected-project-id pid))})
+                                              (m/Expanded
+                                               .child (m/ListView
+                                                       .scrollDirection m/Axis.horizontal
+                                                       .children (vec (concat (cond-> [(quick-input-button ctx)]
+                                                                                (seq selected-task-ids) (conj (batch-action-bar {:ctx ctx
+                                                                                                                                  :db-ctx db-ctx
+                                                                                                                                  :selected-ids selected-task-ids
+                                                                                                                                  :projects projects
+                                                                                                                                  :all-tags all-tags})))
+                                                                              (mapv (fn [t]
+                                                                                      (task-item-card
+                                                                                       {:ctx ctx
+                                                                                        :task-item t
+                                                                                        :task-tags-map task-tags-map
+                                                                                        :selected? (contains? selected-task-ids (.-id t))
+                                                                                        :on-toggle-select (fn [tid]
+                                                                                                           (ui-state/update-inbox-state!
+                                                                                                            update :selected-task-ids
+                                                                                                            (fn [ids] (if (contains? ids tid) (disj ids tid) (conj ids tid)))))
+                                                                                        :on-complete (fn [tid]
+                                                                                                       (dispatch/dispatch-event! db-ctx
+                                                                                                                               {:type :task/complete
+                                                                                                                                :payload {:task-id tid}
+                                                                                                                                :source :ui}))}))
+                                                                                    filtered-tasks)))))]))))))))

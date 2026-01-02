@@ -2,9 +2,12 @@
   "Timeline page"
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    ["dart:collection" :as dart-coll]
+   ["dart:convert" :as json]
    [cljd.flutter :as f]
+   [clojure.string :as str]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
@@ -25,28 +28,66 @@
     (re-find #"complete" type) m/Colors.green
     :else (tokens/color :text-main)))
 
-(defn event-card [{:keys [event]}]
+(defn event-detail-dialog [ctx event]
+  (let [payload-json (.-payload event)
+        payload (when payload-json
+                  (try
+                    (json/jsonDecode payload-json)
+                    (catch Exception _ nil)))]
+    (m/AlertDialog
+     .title (comp/mongol-text-block {:text "Event Details" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+     .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children (vec (concat [(comp/mongol-text-block {:text (str "Type: " (.-type event)) :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                       (comp/mongol-text-block {:text (str "Title: " (.-title event))})
+                                       (comp/mongol-text-block {:text (str "Time: " (widgets/format-date-time (.-timestamp event)))})
+                                       (when (.-entityType event)
+                                         (comp/mongol-text-block {:text (str "Entity: " (.-entityType event) " / " (or (.-entityId event) "N/A"))}))
+                                       (when (.-duration event)
+                                         (comp/mongol-text-block {:text (str "Duration: " (.-duration event) " minutes")}))
+                                       (m/Divider)
+                                       (m/SizedBox .height 8)]
+                                      (when payload
+                                        [(comp/mongol-text-block {:text "Payload:" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                         (m/Container
+                                          .padding (m/EdgeInsets.all 8)
+                                          .decoration (m/BoxDecoration
+                                                       .color m/Colors.grey.shade100
+                                                       .borderRadius (m/BorderRadius.circular 4))
+                                          .child (mgl/MongolText
+                                                  (json/jsonEncode payload)
+                                                  .style (m/TextStyle .fontSize 12 .fontFamily "monospace")))])
+                                      [(m/SizedBox .height 8)])))
+    .actions [(m/TextButton
+                .child (m/Text "Close")
+                .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))])))
+
+(defn event-card [{:keys [event ctx]}]
   (let [type (.-type event)]
-    (m/Card
-     .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
-     .child (m/Padding
-             .padding (m/EdgeInsets.all (tokens/space :s))
-             .child (m/Row
-                     .crossAxisAlignment m/CrossAxisAlignment.start
-                     .children
-                     [(m/Icon (get-event-icon type) .color (get-event-color type) .size 24)
-                      (m/SizedBox .height (tokens/space :s))
-                      (m/Expanded
-                       .child (m/Column
-                               .crossAxisAlignment m/CrossAxisAlignment.start
-                               .children
-                               [(comp/mongol-text-block
-                                 {:text type
-                                  :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.w500 .color (get-event-color type))})
-                                (comp/mongol-text-block {:text (.-title event)})
-                                (comp/mongol-text-block
-                                 {:text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp event)))
-                                  :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})]))])))))
+    (m/InkWell
+     .onTap (fn [] (m/showDialog
+                    .context ctx
+                    .builder (fn [_] (event-detail-dialog ctx event))))
+     .child (m/Card
+             .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
+             .child (m/Padding
+                     .padding (m/EdgeInsets.all (tokens/space :s))
+                     .child (m/Row
+                             .crossAxisAlignment m/CrossAxisAlignment.start
+                             .children
+                             [(m/Icon (get-event-icon type) .color (get-event-color type) .size 24)
+                              (m/SizedBox .height (tokens/space :s))
+                              (m/Expanded
+                               .child (m/Column
+                                       .crossAxisAlignment m/CrossAxisAlignment.start
+                                       .children
+                                       [(comp/mongol-text-block
+                                         {:text type
+                                          :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.w500 .color (get-event-color type))})
+                                        (comp/mongol-text-block {:text (.-title event)})
+                                        (comp/mongol-text-block
+                                         {:text (widgets/format-date-time (.-timestamp event))
+                                          :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})]))]))))))
 
 (defn day-section [{:keys [date-str events]}]
   (m/Column
@@ -57,48 +98,95 @@
      .child (comp/mongol-text-block
              {:text date-str
               :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)}))
-    (m/Column .children (mapv (fn [e] (event-card {:event e})) events))]))
+    (m/Column .children events)]))
+
+(defn search-bar [search-text on-search-change]
+  (m/Container
+   .padding (m/EdgeInsets.all (tokens/space :s))
+   .child (m/TextField
+           .decoration (m/InputDecoration
+                        .hintText "Search events..."
+                        .prefixIcon (m/Icon m/Icons.search)
+                        .suffixIcon (when (seq search-text)
+                                     (m/IconButton
+                                      .icon (m/Icon m/Icons.clear)
+                                      .onPressed (fn [] (on-search-change ""))))
+                        .border (m/OutlineInputBorder
+                                 .borderRadius (m/BorderRadius.circular 8)))
+           .onChanged on-search-change
+           .controller (m/TextEditingController .text search-text))))
+
+(defn days-range-selector [days-range on-range-change]
+  (m/Container
+   .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :s))
+   .child (m/Row
+           .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+           .children [(comp/mongol-text-block {:text "Time Range:"})
+                      (m/Row
+                       .children (mapv (fn [days]
+                                        (m/RotatedBox
+                                         .quarterTurns 1
+                                         .child (m/FilterChip
+                                                 .label (m/Text (str days " days"))
+                                                 .selected (= days-range days)
+                                                 .onSelected (fn [_] (on-range-change days)))))
+                                      [7 14 30 90]))])))
 
 (defn timeline-screen [_params]
-  (let [dao (app-state/get-dao)
-        now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
-        start-ts (int (/ (- now (* 7 24 60 60 1000)) 1000))
-        end-ts (int (/ now 1000))]
-    (letfn [(group-by-date [es]
-              (reduce (fn [acc e]
-                        (let [d (widgets/format-yyyymmdd (int (/ (.-timestamp e) 86400)))]
-                          (update acc d (fnil conj []) e)))
-                      (dart-coll/LinkedHashMap) es)) ; Preserve order
-            (filter-events [es filters]
-              (filter (fn [e] (some #(.startsWith (.-type e) (str % "/")) filters)) es))]
-      (f/widget
-       :watch [events (future (timeline/query-range dao start-ts end-ts))
-               {:keys [filters]} ui-state/timeline-state]
-       :let [loading (nil? events)
-             all-events (or events [])
-             filtered-events (filter-events all-events filters)]
-       (m/Scaffold
-        .appBar (m/AppBar
-                 .actions [(m/PopupMenuButton
-                            .icon (m/Icon m/Icons.filter_list)
-                            .onSelected (fn [v]
-                                          (ui-state/update-timeline-state!
-                                           (fn [s] (update s :filters (fn [fs] (if (contains? fs v) (disj fs v) (conj fs v)))))))
-                            .itemBuilder (fn [_]
-                                           (mapv (fn [t]
-                                                   (m/CheckedPopupMenuItem
-                                                    .value t
-                                                    .checked (contains? filters t)
-                                                    .child (m/Text t)))
-                                                 ["task" "forecast" "focus" "project" "perspective"])))]))
-       .body
-       (m/SafeArea)
-       (if loading
-         (widgets/loading-indicator)
-         (let [groups (group-by-date filtered-events)]
-           (if (empty? groups)
-             (widgets/empty-state "No events matching filters")
-             (m/ListView
-              .scrollDirection m/Axis.horizontal
-              .children
-              (mapv (fn [d] (day-section {:date-str d :events (get groups d)})) (keys groups))))))))))
+  (let [dao (app-state/get-dao)]
+    (f/widget
+     :context ctx
+     :watch [{:keys [filters search-text days-range]} ui-state/timeline-state]
+     :let [now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+           start-ts (int (/ (- now (* days-range 24 60 60 1000)) 1000))
+           end-ts (int (/ now 1000))
+           events (future (timeline/query-range dao start-ts end-ts))
+           loading (nil? events)
+           all-events (or events [])
+           filtered-by-type (filter (fn [e] (some #(.startsWith (.-type e) (str % "/")) filters)) all-events)
+           filtered-by-search (if (empty? search-text)
+                               filtered-by-type
+                               (filter (fn [e]
+                                        (or (str/includes? (str/lower-case (.-title e)) (str/lower-case search-text))
+                                            (str/includes? (str/lower-case (.-type e)) (str/lower-case search-text))))
+                                      filtered-by-type))
+           group-by-date (fn [es]
+                          (reduce (fn [acc e]
+                                   (let [d (widgets/format-yyyymmdd (int (/ (.-timestamp e) 86400)))]
+                                     (update acc d (fnil conj []) e)))
+                                 (dart-coll/LinkedHashMap) es))
+           groups (group-by-date filtered-by-search)]
+     (m/Scaffold
+      .appBar (m/AppBar
+               .actions [(m/PopupMenuButton
+                          .icon (m/Icon m/Icons.filter_list)
+                          .onSelected (fn [v]
+                                        (ui-state/update-timeline-state!
+                                         (fn [s] (update s :filters (fn [fs] (if (contains? fs v) (disj fs v) (conj fs v)))))))
+                          .itemBuilder (fn [_]
+                                         (mapv (fn [t]
+                                                 (m/CheckedPopupMenuItem
+                                                  .value t
+                                                  .checked (contains? filters t)
+                                                  .child (m/Text t)))
+                                               ["task" "forecast" "focus" "project" "perspective"])))])
+      .body (m/SafeArea
+             .child (m/Column
+                     .children [(search-bar search-text
+                                            (fn [text]
+                                              (ui-state/update-timeline-state! assoc :search-text text)))
+                                (days-range-selector days-range
+                                                     (fn [days]
+                                                       (ui-state/update-timeline-state! assoc :days-range days)))
+                                (m/Expanded
+                                 .child (if loading
+                                         (widgets/loading-indicator)
+                                         (if (empty? groups)
+                                           (widgets/empty-state "No events matching filters")
+                                           (m/ListView
+                                            .scrollDirection m/Axis.horizontal
+                                            .children
+                                            (vec (mapv (fn [d]
+                                                         (day-section {:date-str d
+                                                                      :events (vec (mapv (fn [e] (event-card {:event e :ctx ctx})) (get groups d)))}))
+                                                       (keys groups)))))))]))))))
