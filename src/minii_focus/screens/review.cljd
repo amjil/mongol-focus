@@ -1,6 +1,7 @@
 (ns minii-focus.screens.review
   (:require
    ["package:flutter/material.dart" :as m]
+   ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
@@ -175,44 +176,44 @@
                         (not= (int (* (:confidence current-forecast) 100)) (int (* (:confidence calibrated) 100)))
                         (not= (int (* (:volatility current-forecast) 100)) (int (* (:volatility calibrated) 100))))]
     (m/AlertDialog
-     .title (comp/mongol-text-block {:text "Forecast 校准建议" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+     .title (comp/mongol-text-block {:text "Forecast Calibration Suggestion" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
      .content (m/Column
                 .mainAxisSize m/MainAxisSize.min
-                .children (vec (concat [(comp/mongol-text-block {:text "校准前后对比" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                .children (vec (concat [(comp/mongol-text-block {:text "Before vs After Calibration" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
                                        (m/SizedBox .height 8)
                                        (m/Row
                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                        .children [(comp/mongol-text-block {:text "当前" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
-                                                   (comp/mongol-text-block {:text "建议" :style (m/TextStyle .fontWeight m/FontWeight.bold)})])
+                                        .children [(comp/mongol-text-block {:text "Current" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                                   (comp/mongol-text-block {:text "Suggested" :style (m/TextStyle .fontWeight m/FontWeight.bold)})])
                                        (m/Divider)
                                        (m/Row
                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                        .children [(comp/mongol-text-block {:text (str "每日容量: " (int (:target-count current-forecast)))})
+                                        .children [(comp/mongol-text-block {:text (str "Daily Capacity: " (int (:target-count current-forecast)))})
                                                    (comp/mongol-text-block {:text (str (int (:target-count calibrated))) :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
                                        (m/Row
                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                        .children [(comp/mongol-text-block {:text (str "目标时长: " (int (:target-duration current-forecast)) "m")})
+                                        .children [(comp/mongol-text-block {:text (str "Target Duration: " (int (:target-duration current-forecast)) "m")})
                                                    (comp/mongol-text-block {:text (str (int (:target-duration calibrated)) "m") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
                                        (m/Row
                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                        .children [(comp/mongol-text-block {:text (str "置信度: " (int (* (:confidence current-forecast) 100)) "%")})
+                                        .children [(comp/mongol-text-block {:text (str "Confidence: " (int (* (:confidence current-forecast) 100)) "%")})
                                                    (comp/mongol-text-block {:text (str (int (* (:confidence calibrated) 100)) "%") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
                                        (m/Row
                                         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                                        .children [(comp/mongol-text-block {:text (str "波动性: " (int (* (:volatility current-forecast) 100)) "%")})
+                                        .children [(comp/mongol-text-block {:text (str "Volatility: " (int (* (:volatility current-forecast) 100)) "%")})
                                                    (comp/mongol-text-block {:text (str (int (* (:volatility calibrated) 100)) "%") :style (m/TextStyle .color (if has-changes m/Colors.blue m/Colors.grey))})])
                                        (m/Divider)
                                        (m/SizedBox .height 8)
-                                       (comp/mongol-text-block {:text "基于本次Review的统计数据自动计算" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})])))
+                                       (comp/mongol-text-block {:text "Automatically calculated based on this Review's statistics" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})])))
      .actions [(m/TextButton
-                .child (m/Text "取消")
+                .child (m/Text "Cancel")
                 .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
                (m/TextButton
-                .child (m/Text "应用校准")
+                .child (m/Text "Apply Calibration")
                 .onPressed (fn []
                              ;; Update daily capacity in settings
                              (ui-state/update-settings-state! assoc :daily-capacity (:target-count calibrated))
-                             (toast/show-success-toast ctx "Forecast校准已应用")
+                             (toast/show-success-toast ctx "Forecast calibration applied")
                              (-> (m/Navigator.of ctx) (.pop))))])))
 
 (defn completion-rate-chart
@@ -236,10 +237,10 @@
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
              .children
-             [(comp/mongol-text-block {:text "完成率趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+             [(comp/mongol-text-block {:text "Completion Rate Trend" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
               (m/SizedBox .height 8)
               (if (empty? chart-data)
-                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (comp/mongol-text-block {:text "No data" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
                 (m/Row
                  .crossAxisAlignment m/CrossAxisAlignment.end
                  .children
@@ -279,10 +280,10 @@
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
              .children
-             [(comp/mongol-text-block {:text "专注时长趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+             [(comp/mongol-text-block {:text "Focus Duration Trend" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
               (m/SizedBox .height 8)
               (if (empty? chart-data)
-                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (comp/mongol-text-block {:text "No data" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
                 (m/Row
                  .crossAxisAlignment m/CrossAxisAlignment.end
                  .children
@@ -318,10 +319,10 @@
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
              .children
-             [(comp/mongol-text-block {:text "情绪评分趋势" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+             [(comp/mongol-text-block {:text "Mood Score Trend" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
               (m/SizedBox .height 8)
               (if (empty? chart-data)
-                (comp/mongol-text-block {:text "暂无数据" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (comp/mongol-text-block {:text "No data" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
                 (m/Row
                  .crossAxisAlignment m/CrossAxisAlignment.end
                  .children
@@ -343,6 +344,211 @@
                                      (comp/mongol-text-block {:text (str (:score item)) :style (m/TextStyle .fontSize 10)})])))
                           chart-data))))]))))
 
+(defn comparison-chart
+  "Expected vs Actual comparison chart
+  Parameters:
+  - reviews: vector of Review objects with expectedCount, actualCount, expectedDuration, actualDuration"
+  [{:keys [reviews]}]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > (take 7 reviews))
+        max-count (if (empty? sorted-reviews)
+                   1.0
+                   (apply max (concat (map (fn [r] (.-expectedCount r)) sorted-reviews)
+                                     (map (fn [r] (.-actualCount r)) sorted-reviews))))
+        _max-duration (if (empty? sorted-reviews)
+                       1.0
+                       (apply max (concat (map (fn [r] (.-expectedDuration r)) sorted-reviews)
+                                         (map (fn [r] (.-actualDuration r)) sorted-reviews))))
+        chart-data (map (fn [r]
+                         {:timestamp (.-createdAt r)
+                          :expected-count (.-expectedCount r)
+                          :actual-count (.-actualCount r)
+                          :expected-duration (.-expectedDuration r)
+                          :actual-duration (.-actualDuration r)})
+                       sorted-reviews)]
+    (m/Container
+     .height 150
+     .margin (m/EdgeInsets.all (tokens/space :s))
+     .child (m/Column
+             .crossAxisAlignment m/CrossAxisAlignment.start
+             .children
+             [(comp/mongol-text-block {:text "Expected vs Actual Comparison" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
+              (m/SizedBox .height 8)
+              (if (empty? chart-data)
+                (comp/mongol-text-block {:text "No data" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                (m/Column
+                 .children
+                 (vec (map (fn [item]
+                           (m/Row
+                            .crossAxisAlignment m/CrossAxisAlignment.end
+                            .children
+                            [(m/Expanded
+                              .child (m/Column
+                                     .crossAxisAlignment m/CrossAxisAlignment.center
+                                     .children
+                                     [(m/Row
+                                       .crossAxisAlignment m/CrossAxisAlignment.end
+                                       .children
+                                       [(m/Container
+                                         .width 30
+                                         .margin (m/EdgeInsets.symmetric :horizontal 1)
+                                         .height (* 50 (if (zero? max-count) 0.0 (/ (:expected-count item) max-count)))
+                                         .decoration (m/BoxDecoration
+                                                     .color m/Colors.blue.shade300
+                                                     .borderRadius (m/BorderRadius.circular 2)))
+                                        (m/Container
+                                         .width 30
+                                         .margin (m/EdgeInsets.symmetric :horizontal 1)
+                                         .height (* 50 (if (zero? max-count) 0.0 (/ (:actual-count item) max-count)))
+                                         .decoration (m/BoxDecoration
+                                                     .color m/Colors.green
+                                                     .borderRadius (m/BorderRadius.circular 2)))])
+                                      (m/SizedBox .height 4)
+                                      (comp/mongol-text-block {:text (str (:actual-count item) "/" (:expected-count item)) :style (m/TextStyle .fontSize 8)})
+                                      (comp/mongol-text-block {:text (str (:actual-duration item) "/" (:expected-duration item) "m") :style (m/TextStyle .fontSize 8 .color (tokens/color :text-weak))})]))]))
+                         chart-data))))]))))
+
+(defn historical-comparison-section
+  "Historical comparison analysis
+  Parameters:
+  - reviews: vector of Review objects"
+  [{:keys [reviews]}]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > reviews)
+        recent-reviews (take 4 sorted-reviews)
+        older-reviews (take 4 (drop 4 sorted-reviews))
+        recent-avg-completion (if (empty? recent-reviews)
+                               0.0
+                               (let [completion-values (map (fn [r] (if (zero? (.-expectedCount r)) 0.0 (/ (.-actualCount r) (.-expectedCount r)))) recent-reviews)]
+                                 (/ (reduce + 0 completion-values) (count recent-reviews))))
+        older-avg-completion (if (empty? older-reviews)
+                              0.0
+                              (let [completion-values (map (fn [r] (if (zero? (.-expectedCount r)) 0.0 (/ (.-actualCount r) (.-expectedCount r)))) older-reviews)]
+                                (/ (reduce + 0 completion-values) (count older-reviews))))
+        recent-avg-duration (if (empty? recent-reviews)
+                             0.0
+                             (let [duration-values (map (fn [r] (.-actualDuration r)) recent-reviews)]
+                               (/ (reduce + 0 duration-values) (count recent-reviews))))
+        older-avg-duration (if (empty? older-reviews)
+                            0.0
+                            (let [duration-values (map (fn [r] (.-actualDuration r)) older-reviews)]
+                              (/ (reduce + 0 duration-values) (count older-reviews))))
+        completion-change (- recent-avg-completion older-avg-completion)
+        duration-change (- recent-avg-duration older-avg-duration)]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     [(comp/mongol-text-block {:text "Historical Comparison Analysis" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
+                      (m/SizedBox .height 16)
+                      (m/Row
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.start
+                         .children
+                         [(comp/mongol-text-block {:text "Last 4 Reviews" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.w500)})
+                          (comp/mongol-text-block {:text (str "Completion Rate: " (int (* recent-avg-completion 100)) "%") :style (m/TextStyle .fontSize 12)})
+                          (comp/mongol-text-block {:text (str "Focus Duration: " (int recent-avg-duration) "m") :style (m/TextStyle .fontSize 12)})])
+                        (m/Column
+                         .crossAxisAlignment m/CrossAxisAlignment.end
+                         .children
+                         [(comp/mongol-text-block {:text "Earlier 4 Reviews" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.w500)})
+                          (comp/mongol-text-block {:text (str "Completion Rate: " (int (* older-avg-completion 100)) "%") :style (m/TextStyle .fontSize 12)})
+                          (comp/mongol-text-block {:text (str "Focus Duration: " (int older-avg-duration) "m") :style (m/TextStyle .fontSize 12)})])])
+                      (m/SizedBox .height 16)
+                      (m/Row
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(comp/mongol-text-block {:text "Trend" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.w500)})
+                        (m/Row
+                         .children
+                         [(m/Icon (if (>= completion-change 0) m/Icons.trending_up m/Icons.trending_down)
+                                  .color (if (>= completion-change 0) m/Colors.green m/Colors.red)
+                                  .size 16)
+                          (comp/mongol-text-block {:text (str (if (>= completion-change 0) "+" "") (int (* completion-change 100)) "%") 
+                                                              :style (m/TextStyle .fontSize 12 
+                                                                                 .color (if (>= completion-change 0) m/Colors.green m/Colors.red))})])
+                        (m/SizedBox .width 16)
+                        (m/Row
+                         .children
+                         [(m/Icon (if (>= duration-change 0) m/Icons.trending_up m/Icons.trending_down)
+                                  .color (if (>= duration-change 0) m/Colors.green m/Colors.red)
+                                  .size 16)
+                          (comp/mongol-text-block {:text (str (if (>= duration-change 0) "+" "") (int duration-change) "m")
+                                                              :style (m/TextStyle .fontSize 12
+                                                                                 .color (if (>= duration-change 0) m/Colors.green m/Colors.red))})])])])))))
+
+(defn generate-improvement-suggestions
+  "Generate improvement suggestions based on review data
+  Parameters:
+  - review-data: aggregated review data map
+  - reviews: vector of historical Review objects
+  Returns: vector of suggestion strings"
+  [review-data reviews]
+  (let [sorted-reviews (sort-by (fn [r] (.-createdAt r)) > reviews)
+        recent-reviews (take 4 sorted-reviews)
+        overview (:overview review-data)
+        completion-rate (if (zero? (:forecast-completed overview))
+                         0.0
+                         (/ (:task-completed overview) (:forecast-completed overview)))
+        recent-avg-completion (if (empty? recent-reviews)
+                               0.0
+                               (let [completion-values (map (fn [r] (if (zero? (.-expectedCount r)) 0.0 (/ (.-actualCount r) (.-expectedCount r)))) recent-reviews)]
+                                 (/ (reduce + 0 completion-values) (count recent-reviews))))
+        recent-avg-mood (if (empty? recent-reviews)
+                         5.0
+                         (let [mood-values (map (fn [r] (or (.-moodScore r) 5.0)) recent-reviews)]
+                           (/ (reduce + 0 mood-values) (count recent-reviews))))]
+    (vec (filter some?
+                 (concat
+                  (when (< completion-rate 0.7)
+                    [(str "Low completion rate (" (int (* completion-rate 100)) "%), consider adjusting daily capacity settings")
+                     "Try reducing the number of daily forecast tasks to improve completion rate"])
+                  (when (< recent-avg-completion 0.6)
+                    ["Recent completion rate continues to decline, consider checking task difficulty and priority allocation"
+                     "Consider breaking down complex tasks into smaller subtasks"])
+                  (when (< recent-avg-mood 5.0)
+                    [(str "Recent mood score is low (" (int recent-avg-mood) "/10), consider adjusting work pace")
+                     "Increase rest time to avoid excessive fatigue"])
+                  (when (> (:forecast-skipped overview) (* (:forecast-completed overview) 0.3))
+                    ["Too many skipped tasks, consider re-evaluating forecast accuracy"
+                     "Check Perspective weight settings and optimize task allocation"])
+                  (when (and (>= completion-rate 0.8) (>= recent-avg-mood 7.0))
+                    ["Excellent performance! Keep up the current work pace and task allocation strategy"]))))))
+
+(defn improvement-suggestions-section
+  "Improvement suggestions section
+  Parameters:
+  - review-data: aggregated review data map
+  - reviews: vector of historical Review objects"
+  [{:keys [review-data reviews]}]
+  (let [suggestions (generate-improvement-suggestions review-data reviews)]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :m))
+     .child (m/Padding
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     (vec (concat
+                           [(comp/mongol-text-block {:text "Improvement Suggestions" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
+                            (m/SizedBox .height 16)]
+                           (if (empty? suggestions)
+                             [(comp/mongol-text-block {:text "No suggestions, keep it up!" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})]
+                             (map (fn [suggestion]
+                                   (m/Padding
+                                    .padding (m/EdgeInsets.only :bottom (tokens/space :s))
+                                    .child (m/Row
+                                            .crossAxisAlignment m/CrossAxisAlignment.start
+                                            .children
+                                            [(m/Icon m/Icons.lightbulb_outline .size 16 .color m/Colors.amber)
+                                             (m/SizedBox .width (tokens/space :xs))
+                                             (m/Expanded
+                                              .child (comp/mongol-text-block {:text suggestion :style (m/TextStyle .fontSize 12 .color (tokens/color :text-main))}))])))
+                                 suggestions)))))))))
+
 (defn visualization-section [{:keys [reviews]}]
   (m/Card
    .margin (m/EdgeInsets.all (tokens/space :m))
@@ -351,13 +557,15 @@
            .child (m/Column
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
-                   [(comp/mongol-text-block {:text "统计趋势" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
+                   [(comp/mongol-text-block {:text "Statistics Trend" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
                     (m/SizedBox .height 16)
                     (completion-rate-chart {:reviews reviews})
                     (m/SizedBox .height 16)
                     (focus-duration-chart {:reviews reviews})
                     (m/SizedBox .height 16)
-                    (mood-score-chart {:reviews reviews})]))))
+                    (mood-score-chart {:reviews reviews})
+                    (m/SizedBox .height 16)
+                    (comparison-chart {:reviews reviews})]))))
 
 (defn get-historical-reviews
   "Get historical reviews for visualization
@@ -371,6 +579,166 @@
                    (first reviews-stream)
                    reviews-stream)
                  reviews-stream)))))
+
+(defn review-detail-dialog [ctx review]
+  (let [period-start (.-periodStart review)
+        period-end (.-periodEnd review)
+        expected-count (.-expectedCount review)
+        actual-count (.-actualCount review)
+        expected-duration (.-expectedDuration review)
+        actual-duration (.-actualDuration review)
+        mood-score (.-moodScore review)
+        focus-score (.-focusScore review)
+        created-at (.-createdAt review)
+        completion-rate (if (zero? expected-count) 0.0 (/ actual-count expected-count))
+        duration-rate (if (zero? expected-duration) 0.0 (/ actual-duration expected-duration))
+        period-start-dt (dart-core/DateTime.fromMillisecondsSinceEpoch (* period-start 1000))
+        period-end-dt (dart-core/DateTime.fromMillisecondsSinceEpoch (* period-end 1000))
+        format-date (fn [dt]
+                      (str (.year dt) "-" 
+                           (if (< (.month dt) 10) "0" "") (.month dt) "-"
+                           (if (< (.day dt) 10) "0" "") (.day dt)))
+        base-children [(comp/mongol-text-block {:text "Period" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                       (m/SizedBox .height 4)
+                       (comp/mongol-text-block {:text (str (format-date period-start-dt) " ~ " (format-date period-end-dt))})
+                       (comp/mongol-text-block {:text (str "Created: " (widgets/format-date-time created-at)) :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                       (m/Divider)
+                       (m/SizedBox .height 8)
+                       (comp/mongol-text-block {:text "Task Statistics" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                       (m/SizedBox .height 4)
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Expected Tasks"})
+                                  (comp/mongol-text-block {:text (str expected-count)})])
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Actual Tasks"})
+                                  (comp/mongol-text-block {:text (str actual-count) :style (m/TextStyle .color (if (>= completion-rate 0.8) m/Colors.green (if (>= completion-rate 0.5) m/Colors.orange m/Colors.red)))})])
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Completion Rate"})
+                                  (comp/mongol-text-block {:text (str (int (* completion-rate 100)) "%") :style (m/TextStyle .color (if (>= completion-rate 0.8) m/Colors.green (if (>= completion-rate 0.5) m/Colors.orange m/Colors.red)))})])
+                       (m/Divider)
+                       (m/SizedBox .height 8)
+                       (comp/mongol-text-block {:text "Focus Duration" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                       (m/SizedBox .height 4)
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Expected Duration"})
+                                  (comp/mongol-text-block {:text (str expected-duration " minutes")})])
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Actual Duration"})
+                                  (comp/mongol-text-block {:text (str actual-duration " minutes") :style (m/TextStyle .color (if (>= duration-rate 0.8) m/Colors.green (if (>= duration-rate 0.5) m/Colors.orange m/Colors.red)))})])
+                       (m/Row
+                        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                        .children [(comp/mongol-text-block {:text "Completion Rate"})
+                                  (comp/mongol-text-block {:text (str (int (* duration-rate 100)) "%") :style (m/TextStyle .color (if (>= duration-rate 0.8) m/Colors.green (if (>= duration-rate 0.5) m/Colors.orange m/Colors.red)))})])
+                       (m/Divider)
+                       (m/SizedBox .height 8)
+                       (comp/mongol-text-block {:text "Scores" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                       (m/SizedBox .height 4)]
+        mood-widget (when mood-score
+                     (m/Row
+                      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                      .children [(comp/mongol-text-block {:text "Mood Score"})
+                                (comp/mongol-text-block {:text (str mood-score "/100") :style (m/TextStyle .color (cond (>= mood-score 70) m/Colors.green (>= mood-score 50) m/Colors.orange :else m/Colors.red))})]))
+        focus-widget (when focus-score
+                      (m/Row
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children [(comp/mongol-text-block {:text "Focus Score"})
+                                 (comp/mongol-text-block {:text (str focus-score "/100") :style (m/TextStyle .color (cond (>= focus-score 70) m/Colors.green (>= focus-score 50) m/Colors.orange :else m/Colors.red))})]))
+        all-children (vec (concat base-children
+                                  (when mood-score [(m/SizedBox .height 4) mood-widget])
+                                  (when focus-score [focus-widget])
+                                  [(m/SizedBox .height 8)]))]
+    (m/AlertDialog
+     .title (comp/mongol-text-block {:text "Review Details" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+     .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children all-children)
+     .actions [(m/TextButton
+                .child (m/Text "Close")
+                .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))])))
+
+(defn review-history-item [{:keys [review ctx]}]
+  (let [expected-count (.-expectedCount review)
+        actual-count (.-actualCount review)
+        actual-duration (.-actualDuration review)
+        mood-score (.-moodScore review)
+        focus-score (.-focusScore review)
+        created-at (.-createdAt review)
+        completion-rate (if (zero? expected-count) 0.0 (/ actual-count expected-count))
+        period-start (.-periodStart review)
+        period-end (.-periodEnd review)
+        period-start-dt (dart-core/DateTime.fromMillisecondsSinceEpoch (* period-start 1000))
+        period-end-dt (dart-core/DateTime.fromMillisecondsSinceEpoch (* period-end 1000))
+        format-date (fn [dt]
+                      (str (.year dt) "-" 
+                           (if (< (.month dt) 10) "0" "") (.month dt) "-"
+                           (if (< (.day dt) 10) "0" "") (.day dt)))
+        base-columns [(m/Column
+                       .mainAxisSize m/MainAxisSize.min
+                       .children [(comp/mongol-text-block {:text "Completion Rate" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                                 (comp/mongol-text-block {:text (str (int (* completion-rate 100)) "%") :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold .color (if (>= completion-rate 0.8) m/Colors.green (if (>= completion-rate 0.5) m/Colors.orange m/Colors.red)))})
+                                 (comp/mongol-text-block {:text (str actual-count "/" expected-count) :style (m/TextStyle .fontSize 10 .color (tokens/color :text-weak))})])
+                      (m/Column
+                       .mainAxisSize m/MainAxisSize.min
+                       .children [(comp/mongol-text-block {:text "Focus Duration" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                                 (comp/mongol-text-block {:text (str actual-duration "m") :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
+                                 (comp/mongol-text-block {:text "" :style (m/TextStyle .fontSize 10)})])]
+        mood-column (when mood-score
+                     (m/Column
+                      .mainAxisSize m/MainAxisSize.min
+                      .children [(comp/mongol-text-block {:text "Mood" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                                (comp/mongol-text-block {:text (str mood-score) :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold .color (cond (>= mood-score 70) m/Colors.green (>= mood-score 50) m/Colors.orange :else m/Colors.red))})
+                                (comp/mongol-text-block {:text "" :style (m/TextStyle .fontSize 10)})]))
+        focus-column (when focus-score
+                      (m/Column
+                       .mainAxisSize m/MainAxisSize.min
+                       .children [(comp/mongol-text-block {:text "Focus" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                                 (comp/mongol-text-block {:text (str focus-score) :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold .color (cond (>= focus-score 70) m/Colors.green (>= focus-score 50) m/Colors.orange :else m/Colors.red))})
+                                 (comp/mongol-text-block {:text "" :style (m/TextStyle .fontSize 10)})]))
+        row-children (vec (concat base-columns
+                                  (when mood-column [mood-column])
+                                  (when focus-column [focus-column])))]
+    (m/InkWell
+     .onTap (fn [] (m/showDialog
+                    .context ctx
+                    .builder (fn [_] (review-detail-dialog ctx review))))
+     .child (m/Card
+             .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
+             .child (m/Padding
+                     .padding (m/EdgeInsets.all (tokens/space :s))
+                     .child (m/Column
+                             .crossAxisAlignment m/CrossAxisAlignment.start
+                             .children
+                             [(m/Row
+                               .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                               .children [(comp/mongol-text-block {:text (str (format-date period-start-dt) " ~ " (format-date period-end-dt)) :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                         (comp/mongol-text-block {:text (widgets/format-date-time created-at) :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})])
+                              (m/SizedBox .height 8)
+                              (m/Row
+                               .mainAxisAlignment m/MainAxisAlignment.spaceAround
+                               .children row-children)]))))))
+
+(defn review-history-section [{:keys [reviews ctx]}]
+  (m/Card
+   .margin (m/EdgeInsets.all (tokens/space :m))
+   .child (m/Padding
+           .padding (m/EdgeInsets.all (tokens/space :m))
+           .child (m/Column
+                   .crossAxisAlignment m/CrossAxisAlignment.start
+                   .children
+                   [(comp/mongol-text-block {:text "Review History" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
+                    (m/SizedBox .height 16)
+                    (if (empty? reviews)
+                      (comp/mongol-text-block {:text "No history" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                      (m/Column
+                       .mainAxisSize m/MainAxisSize.min
+                       .children (vec (map (fn [review]
+                                            (review-history-item {:review review :ctx ctx}))
+                                          (take 10 reviews)))))]))))
 
 (defn review-screen [_params]
   (let [dao (app-state/get-dao)
@@ -416,4 +784,5 @@
                    .padding (m/EdgeInsets.all 16)
                    .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)}))
                   (m/Row .children (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))
-                  (visualization-section {:reviews reviews-list})])))))))
+                  (visualization-section {:reviews reviews-list})
+                  (review-history-section {:reviews reviews-list :ctx my-ctx})])))))))

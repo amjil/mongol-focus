@@ -11,6 +11,7 @@
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.timeline :as timeline]
+   [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.widgets.common :as widgets]))
 
 (defn stats-item [{:keys [label value color]}]
@@ -142,40 +143,178 @@
                        (stats-item {:label "Completed" :value (:completed-count stats) :color m/Colors.green})
                        (stats-item {:label "Interruptions" :value (:pause-count stats) :color m/Colors.orange})]))]))))
 
-(defn focus-active-session [{:keys [task-title remaining-seconds current-focus-depth is-paused on-resume on-pause on-complete on-abort]}]
-  (m/Center
-   .child (m/Row
-           .mainAxisAlignment m/MainAxisAlignment.center
-           .crossAxisAlignment m/CrossAxisAlignment.center
-           .children
-           [(comp/mongol-text-block
-             {:text task-title
-              :style (m/TextStyle
-                      .fontSize (tokens/font-size :xl)
-                      .fontWeight m/FontWeight.bold)})
-            (m/SizedBox .width (tokens/space :l))
-            (comp/mongol-text-block
-             {:text (widgets/format-timer remaining-seconds)
-              :style (m/TextStyle
-                      .fontSize (tokens/font-size :xxl)
-                      .fontWeight m/FontWeight.bold)})
-            (m/SizedBox .width (tokens/space :l))
-            (focus-depth/focus-depth-bar
-             {:depth current-focus-depth
-              :max-depth 1.0
-              :width 24.0
-              :height 250.0})
-            (m/SizedBox .width (tokens/space :xl))
-            (if is-paused
-              (m/ElevatedButton .onPressed on-resume .child (comp/mongol-text-block {:text "Resume"}))
-              (m/OutlinedButton .onPressed on-pause .child (comp/mongol-text-block {:text "Pause"})))
-            (m/SizedBox .width (tokens/space :m))
-            (m/Column
-             .mainAxisAlignment m/MainAxisAlignment.center
-             .children
-             [(mgl/MongolElevatedButton .onPressed on-complete .child (comp/mongol-text-block {:text "Complete"}))
-              (m/SizedBox .height (tokens/space :m))
-              (mgl/MongolOutlinedButton .onPressed on-abort .child (comp/mongol-text-block {:text "Abort"}))])])))
+(defn abort-reason-dialog [ctx on-abort]
+  (let [reason-atom (atom "")]
+    (f/widget
+     :watch [selected-reason reason-atom]
+     (m/AlertDialog
+      .title (comp/mongol-text-block {:text "Abort Focus"})
+      .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children [(comp/mongol-text-block {:text "Please select abort reason:" :style (m/TextStyle .fontSize 14)})
+                          (m/SizedBox .height 8)
+                          (m/RadioListTile
+                           .title (m/Text "Task Completed")
+                           .value "completed"
+                           .groupValue selected-reason
+                           .onChanged (fn [v] (reset! reason-atom v)))
+                          (m/RadioListTile
+                           .title (m/Text "Interrupted")
+                           .value "interrupted"
+                           .groupValue selected-reason
+                           .onChanged (fn [v] (reset! reason-atom v)))
+                          (m/RadioListTile
+                           .title (m/Text "Task Changed")
+                           .value "task-changed"
+                           .groupValue selected-reason
+                           .onChanged (fn [v] (reset! reason-atom v)))
+                          (m/RadioListTile
+                           .title (m/Text "Other")
+                           .value "other"
+                           .groupValue selected-reason
+                           .onChanged (fn [v] (reset! reason-atom v)))])
+      .actions [(m/TextButton
+                 .child (m/Text "Cancel")
+                 .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                (m/TextButton
+                 .child (m/Text "Confirm")
+                 .onPressed (fn []
+                             (let [reason selected-reason]
+                               (when (seq reason)
+                                 (on-abort reason))
+                               (-> (m/Navigator.of ctx) (.pop)))))]))))
+
+(defn duration-selector-dialog [ctx current-duration on-duration-set]
+  (let [minutes-atom (atom (int (/ current-duration 60)))]
+    (f/widget
+     :watch [selected-minutes minutes-atom]
+     (m/AlertDialog
+      .title (comp/mongol-text-block {:text "Set Focus Duration"})
+      .content (m/Column
+                .mainAxisSize m/MainAxisSize.min
+                .children [(comp/mongol-text-block {:text (str "Current Duration: " selected-minutes " minutes") :style (m/TextStyle .fontSize 16)})
+                          (m/SizedBox .height 16)
+                          (m/Slider
+                           .value (double selected-minutes)
+                           .onChanged (fn [v] (reset! minutes-atom (int v)))
+                           .min 5.0
+                           .max 120.0
+                           .divisions 23
+                           .label (str selected-minutes " minutes"))])
+      .actions [(m/TextButton
+                 .child (m/Text "Cancel")
+                 .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                (m/TextButton
+                 .child (m/Text "Confirm")
+                 .onPressed (fn []
+                             (on-duration-set (* selected-minutes 60))
+                             (-> (m/Navigator.of ctx) (.pop))))]))))
+
+(defn focus-active-session [{:keys [task-title remaining-seconds current-focus-depth is-paused pause-count is-fullscreen sound-enabled on-resume on-pause on-complete on-abort on-toggle-fullscreen on-set-duration on-toggle-sound ctx]}]
+  (f/widget
+   :context ctx
+   (if is-fullscreen
+     (m/Scaffold
+      .backgroundColor m/Colors.black
+      .body (m/Center
+             .child (m/Column
+                     .mainAxisAlignment m/MainAxisAlignment.center
+                     .children [(comp/mongol-text-block
+                                {:text task-title
+                                 :style (m/TextStyle
+                                        .fontSize (tokens/font-size :xl)
+                                        .fontWeight m/FontWeight.bold
+                                        .color m/Colors.white)})
+                               (m/SizedBox .height (tokens/space :xl))
+                               (comp/mongol-text-block
+                                {:text (widgets/format-timer remaining-seconds)
+                                 :style (m/TextStyle
+                                        .fontSize 72
+                                        .fontWeight m/FontWeight.bold
+                                        .color m/Colors.white)})
+                               (m/SizedBox .height (tokens/space :l))
+                               (focus-depth/focus-depth-bar
+                                {:depth current-focus-depth
+                                 :max-depth 1.0
+                                 :width 400.0
+                                 :height 20.0})
+                               (m/SizedBox .height (tokens/space :xl))
+                               (m/Row
+                                .mainAxisAlignment m/MainAxisAlignment.center
+                                .children [(if is-paused
+                                            (m/ElevatedButton
+                                             .onPressed on-resume
+                                             .child (comp/mongol-text-block {:text "Resume" :style (m/TextStyle .color m/Colors.white)}))
+                                            (m/OutlinedButton
+                                             .onPressed on-pause
+                                             .child (comp/mongol-text-block {:text "Pause" :style (m/TextStyle .color m/Colors.white)})))
+                                          (m/SizedBox .width (tokens/space :m))
+                                          (mgl/MongolElevatedButton
+                                           .onPressed on-complete
+                                           .child (comp/mongol-text-block {:text "Complete" :style (m/TextStyle .color m/Colors.white)}))
+                                          (m/SizedBox .width (tokens/space :m))
+                                          (m/IconButton
+                                           .icon (m/Icon m/Icons.fullscreen_exit .color m/Colors.white)
+                                           .onPressed on-toggle-fullscreen)])]))
+      .floatingActionButton (m/FloatingActionButton
+                             .onPressed on-toggle-fullscreen
+                             .child (m/Icon m/Icons.fullscreen_exit)))
+     (m/Center
+      .child (m/Row
+              .mainAxisAlignment m/MainAxisAlignment.center
+              .crossAxisAlignment m/CrossAxisAlignment.center
+              .children
+              [(comp/mongol-text-block
+                {:text task-title
+                 :style (m/TextStyle
+                        .fontSize (tokens/font-size :xl)
+                        .fontWeight m/FontWeight.bold)})
+               (m/SizedBox .width (tokens/space :l))
+               (comp/mongol-text-block
+                {:text (widgets/format-timer remaining-seconds)
+                 :style (m/TextStyle
+                        .fontSize (tokens/font-size :xxl)
+                        .fontWeight m/FontWeight.bold)})
+               (m/SizedBox .width (tokens/space :l))
+               (focus-depth/focus-depth-bar
+                {:depth current-focus-depth
+                 :max-depth 1.0
+                 :width 24.0
+                 :height 250.0})
+               (m/SizedBox .width (tokens/space :xl))
+               (if is-paused
+                 (m/ElevatedButton .onPressed on-resume .child (comp/mongol-text-block {:text "Resume"}))
+                 (m/OutlinedButton .onPressed on-pause .child (comp/mongol-text-block {:text "Pause"})))
+               (m/SizedBox .width (tokens/space :m))
+               (m/Column
+                .mainAxisAlignment m/MainAxisAlignment.center
+                .children
+                [(mgl/MongolElevatedButton .onPressed on-complete .child (comp/mongol-text-block {:text "Complete"}))
+                 (m/SizedBox .height (tokens/space :m))
+                 (mgl/MongolOutlinedButton
+                  .onPressed (fn []
+                              (m/showDialog
+                               .context ctx
+                               .builder (fn [dialog-ctx] (abort-reason-dialog dialog-ctx on-abort)))
+                              nil)
+                  .child (comp/mongol-text-block {:text "Abort"}))
+                 (m/SizedBox .height (tokens/space :s))
+                 (m/IconButton
+                  .icon (m/Icon m/Icons.fullscreen)
+                  .tooltip "Fullscreen Mode"
+                  .onPressed on-toggle-fullscreen)
+                 (m/IconButton
+                  .icon (m/Icon m/Icons.timer)
+                  .tooltip "Set Duration"
+                  .onPressed (fn []
+                              (m/showDialog
+                               .context ctx
+                               .builder (fn [dialog-ctx] (duration-selector-dialog dialog-ctx remaining-seconds on-set-duration)))
+                              nil))
+                 (m/IconButton
+                  .icon (m/Icon (if sound-enabled m/Icons.volume_up m/Icons.volume_off))
+                  .tooltip (if sound-enabled "Disable Sound" "Enable Sound")
+                  .onPressed on-toggle-sound)])])))))
 
 (defn forecast-list [{:keys [forecasts task-titles-map on-start]}]
   (if (empty? forecasts)
@@ -203,7 +342,7 @@
     (f/widget
      :context ctx
      :watch [{:keys [is-focusing is-paused remaining-seconds today-forecasts task-titles-map
-                     loading today-stats focus-depth-history current-focus-depth current-forecast timer history-filter]} ui-state/focus-state
+                     loading today-stats focus-depth-history current-focus-depth current-forecast timer history-filter pause-count session-id is-fullscreen custom-duration sound-enabled]} ui-state/focus-state
              events (timeline/watch-range dao start-ts (+ start-ts 86399))]
      :let [effective-stats (if (seq events) (ui-state/calculate-today-stats events) today-stats)]
      (m/Scaffold
@@ -212,26 +351,53 @@
       .backgroundColor (tokens/color :bg-focus)
       .body (m/Row
              .children
-             [(today-stats-card {:stats effective-stats :depth-history focus-depth-history})
-              (focus-history-list {:events events
-                                  :filter-type history-filter
-                                  :on-filter-change (fn [filter-type]
-                                                      (ui-state/update-focus-state! assoc :history-filter filter-type))})
-              (m/Expanded
-               .child (if is-focusing
+             (filterv some?
+              [(today-stats-card {:stats effective-stats :depth-history focus-depth-history})
+               (focus-history-list {:events events
+                                   :filter-type history-filter
+                                   :on-filter-change (fn [filter-type]
+                                                       (ui-state/update-focus-state! assoc :history-filter filter-type))})
+               (when (seq focus-depth-history)
+                 (focus-depth/depth-analysis-card {:depths focus-depth-history
+                                                   :pause-count pause-count}))
+               (m/Expanded
+                .child (if is-focusing
                         (focus-active-session
-                         {:task-title (get task-titles-map (.-taskId current-forecast) "Unknown task")
+                         {:task-title (if current-forecast
+                                        (get task-titles-map (.-taskId current-forecast) "Unknown task")
+                                        "Unknown task")
                           :remaining-seconds remaining-seconds
                           :current-focus-depth current-focus-depth
                           :is-paused is-paused
+                          :pause-count pause-count
+                          :is-fullscreen (or is-fullscreen false)
+                          :ctx ctx
                           :on-resume (fn [] (ui-state/update-focus-state! assoc :is-paused false))
                           :on-pause (fn []
                                       (ui-state/update-focus-state!
                                        (fn [s] (-> s (assoc :is-paused true) (update :pause-count inc)))))
                           :on-complete (fn [] (ui-state/complete-focus ctx))
-                          :on-abort (fn []
-                                      (ui-state/update-focus-state! assoc :is-focusing false)
-                                      (when timer (.cancel timer) (ui-state/update-focus-state! assoc :timer nil)))})
+                          :on-abort (fn [reason]
+                                      (let [db-ctx {:db (app-state/get-db) :dao dao}
+                                            task-title (if current-forecast
+                                                        (get task-titles-map (.-taskId current-forecast) "Unknown task")
+                                                        "Unknown task")]
+                                        (-> (dispatch/dispatch-event! db-ctx
+                                                                      {:type :focus/abort
+                                                                       :payload {:session-id session-id
+                                                                                 :reason reason
+                                                                                 :title (str "Abort Focus: " task-title " (" reason ")")}
+                                                                       :source :ui})
+                                            (.then (fn [_]
+                                                     (ui-state/update-focus-state! assoc :is-focusing false :is-fullscreen false)
+                                                     (when timer (.cancel timer) (ui-state/update-focus-state! assoc :timer nil)))))))
+                          :on-toggle-fullscreen (fn []
+                                                  (ui-state/update-focus-state! update :is-fullscreen not))
+                          :on-set-duration (fn [new-duration]
+                                            (ui-state/update-focus-state! assoc :custom-duration new-duration :remaining-seconds new-duration))
+                          :sound-enabled sound-enabled
+                          :on-toggle-sound (fn []
+                                            (ui-state/update-focus-state! update :sound-enabled not))})
                         (if loading
                           (widgets/loading-indicator)
-                          (forecast-list {:forecasts today-forecasts :task-titles-map task-titles-map :on-start (fn [f] (ui-state/start-focus f ctx))}))))])))))
+                          (forecast-list {:forecasts today-forecasts :task-titles-map task-titles-map :on-start (fn [f] (ui-state/start-focus f ctx))}))))]))))))

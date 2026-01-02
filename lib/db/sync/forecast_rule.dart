@@ -1,22 +1,22 @@
-/// ForecastRule - 核心抽象类
+/// ForecastRule - Core abstract class
 /// 
-/// 定义了"什么条件下，在什么时候，生成什么类型的 ForecastItem"
+/// Defines "under what conditions, at what time, generate what type of ForecastItem"
 /// 
-/// 这是整个系统最值钱的抽象，使得同步逻辑规则驱动而非硬编码。
+/// This is the most valuable abstraction in the entire system, making sync logic rule-driven rather than hard-coded.
 class ForecastRule {
-  /// 规则类型，如：task_due / task_defer / project_review
+  /// Rule type, e.g.: task_due / task_defer / project_review
   final String type;
 
-  /// 条件函数：判断实体是否满足此规则
-  /// 返回 true 表示应该为此实体生成 ForecastItem
+  /// Condition function: determine if entity satisfies this rule
+  /// Returns true means should generate ForecastItem for this entity
   final bool Function(dynamic entity) when;
 
-  /// 日期函数：返回应该生成的 ForecastItem 的日期
-  /// 返回 null 表示不生成
+  /// Date function: returns the date for the ForecastItem to be generated
+  /// Returns null means don't generate
   final DateTime? Function(dynamic entity) date;
 
-  /// 优先级函数（可选）：返回 ForecastItem 的优先级
-  /// 如果不提供，使用默认优先级
+  /// Priority function (optional): returns ForecastItem priority
+  /// If not provided, use default priority
   final int Function(dynamic entity)? priority;
 
   const ForecastRule({

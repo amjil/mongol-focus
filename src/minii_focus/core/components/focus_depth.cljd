@@ -69,7 +69,11 @@
   Returns: Widget"
   [& {:keys [depths max-items]
       :or {depths [] max-items 7}}]
-  (let [recent-depths (take max-items (reverse depths))
+  (let [depths-list (if (map? depths)
+                      (vals depths)
+                      depths)
+        numeric-depths (filter number? depths-list)
+        recent-depths (take max-items (reverse numeric-depths))
         max-depth (if (empty? recent-depths)
                    1.0
                    (apply max recent-depths))
@@ -122,8 +126,8 @@
                                                  (>= normalized-depth 0.4) m/Colors.orange
                                                  :else m/Colors.grey)
                                          .borderRadius (m/BorderRadius.only
-                                                       :topLeft (tokens/space :xs)
-                                                       :topRight (tokens/space :xs))))))
+                                                       :topLeft (m/Radius.circular (tokens/space :xs))
+                                                       :topRight (m/Radius.circular (tokens/space :xs)))))))
                         recent-depths))))
           (m/SizedBox .height (tokens/space :s))
           (focus-depth-trend-indicator {:depths depths})]))])))
@@ -154,9 +158,13 @@
   
   Returns: {:trend :rising|:falling|:stable :avg-depth double :change double}"
   [depths]
-  (if (< (count depths) 2)
-    {:trend :stable :avg-depth (if (empty? depths) 0.0 (first depths)) :change 0.0}
-    (let [recent-depths (take 7 (reverse depths))  ; Take last 7, in chronological order
+  (let [depths-list (if (map? depths)
+                      (vals depths)
+                      depths)
+        numeric-depths (filter number? depths-list)]
+    (if (< (count numeric-depths) 2)
+      {:trend :stable :avg-depth (if (empty? numeric-depths) 0.0 (first numeric-depths)) :change 0.0}
+      (let [recent-depths (take 7 (reverse numeric-depths))  ; Take last 7, in chronological order
           first-half (take (int (/ (count recent-depths) 2)) recent-depths)
           second-half (drop (int (/ (count recent-depths) 2)) recent-depths)
           first-avg (if (empty? first-half)
@@ -171,7 +179,139 @@
                  (> change-val 0.05) :rising
                  (< change-val -0.05) :falling
                  :else :stable)]
-      {:trend trend :avg-depth avg-depth :change change-val})))
+        {:trend trend :avg-depth avg-depth :change change-val}))))
+
+(defn generate-depth-suggestions
+  "Generate improvement suggestions based on depth trend analysis
+  
+  Parameters:
+  - trend-analysis: {:trend :rising|:falling|:stable :avg-depth double :change double}
+  - pause-count: int - Number of pauses in current session
+  
+  Returns: List<string> - List of suggestion texts"
+  [trend-analysis pause-count]
+  (let [trend (:trend trend-analysis)
+        avg-depth (if (number? (:avg-depth trend-analysis))
+                    (:avg-depth trend-analysis)
+                    0.0)
+        change (if (number? (:change trend-analysis))
+                 (:change trend-analysis)
+                 0.0)
+        pause-count-num (if (number? pause-count)
+                          pause-count
+                          0)]
+    (vec (filter some?
+                 (concat
+                  (when (= trend :falling)
+                    [(str "Focus depth decreased " (int (* (if (< change 0) (- change) change) 100)) "%, consider reducing distractions")
+                     "Try working in a quieter environment"
+                     "Turn off unnecessary notifications"])
+                  (when (and (= trend :stable) (< avg-depth 0.5))
+                    ["Average focus depth is low, consider extending focus time"
+                     "Try using the Pomodoro technique to improve focus"])
+                  (when (> pause-count-num 2)
+                    [(str "This session has been paused " pause-count-num " times, consider reducing interruptions")
+                     "Plan tasks in advance to avoid frequent switching"])
+                  (when (and (= trend :rising) (> avg-depth 0.7))
+                    ["Focus depth continues to improve, keep it up!"])
+                  (when (< avg-depth 0.4)
+                    ["Focus depth is low, consider choosing more suitable tasks"
+                     "Try doing important tasks when you have more energy"]))))))
+
+(defn depth-analysis-card
+  "Focus depth analysis card with trend and suggestions
+  
+  Parameters:
+  - depths: List<double> - Historical depth values
+  - pause-count: int - Current session pause count
+  
+  Returns: Widget"
+  [& {:keys [depths pause-count]
+      :or {depths [] pause-count 0}}]
+  (let [trend-analysis (analyze-depth-trend depths)
+        suggestions (generate-depth-suggestions trend-analysis pause-count)
+        trend (:trend trend-analysis)
+        avg-depth (if (number? (:avg-depth trend-analysis))
+                    (:avg-depth trend-analysis)
+                    0.0)
+        trend-icon (case trend
+                     :rising m/Icons.trending_up
+                     :falling m/Icons.trending_down
+                     :stable m/Icons.trending_flat)
+        trend-color (case trend
+                      :rising m/Colors.green
+                      :falling m/Colors.red
+                      :stable (tokens/color :text-weak))
+        trend-text (case trend
+                     :rising "Rising"
+                     :falling "Falling"
+                     :stable "Stable")]
+    (m/Card
+     .margin (m/EdgeInsets.all (tokens/space :s))
+     .child (m/Container
+             .width 200
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child (m/Column
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     (vec (concat
+                           [(text/mongol-text-block
+                             {:text "Depth Analysis"
+                              :style (m/TextStyle
+                                     .fontSize (tokens/font-size :m)
+                                     .fontWeight m/FontWeight.bold)})
+                            (m/SizedBox .height (tokens/space :s))
+                            (m/Row
+                             .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                             .children [(text/mongol-text-block
+                                        {:text "Trend"
+                                         :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                                       (m/Row
+                                        .mainAxisSize m/MainAxisSize.min
+                                        .children [(m/Icon trend-icon .size 16 .color trend-color)
+                                                  (m/SizedBox .width (tokens/space :xs))
+                                                  (text/mongol-text-block
+                                                   {:text trend-text
+                                                    :style (m/TextStyle
+                                                           .fontSize (tokens/font-size :s)
+                                                           .color trend-color)})])])
+                            (m/SizedBox .height (tokens/space :xs))
+                            (m/Row
+                             .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                             .children [(text/mongol-text-block
+                                        {:text "Average Depth"
+                                         :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                                       (text/mongol-text-block
+                                        {:text (str (int (* avg-depth 100)) "%")
+                                         :style (m/TextStyle
+                                                .fontSize (tokens/font-size :s)
+                                                .fontWeight m/FontWeight.bold
+                                                .color trend-color)})])]
+                           (when (seq suggestions)
+                             [(m/Divider)
+                              (m/SizedBox .height (tokens/space :s))
+                              (text/mongol-text-block
+                               {:text "Improvement Suggestions"
+                                :style (m/TextStyle
+                                       .fontSize (tokens/font-size :s)
+                                       .fontWeight m/FontWeight.bold)})
+                              (m/SizedBox .height (tokens/space :xs))
+                              (m/Column
+                               .crossAxisAlignment m/CrossAxisAlignment.start
+                               .children (vec (map
+                                              (fn [suggestion]
+                                                (m/Padding
+                                                 .padding (m/EdgeInsets.only :bottom (tokens/space :xs))
+                                                 .child (m/Row
+                                                         .crossAxisAlignment m/CrossAxisAlignment.start
+                                                         .children [(m/Icon m/Icons.lightbulb_outline .size 14 .color m/Colors.amber)
+                                                                   (m/SizedBox .width (tokens/space :xs))
+                                                                   (text/mongol-text-block
+                                                                    {:text suggestion
+                                                                     :style (m/TextStyle
+                                                                            .fontSize (tokens/font-size :xs)
+                                                                            .color (tokens/color :text-weak))})])))
+                                              suggestions)))]))))))))
 
 (defn focus-depth-trend-indicator
   "Focus depth trend indicator component
@@ -184,7 +324,9 @@
       :or {depths []}}]
   (let [trend-analysis (analyze-depth-trend depths)
         trend (:trend trend-analysis)
-        avg-depth (:avg-depth trend-analysis)
+        avg-depth (if (number? (:avg-depth trend-analysis))
+                    (:avg-depth trend-analysis)
+                    0.0)
         trend-icon (case trend
                      :rising m/Icons.trending_up
                      :falling m/Icons.trending_down

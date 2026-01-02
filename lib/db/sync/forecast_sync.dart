@@ -6,12 +6,12 @@ import '../tables/projects.dart';
 import '../tables/forecasts.dart';
 import 'forecast_rule.dart';
 
-/// 生成 ForecastItem 的稳定 ID
+/// Generate stable ID for ForecastItem
 /// 
-/// 格式：forecast:{type}:{refId}:{date}
-/// 示例：forecast:task_due:task-123:2025-01-10
+/// Format: forecast:{type}:{refId}:{date}
+/// Example: forecast:task_due:task-123:2025-01-10
 /// 
-/// ⚠️ 关键：同一规则 + 同一实体 + 同一日期 = 同一个 ForecastItem
+/// ⚠️ Key: same rule + same entity + same date = same ForecastItem
 String generateForecastId({
   required String type,
   required String refId,
@@ -21,7 +21,7 @@ String generateForecastId({
   return 'forecast:$type:$refId:$dateStr';
 }
 
-/// 格式化日期为 yyyyMMdd 字符串
+/// Format date to yyyyMMdd string
 String _formatDate(DateTime date) {
   final year = date.year.toString().padLeft(4, '0');
   final month = date.month.toString().padLeft(2, '0');
@@ -29,12 +29,12 @@ String _formatDate(DateTime date) {
   return '$year$month$day';
 }
 
-/// 将 DateTime 转换为 yyyyMMdd 整数格式
+/// Convert DateTime to yyyyMMdd integer format
 int _dateToInt(DateTime date) {
   return date.year * 10000 + date.month * 100 + date.day;
 }
 
-/// 生成的 ForecastItem 数据
+/// Generated ForecastItem data
 class GeneratedForecastItem {
   final String id;
   final String type;
@@ -51,9 +51,9 @@ class GeneratedForecastItem {
   });
 }
 
-/// 根据规则生成 ForecastItems（纯函数）
+/// Generate ForecastItems based on rules (pure function)
 /// 
-/// 遍历所有实体，应用所有规则，生成 ForecastItems 列表
+/// Iterate through all entities, apply all rules, generate ForecastItems list
 List<GeneratedForecastItem> generateForecastItems({
   required List<Task> tasks,
   required List<Project> projects,
@@ -61,7 +61,7 @@ List<GeneratedForecastItem> generateForecastItems({
 }) {
   final List<GeneratedForecastItem> items = [];
 
-  // 处理所有 Tasks
+  // Process all Tasks
   for (final task in tasks) {
     for (final rule in rules) {
       if (rule.when(task)) {
@@ -84,7 +84,7 @@ List<GeneratedForecastItem> generateForecastItems({
     }
   }
 
-  // 处理所有 Projects
+  // Process all Projects
   for (final project in projects) {
     for (final rule in rules) {
       if (rule.when(project)) {
@@ -110,39 +110,39 @@ List<GeneratedForecastItem> generateForecastItems({
   return items;
 }
 
-/// 同步所有 ForecastItems
+/// Sync all ForecastItems
 /// 
-/// 算法流程：
-/// 1. 生成阶段：遍历所有 Task 和 Project，根据规则生成 ForecastItems（纯函数）
-/// 2. 对账阶段：与数据库中的现有数据对比
-///    - 插入新的 ForecastItems
-///    - 删除不存在的 ForecastItems
+/// Algorithm flow:
+/// 1. Generation phase: iterate through all Tasks and Projects, generate ForecastItems based on rules (pure function)
+/// 2. Reconciliation phase: compare with existing data in database
+///    - Insert new ForecastItems
+///    - Delete non-existent ForecastItems
 /// 
-/// 幂等性保证：
-/// - ✅ 可以安全地多次调用
-/// - ✅ 结果一致
-/// - ✅ 永远可以删掉重建
+/// Idempotency guarantee:
+/// - ✅ Can be safely called multiple times
+/// - ✅ Consistent results
+/// - ✅ Can always delete and rebuild
 Future<void> syncForecastItems({
   required AppDatabase db,
   required List<Task> tasks,
   required List<Project> projects,
   required List<ForecastRule> rules,
 }) async {
-  // 生成阶段：根据规则生成所有 ForecastItems
+  // Generation phase: generate all ForecastItems based on rules
   final generated = generateForecastItems(
     tasks: tasks,
     projects: projects,
     rules: rules,
   );
 
-  // 获取数据库中现有的所有 Forecasts
+  // Get all existing Forecasts from database
   final existing = await db.select(db.forecasts).get();
   final existingIds = existing.map((f) => f.id).toSet();
   final generatedIds = generated.map((g) => g.id).toSet();
 
-  // 对账阶段
+  // Reconciliation phase
   await db.transaction(() async {
-    // 插入新的 ForecastItems
+    // Insert new ForecastItems
     for (final item in generated) {
       if (!existingIds.contains(item.id)) {
         await db.into(db.forecasts).insert(
@@ -151,13 +151,13 @@ Future<void> syncForecastItems({
                 taskId: Value(item.refId),
                 scheduledDate: Value(_dateToInt(item.date)),
                 createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-                // 保持默认值：done=false, skipped=false, confidence=50, source=0
+                // Keep default values: done=false, skipped=false, confidence=50, source=0
               ),
             );
       }
     }
 
-    // 删除不存在的 ForecastItems
+    // Delete non-existent ForecastItems
     for (final existingId in existingIds) {
       if (!generatedIds.contains(existingId)) {
         await (db.delete(db.forecasts)..where((f) => f.id.equals(existingId))).go();

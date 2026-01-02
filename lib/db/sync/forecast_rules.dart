@@ -2,13 +2,13 @@ import 'forecast_rule.dart';
 import '../tables/tasks.dart';
 import '../tables/projects.dart';
 
-/// 计算任务截止日期的优先级
+/// Calculate task due date priority
 /// 
-/// - 逾期：100
-/// - 今天：90
-/// - 3天内：80
-/// - 7天内：70
-/// - 更远：60
+/// - Overdue: 100
+/// - Today: 90
+/// - Within 3 days: 80
+/// - Within 7 days: 70
+/// - Further: 60
 int _calculateTaskDuePriority(Task task) {
   if (task.dueAt == null) return 60;
 
@@ -20,27 +20,27 @@ int _calculateTaskDuePriority(Task task) {
   final daysDiff = due.difference(today).inDays;
 
   if (daysDiff < 0) {
-    // 逾期
+    // Overdue
     return 100;
   } else if (daysDiff == 0) {
-    // 今天
+    // Today
     return 90;
   } else if (daysDiff <= 3) {
-    // 3天内
+    // Within 3 days
     return 80;
   } else if (daysDiff <= 7) {
-    // 7天内
+    // Within 7 days
     return 70;
   } else {
-    // 更远
+    // Further
     return 60;
   }
 }
 
-/// 最小规则集：Task due → Forecast
+/// Minimal rule set: Task due → Forecast
 /// 
-/// 条件：Task 有 dueAt 且未完成
-/// 优先级：根据距离今天的天数动态计算
+/// Condition: Task has dueAt and is not completed
+/// Priority: dynamically calculated based on days from today
 final ForecastRule taskDueRule = ForecastRule(
   type: 'task_due',
   when: (entity) {
@@ -57,10 +57,10 @@ final ForecastRule taskDueRule = ForecastRule(
   },
 );
 
-/// 最小规则集：Task defer → Forecast
+/// Minimal rule set: Task defer → Forecast
 /// 
-/// 条件：Task 有 deferAt 且未完成
-/// 优先级：40（较低）
+/// Condition: Task has deferAt and is not completed
+/// Priority: 40 (lower)
 final ForecastRule taskDeferRule = ForecastRule(
   type: 'task_defer',
   when: (entity) {
@@ -74,10 +74,10 @@ final ForecastRule taskDeferRule = ForecastRule(
   priority: (_) => 40,
 );
 
-/// 最小规则集：Project review → Forecast
+/// Minimal rule set: Project review → Forecast
 /// 
-/// 条件：Project 有 reviewAt 且未完成
-/// 优先级：50（默认）
+/// Condition: Project has reviewAt and is not completed
+/// Priority: 50 (default)
 final ForecastRule projectReviewRule = ForecastRule(
   type: 'project_review',
   when: (entity) {
@@ -91,9 +91,9 @@ final ForecastRule projectReviewRule = ForecastRule(
   priority: (_) => 50,
 );
 
-/// 默认规则列表
+/// Default rule list
 /// 
-/// 包含所有最小规则集
+/// Contains all minimal rule sets
 const List<ForecastRule> defaultForecastRules = [
   taskDueRule,
   taskDeferRule,

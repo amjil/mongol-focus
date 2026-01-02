@@ -95,7 +95,7 @@
                   (m/Row
                    .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                    .children
-                   [(comp/mongol-text-block {:text "Quick Entry (Enter提交, Esc关闭)" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
+                   [(comp/mongol-text-block {:text "Quick Entry (Enter to submit, Esc to close)" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
                     (m/IconButton
                      .icon (m/Icon m/Icons.close)
                      .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))

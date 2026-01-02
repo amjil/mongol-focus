@@ -13,7 +13,10 @@
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.state.ui-state :as ui-state]
    [minii-focus.core.db.timeline :as timeline]
-   [minii-focus.widgets.common :as widgets]))
+   [minii-focus.widgets.common :as widgets]
+   [minii-focus.screens.task-detail :as task-detail]
+   [minii-focus.screens.project :as project]
+   [minii-focus.screens.perspective-detail :as perspective-detail]))
 
 (defn get-event-icon [type]
   (cond
@@ -62,12 +65,59 @@
                 .child (m/Text "Close")
                 .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))])))
 
+(defn navigate-to-entity [ctx entity-type entity-id]
+  (let [navigator (m/Navigator.of ctx)]
+    (case entity-type
+      "task" (let [task-detail-page (m/MaterialPageRoute
+                                     .builder (fn [_build-ctx]
+                                                (task-detail/task-detail-screen {:id entity-id})))]
+               (-> navigator (.push task-detail-page)))
+      "project" (let [project-page (m/MaterialPageRoute
+                                    .builder (fn [_build-ctx]
+                                               (project/project-screen nil)))]
+                  (-> navigator (.push project-page)))
+      "perspective" (let [perspective-detail-page (m/MaterialPageRoute
+                                                   .builder (fn [_build-ctx]
+                                                              (perspective-detail/perspective-detail-screen {:id entity-id})))]
+                      (-> navigator (.push perspective-detail-page)))
+      nil)))
+
 (defn event-card [{:keys [event ctx]}]
-  (let [type (.-type event)]
+  (let [type (.-type event)
+        entity-type (.-entityType event)
+        entity-id (.-entityId event)
+        can-navigate (and entity-type entity-id (contains? #{"task" "project" "perspective"} entity-type))]
     (m/InkWell
-     .onTap (fn [] (m/showDialog
-                    .context ctx
-                    .builder (fn [_] (event-detail-dialog ctx event))))
+     .onTap (fn []
+             (if can-navigate
+               (m/showDialog
+                .context ctx
+                .builder (fn [dialog-ctx]
+                          (m/AlertDialog
+                           .title (comp/mongol-text-block {:text "Event Options"})
+                           .content (m/Column
+                                     .mainAxisSize m/MainAxisSize.min
+                                     .children [(m/ListTile
+                                                .leading (m/Icon m/Icons.info)
+                                                .title (comp/mongol-text-block {:text "View Details"})
+                                                .onTap (fn []
+                                                        (-> (m/Navigator.of dialog-ctx) (.pop))
+                                                        (m/showDialog
+                                                         .context ctx
+                                                         .builder (fn [_] (event-detail-dialog ctx event)))))
+                                               (when can-navigate
+                                                 (m/ListTile
+                                                  .leading (m/Icon m/Icons.open_in_new)
+                                                  .title (comp/mongol-text-block {:text (str "Go to " entity-type)})
+                                                  .onTap (fn []
+                                                          (-> (m/Navigator.of dialog-ctx) (.pop))
+                                                          (navigate-to-entity ctx entity-type entity-id))))])
+                           .actions [(m/TextButton
+                                      .child (m/Text "Cancel")
+                                      .onPressed (fn [] (-> (m/Navigator.of dialog-ctx) (.pop))))])))
+               (m/showDialog
+                .context ctx
+                .builder (fn [_] (event-detail-dialog ctx event)))))
      .child (m/Card
              .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
              .child (m/Padding
@@ -76,7 +126,7 @@
                              .crossAxisAlignment m/CrossAxisAlignment.start
                              .children
                              [(m/Icon (get-event-icon type) .color (get-event-color type) .size 24)
-                              (m/SizedBox .height (tokens/space :s))
+                              (m/SizedBox .width (tokens/space :s))
                               (m/Expanded
                                .child (m/Column
                                        .crossAxisAlignment m/CrossAxisAlignment.start
@@ -87,7 +137,13 @@
                                         (comp/mongol-text-block {:text (.-title event)})
                                         (comp/mongol-text-block
                                          {:text (widgets/format-date-time (.-timestamp event))
-                                          :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})]))]))))))
+                                          :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})
+                                        (when (and entity-type entity-id)
+                                          (comp/mongol-text-block
+                                           {:text (str entity-type ": " entity-id)
+                                            :style (m/TextStyle .fontSize (tokens/font-size :xs) .color m/Colors.blue)}))]))
+                              (when can-navigate
+                                (m/Icon m/Icons.open_in_new .size 16 .color m/Colors.blue))]))))))
 
 (defn day-section [{:keys [date-str events]}]
   (m/Column
@@ -132,11 +188,79 @@
                                                  .onSelected (fn [_] (on-range-change days)))))
                                       [7 14 30 90]))])))
 
+(defn entity-type-filter [entity-filters on-filter-change]
+  (m/Container
+   .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :s))
+   .child (m/Column
+           .crossAxisAlignment m/CrossAxisAlignment.start
+           .children [(comp/mongol-text-block {:text "Entity Type Filter:"})
+                      (m/SizedBox .height 8)
+                      (m/Wrap
+                       .spacing 8
+                       .children (mapv (fn [entity-type]
+                                        (m/RotatedBox
+                                         .quarterTurns 1
+                                         .child (m/FilterChip
+                                                 .label (m/Text entity-type)
+                                                 .selected (contains? entity-filters entity-type)
+                                                 .onSelected (fn [_]
+                                                              (on-filter-change
+                                                               (if (contains? entity-filters entity-type)
+                                                                 (disj entity-filters entity-type)
+                                                                 (conj entity-filters entity-type)))))))
+                                      ["task" "project" "perspective" "forecast"]))])))
+
+(defn export-timeline-data [events ctx]
+  (let [export-data (map (fn [e]
+                           {:id (.-id e)
+                            :type (.-type e)
+                            :title (.-title e)
+                            :timestamp (.-timestamp e)
+                            :entity-type (.-entityType e)
+                            :entity-id (.-entityId e)
+                            :duration (.-duration e)
+                            :payload (when (.-payload e)
+                                      (try
+                                       (json/jsonDecode (.-payload e))
+                                       (catch Exception _ nil)))})
+                         events)
+        json-str (json/jsonEncode export-data)
+        timestamp (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+        filename (str "timeline-export-" timestamp ".json")]
+    ;; In a real implementation, you would use a file picker or share functionality
+    ;; For now, we'll show the data in a dialog
+    (m/showDialog
+     .context ctx
+     .builder (fn [dialog-ctx]
+               (m/AlertDialog
+                .title (comp/mongol-text-block {:text "Export Timeline Data"})
+                .content (m/Container
+                         .width 400
+                         .height 300
+                         .child (m/Column
+                                 .children [(comp/mongol-text-block {:text (str "Exported " (count events) " events")})
+                                           (m/SizedBox .height 8)
+                                           (comp/mongol-text-block {:text (str "Filename: " filename)})
+                                           (m/SizedBox .height 8)
+                                           (m/Expanded
+                                            .child (m/SingleChildScrollView
+                                                   .child (mgl/MongolText
+                                                          json-str
+                                                          .style (m/TextStyle .fontSize 10 .fontFamily "monospace"))))]))
+                .actions [(m/TextButton
+                           .child (m/Text "Copy JSON")
+                           .onPressed (fn []
+                                       ;; In a real implementation, copy to clipboard
+                                       (-> (m/Navigator.of dialog-ctx) (.pop))))
+                         (m/TextButton
+                          .child (m/Text "Close")
+                          .onPressed (fn [] (-> (m/Navigator.of dialog-ctx) (.pop))))])))))
+
 (defn timeline-screen [_params]
   (let [dao (app-state/get-dao)]
     (f/widget
      :context ctx
-     :watch [{:keys [filters search-text days-range]} ui-state/timeline-state]
+     :watch [{:keys [filters entity-filters search-text days-range]} ui-state/timeline-state]
      :let [now (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
            start-ts (int (/ (- now (* days-range 24 60 60 1000)) 1000))
            end-ts (int (/ now 1000))
@@ -144,12 +268,15 @@
            loading (nil? events)
            all-events (or events [])
            filtered-by-type (filter (fn [e] (some #(.startsWith (.-type e) (str % "/")) filters)) all-events)
+           filtered-by-entity (if (empty? entity-filters)
+                                filtered-by-type
+                                (filter (fn [e] (and (.-entityType e) (contains? entity-filters (.-entityType e)))) filtered-by-type))
            filtered-by-search (if (empty? search-text)
-                               filtered-by-type
+                               filtered-by-entity
                                (filter (fn [e]
                                         (or (str/includes? (str/lower-case (.-title e)) (str/lower-case search-text))
                                             (str/includes? (str/lower-case (.-type e)) (str/lower-case search-text))))
-                                      filtered-by-type))
+                                      filtered-by-entity))
            group-by-date (fn [es]
                           (reduce (fn [acc e]
                                    (let [d (widgets/format-yyyymmdd (int (/ (.-timestamp e) 86400)))]
@@ -169,7 +296,11 @@
                                                   .value t
                                                   .checked (contains? filters t)
                                                   .child (m/Text t)))
-                                               ["task" "forecast" "focus" "project" "perspective"])))])
+                                               ["task" "forecast" "focus" "project" "perspective"])))
+                         (m/IconButton
+                          .icon (m/Icon m/Icons.download)
+                          .tooltip "Export Timeline"
+                          .onPressed (fn [] (export-timeline-data filtered-by-search ctx)))])
       .body (m/SafeArea
              .child (m/Column
                      .children [(search-bar search-text
@@ -178,6 +309,9 @@
                                 (days-range-selector days-range
                                                      (fn [days]
                                                        (ui-state/update-timeline-state! assoc :days-range days)))
+                                (entity-type-filter entity-filters
+                                                    (fn [new-filters]
+                                                      (ui-state/update-timeline-state! assoc :entity-filters new-filters)))
                                 (m/Expanded
                                  .child (if loading
                                          (widgets/loading-indicator)

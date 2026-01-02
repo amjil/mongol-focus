@@ -70,7 +70,7 @@
                                                 (task-db/update-task! dao (.-id task) updates)))))))
                              nil))]
     (detail-section
-     {:title "日期"
+     {:title "Date"
       :child (m/Column
               .crossAxisAlignment m/CrossAxisAlignment.start
               .children
@@ -80,13 +80,13 @@
                 [(m/Column
                   .crossAxisAlignment m/CrossAxisAlignment.start
                   .children
-                  [(comp/mongol-text-block {:text "截止日期" :style (m/TextStyle .fontSize (tokens/font-size :s))})
-                   (comp/mongol-text-block {:text (or due-date-str "未设置")
+                  [(comp/mongol-text-block {:text "Due Date" :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                   (comp/mongol-text-block {:text (or due-date-str "Not set")
                                             :style (m/TextStyle .fontSize (tokens/font-size :m)
                                                                .color (if due-date-str m/Colors.blue.shade700 m/Colors.grey))})])
                  (m/IconButton
                   .icon (m/Icon m/Icons.calendar_today)
-                  .tooltip "设置截止日期"
+                  .tooltip "Set Due Date"
                   .onPressed (fn [] (show-date-picker :due) nil))])
                (m/SizedBox .height (tokens/space :s))
                (m/Row
@@ -95,13 +95,13 @@
                 [(m/Column
                   .crossAxisAlignment m/CrossAxisAlignment.start
                   .children
-                  [(comp/mongol-text-block {:text "推迟日期" :style (m/TextStyle .fontSize (tokens/font-size :s))})
-                   (comp/mongol-text-block {:text (or defer-date-str "未设置")
+                  [(comp/mongol-text-block {:text "Defer Date" :style (m/TextStyle .fontSize (tokens/font-size :s))})
+                   (comp/mongol-text-block {:text (or defer-date-str "Not set")
                                             :style (m/TextStyle .fontSize (tokens/font-size :m)
                                                                .color (if defer-date-str m/Colors.orange.shade700 m/Colors.grey))})])
                  (m/IconButton
                   .icon (m/Icon m/Icons.calendar_today)
-                  .tooltip "设置推迟日期"
+                  .tooltip "Set Defer Date"
                   .onPressed (fn [] (show-date-picker :defer) nil))])])})))
 
 (defn task-detail-screen [params]

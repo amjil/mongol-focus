@@ -20,6 +20,9 @@
     :is-paused false
     :start-time nil
     :remaining-seconds pomodoro-duration-seconds
+    :custom-duration pomodoro-duration-seconds  ; Custom timer duration in seconds
+    :is-fullscreen false
+    :sound-enabled true
     :today-forecasts []
     :task-titles-map {}
     :loading false
@@ -51,6 +54,8 @@
   (atom
    {:forecasts-list []
     :task-titles-map {}
+    :selected-forecast-ids #{}
+    :view-type :week  ; :day, :week, :month
     :loading false}))
 
 ;; Perspective screen state
@@ -67,6 +72,7 @@
     :task-tags-map {}
     :loading false
     :selected-task-ids #{}
+    :dismissed-task-ids #{}  ; Track dismissed tasks to remove from UI immediately
     :search-text ""
     :selected-tags #{}
     :selected-project-id nil
@@ -88,6 +94,7 @@
    {:events []
     :loading false
     :filters #{"task" "forecast" "focus" "project" "perspective"}
+    :entity-filters #{}  ; Set of entity types to filter by (e.g., #{"task" "project"})
     :search-text ""
     :days-range 7}))
 
@@ -148,28 +155,35 @@
                                    :payload {:forecast-id (.-id f) :session-id sid :title (str "Start Focus: " title)}
                                    :source :ui})
         (.then (fn [_]
-                 (update-focus-state!
-                  merge
-                  {:current-forecast f
-                   :session-id sid
-                   :is-focusing true
-                   :is-paused false
-                   :start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
-                   :remaining-seconds pomodoro-duration-seconds
-                   :pause-count 0
-                   :current-focus-depth 0.0})
-                 (let [timer (async/Timer.periodic
-                              (dart-core/Duration .seconds 1)
-                              (fn [_]
-                                (let [{:keys [is-focusing is-paused remaining-seconds pause-count]} @focus-state]
-                                  (when (and is-focusing (not is-paused))
-                                    (let [new-rem (dec remaining-seconds)
-                                          depth (focus-depth/calculate-focus-depth (- pomodoro-duration-seconds new-rem) pomodoro-duration-seconds pause-count false)]
-                                      (update-focus-state!
-                                       merge
-                                       {:current-focus-depth depth
-                                        :remaining-seconds (if (<= new-rem 0) 0 new-rem)}))))))]
-                   (update-focus-state! assoc :timer timer))
+                 (let [custom-dur (or (:custom-duration @focus-state) pomodoro-duration-seconds)]
+                   (update-focus-state!
+                    merge
+                    {:current-forecast f
+                     :session-id sid
+                     :is-focusing true
+                     :is-paused false
+                     :start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+                     :remaining-seconds custom-dur
+                     :pause-count 0
+                     :current-focus-depth 0.0})
+                   (let [timer (async/Timer.periodic
+                                (dart-core/Duration .seconds 1)
+                                (fn [_]
+                                  (let [{:keys [is-focusing is-paused remaining-seconds pause-count custom-duration sound-enabled]} @focus-state
+                                        total-duration (or custom-duration pomodoro-duration-seconds)]
+                                    (when (and is-focusing (not is-paused))
+                                      (let [new-rem (dec remaining-seconds)
+                                            elapsed (- total-duration new-rem)
+                                            depth (focus-depth/calculate-focus-depth elapsed total-duration pause-count false)
+                                            should-play-sound (and sound-enabled (<= new-rem 0))]
+                                        (when should-play-sound
+                                          ;; TODO: Play completion sound
+                                          (dart-core/print "Timer completed! Play sound here"))
+                                        (update-focus-state!
+                                         merge
+                                         {:current-focus-depth depth
+                                          :remaining-seconds (if (<= new-rem 0) 0 new-rem)}))))))]
+                     (update-focus-state! assoc :timer timer)))
                  (toast/show-success-toast ctx "Focus started"))))))
 
 (defn complete-focus [ctx]

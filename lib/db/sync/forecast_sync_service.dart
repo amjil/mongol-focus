@@ -4,28 +4,28 @@ import '../dao/project_dao.dart';
 import 'forecast_rules.dart';
 import 'forecast_sync.dart';
 
-/// ForecastSyncService - 便捷服务类
+/// ForecastSyncService - Convenient service class
 /// 
-/// 提供简化的 API 来同步所有 ForecastItems
+/// Provides simplified API to sync all ForecastItems
 class ForecastSyncService {
   final AppDatabase db;
 
   ForecastSyncService(this.db);
 
-  /// 同步所有 ForecastItems
+  /// Sync all ForecastItems
   /// 
-  /// 这是主要的入口函数，会自动：
-  /// 1. 获取所有 Tasks 和 Projects
-  /// 2. 使用默认规则集生成 ForecastItems
-  /// 3. 与数据库对账并更新
+  /// This is the main entry function, automatically:
+  /// 1. Get all Tasks and Projects
+  /// 2. Generate ForecastItems using default rule set
+  /// 3. Reconcile with database and update
   Future<void> syncAll() async {
-    // 获取所有 Tasks（包括已完成和未完成的，因为规则会过滤）
+    // Get all Tasks (including completed and uncompleted, rules will filter)
     final tasks = await db.select(db.tasks).get();
     
-    // 获取所有 Projects
+    // Get all Projects
     final projects = await db.projectDao.watchAllProjects();
 
-    // 使用默认规则集同步
+    // Sync using default rule set
     await syncForecastItems(
       db: db,
       tasks: tasks,
@@ -34,11 +34,11 @@ class ForecastSyncService {
     );
   }
 
-  /// 使用自定义规则集同步
+  /// Sync with custom rule set
   /// 
-  /// 允许传入自定义的规则列表
+  /// Allows passing custom rule list
   Future<void> syncWithRules(List<ForecastRule> rules) async {
-    // 获取所有 Tasks（包括已完成和未完成的）
+    // Get all Tasks (including completed and uncompleted)
     final tasks = await db.select(db.tasks).get();
     final projects = await db.projectDao.watchAllProjects();
 
@@ -51,11 +51,11 @@ class ForecastSyncService {
   }
 }
 
-/// 便捷函数：同步所有 ForecastItems
+/// Convenient function: sync all ForecastItems
 /// 
-/// 这是最简单的使用方式，直接调用即可
+/// This is the simplest way to use, just call directly
 /// 
-/// 使用示例：
+/// Usage example:
 /// ```dart
 /// await syncAllForecastItems(db);
 /// ```

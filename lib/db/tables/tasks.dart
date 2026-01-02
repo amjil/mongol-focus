@@ -11,8 +11,8 @@ class Tasks extends Table {
   IntColumn get priority => integer().withDefault(const Constant(3))();
   IntColumn get postponeCount => integer().withDefault(const Constant(0))();
   BoolColumn get abandoned => boolean().withDefault(const Constant(false))();
-  IntColumn get dueAt => integer().nullable()(); // 截止日期（毫秒时间戳）
-  IntColumn get deferAt => integer().nullable()(); // 推迟日期（毫秒时间戳）
+  IntColumn get dueAt => integer().nullable()(); // Due date (milliseconds timestamp)
+  IntColumn get deferAt => integer().nullable()(); // Defer date (milliseconds timestamp)
 
   @override
   Set<Column> get primaryKey => {id};
