@@ -210,9 +210,9 @@
                              (on-duration-set (* selected-minutes 60))
                              (-> (m/Navigator.of ctx) (.pop))))]))))
 
-(defn focus-active-session [{:keys [task-title remaining-seconds current-focus-depth is-paused pause-count is-fullscreen sound-enabled on-resume on-pause on-complete on-abort on-toggle-fullscreen on-set-duration on-toggle-sound ctx]}]
+(defn focus-active-session [{:keys [task-title remaining-seconds current-focus-depth is-paused _pause-count is-fullscreen sound-enabled on-resume on-pause on-complete on-abort on-toggle-fullscreen on-set-duration on-toggle-sound _ctx]}]
   (f/widget
-   :context ctx
+   :context _ctx
    (if is-fullscreen
      (m/Scaffold
       .backgroundColor m/Colors.black
@@ -294,7 +294,7 @@
                  (mgl/MongolOutlinedButton
                   .onPressed (fn []
                               (m/showDialog
-                               .context ctx
+                               .context _ctx
                                .builder (fn [dialog-ctx] (abort-reason-dialog dialog-ctx on-abort)))
                               nil)
                   .child (comp/mongol-text-block {:text "Abort"}))
@@ -308,7 +308,7 @@
                   .tooltip "Set Duration"
                   .onPressed (fn []
                               (m/showDialog
-                               .context ctx
+                               .context _ctx
                                .builder (fn [dialog-ctx] (duration-selector-dialog dialog-ctx remaining-seconds on-set-duration)))
                               nil))
                  (m/IconButton
@@ -342,7 +342,7 @@
     (f/widget
      :context ctx
      :watch [{:keys [is-focusing is-paused remaining-seconds today-forecasts task-titles-map
-                     loading today-stats focus-depth-history current-focus-depth current-forecast timer history-filter pause-count session-id is-fullscreen custom-duration sound-enabled]} ui-state/focus-state
+                     loading today-stats focus-depth-history current-focus-depth current-forecast timer history-filter pause-count session-id is-fullscreen _custom-duration sound-enabled]} ui-state/focus-state
              events (timeline/watch-range dao start-ts (+ start-ts 86399))]
      :let [effective-stats (if (seq events) (ui-state/calculate-today-stats events) today-stats)]
      (m/Scaffold

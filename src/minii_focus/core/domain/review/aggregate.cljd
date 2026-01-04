@@ -51,7 +51,9 @@
    :completed (.-completed task)
    :created-at (.-createdAt task)
    :due-at (.-dueAt task)
-   :defer-at (.-deferAt task)})
+   :defer-at (.-deferAt task)
+   :postpone-count (.-postponeCount task)
+   :abandoned (.-abandoned task)})
 
 (defn forecast->map
   "Convert Dart Forecast object to Clojure map"
@@ -283,12 +285,20 @@
                                 (>= (:created-at task) start-ts)
                                 (<= (:created-at task) end-ts)))
                          tasks-map)
-        ;; TODO: Need to track postpone_count, current database doesn't have this field
-        ;; Temporarily return empty list
-        postponed-tasks []
-        ;; TODO: Need to track abandoned status, current database doesn't have this field
-        ;; Temporarily return empty list
-        abandoned-tasks []]
+        ;; Filter tasks with postpone_count >= 2
+        postponed-tasks (filter
+                         (fn [task]
+                           (and (>= (or (:postpone-count task) 0) 2)
+                                (>= (:created-at task) start-ts)
+                                (<= (:created-at task) end-ts)))
+                         tasks-map)
+        ;; Filter abandoned tasks
+        abandoned-tasks (filter
+                         (fn [task]
+                           (and (:abandoned task)
+                                (>= (:created-at task) start-ts)
+                                (<= (:created-at task) end-ts)))
+                         tasks-map)]
     {:completed completed-tasks
      :postponed postponed-tasks
      :abandoned abandoned-tasks}))

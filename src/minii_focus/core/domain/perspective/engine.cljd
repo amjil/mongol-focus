@@ -25,8 +25,10 @@
    :display (:display perspective)}"
   (:require
    ["dart:core" :as dart-core]
+   ["dart:async" :as async]
    [clojure.string :as str]
    [minii-focus.core.db.task :as task]
+   [minii-focus.core.db.project :as project]
    [minii-focus.core.utils.time :as time]))
 
 ;; ============================================================================
@@ -52,8 +54,21 @@
     (dart-core/Future.value [])
     
     :projects
-    ;; TODO: Need to add watch-all-projects method
-    (dart-core/Future.value [])
+    (let [projects-stream (project/watch-all-projects dao)
+          completer (async/Completer.)]
+      (.listen projects-stream
+               (fn [projects-list]
+                 (if (not (.isCompleted completer))
+                   (.complete completer
+                              (if (seq? projects-list)
+                                (if (vector? projects-list)
+                                  (first projects-list)
+                                  projects-list)
+                                projects-list))
+                   nil))
+               :onError (fn [error]
+                         (.completeError completer error)))
+      (.future completer))
     
     (dart-core/Future.value [])))
 
@@ -231,8 +246,27 @@
      items)
     
     :tag
-    ;; TODO: Implement tag grouping
-    items
+    ;; Group items by tags
+    ;; Note: Tags are stored asynchronously in Settings, so this groups by tags
+    ;; that should be available in the item's metadata or pre-loaded
+    ;; For now, we'll group items that have a "tags" field or return items as-is
+    ;; if tags are not available in the item structure
+    (reduce
+     (fn [groups item]
+       (let [tags (or (get-field-value item "tags")
+                     (get-field-value item "tag")
+                     [])]
+         (if (and (vector? tags) (seq tags))
+           ;; Item has tags, group by each tag
+           (reduce
+            (fn [acc tag]
+              (update acc tag (fnil conj []) item))
+            groups
+            tags)
+           ;; Item has no tags, put in :none group
+           (update groups :none (fnil conj []) item))))
+     {}
+     items)
     
     items))
 
@@ -268,8 +302,25 @@
                items)
       
       :urgency
-      ;; TODO: Implement urgency sorting logic
-      items
+      (sort-by (fn [item]
+                 (let [priority (or (get-field-value item "priority") 3)
+                       due-at (or (get-field-value item "dueAt")
+                                 (get-field-value item "due-date")
+                                 nil)
+                       now-ms (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
+                       ;; Calculate urgency score: higher = more urgent
+                       urgency-score (if due-at
+                                      (let [due-ms (if (number? due-at) due-at (* due-at 1000))
+                                            days-diff (int (/ (- due-ms now-ms) (* 24 60 60 1000)))]
+                                        (cond
+                                          (< days-diff 0) (+ 100 priority)  ; Overdue
+                                          (= days-diff 0) (+ 90 priority)  ; Today
+                                          (<= days-diff 3) (+ 80 priority)  ; Within 3 days
+                                          (<= days-diff 7) (+ 70 priority)  ; Within 7 days
+                                          :else (+ 60 priority)))  ; Further
+                                      (+ (* priority 10) 50))]  ; No due date, use priority
+                   (- urgency-score)))  ; Negative for descending sort
+               items)
       
       :created
       (sort-by (fn [item]

@@ -7,7 +7,8 @@
    [minii-focus.core.db.forecast :as forecast-db]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
-   [minii-focus.core.components.focus-depth :as focus-depth]))
+   [minii-focus.core.components.focus-depth :as focus-depth]
+   ["package:vibration/vibration.dart" :as vibration]))
 
 (def pomodoro-duration-seconds (* 25 60))
 
@@ -23,6 +24,7 @@
     :custom-duration pomodoro-duration-seconds  ; Custom timer duration in seconds
     :is-fullscreen false
     :sound-enabled true
+    :sound-played false  ; Track if completion sound has been played
     :today-forecasts []
     :task-titles-map {}
     :loading false
@@ -165,20 +167,29 @@
                      :start-time (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
                      :remaining-seconds custom-dur
                      :pause-count 0
-                     :current-focus-depth 0.0})
+                     :current-focus-depth 0.0
+                     :sound-played false})
                    (let [timer (async/Timer.periodic
                                 (dart-core/Duration .seconds 1)
                                 (fn [_]
                                   (let [{:keys [is-focusing is-paused remaining-seconds pause-count custom-duration sound-enabled]} @focus-state
                                         total-duration (or custom-duration pomodoro-duration-seconds)]
                                     (when (and is-focusing (not is-paused))
-                                      (let [new-rem (dec remaining-seconds)
+                                      (let [{:keys [sound-played]} @focus-state
+                                            new-rem (dec remaining-seconds)
                                             elapsed (- total-duration new-rem)
                                             depth (focus-depth/calculate-focus-depth elapsed total-duration pause-count false)
-                                            should-play-sound (and sound-enabled (<= new-rem 0))]
+                                            should-play-sound (and sound-enabled (<= new-rem 0) (not sound-played))]
                                         (when should-play-sound
-                                          ;; TODO: Play completion sound
-                                          (dart-core/print "Timer completed! Play sound here"))
+                                          ;; Play completion notification (vibration)
+                                          ;; Note: For custom audio files, add audioplayers package to pubspec.yaml
+                                          (try
+                                            (vibration/Vibration.vibrate
+                                             .pattern [0, 200, 100, 200, 100, 200])
+                                            (catch Exception e
+                                              (dart-core/print (str "Vibration error: " e))))
+                                          ;; Mark sound as played to prevent repeated triggers
+                                          (update-focus-state! assoc :sound-played true))
                                         (update-focus-state!
                                          merge
                                          {:current-focus-depth depth

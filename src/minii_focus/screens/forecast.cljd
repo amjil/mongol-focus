@@ -307,8 +307,7 @@
   (let [dao (app-state/get-dao)
         today-yyyymmdd (time/ts->yyyymmdd (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))]
     (f/widget
-     :watch [{:keys [daily-capacity]} ui-state/settings-state
-             {:keys [task-titles-map selected-forecast-ids view-type]} ui-state/forecast-state]
+     :watch [{:keys [view-type]} ui-state/forecast-state]
      :let [dates (calculate-dates-for-view today-yyyymmdd (or view-type :week))
            current-view-type (or view-type :week)]
      (m/Scaffold
@@ -320,7 +319,7 @@
              .scrollDirection m/Axis.horizontal
              .children (vec (concat (when (= current-view-type :week)
                                       [(f/widget
-                                        :context ctx
+                                        :context _ctx
                                         :watch [today-forecasts (forecast/watch-by-date dao today-yyyymmdd)]
                                         :let [today-forecasts (or today-forecasts [])]
                                         (forecast-stats-card {:forecasts today-forecasts}))])

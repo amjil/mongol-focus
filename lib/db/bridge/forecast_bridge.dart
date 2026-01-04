@@ -35,3 +35,10 @@ Future<void> updateForecast(DaoBridge bridge, String forecastId, ForecastsCompan
   return bridge.forecastDao.updateForecast(forecastId, updates);
 }
 
+/// Clear all forecasts
+/// 
+/// ⚠️ WARNING: This is a dangerous operation. Only use for replay scenarios.
+Future<void> clearAllForecasts(AppDatabase db) async {
+  await db.delete(db.forecasts).go();
+}
+

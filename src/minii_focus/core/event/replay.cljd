@@ -18,7 +18,8 @@
    [minii-focus.core.event.executor :as executor]
    [minii-focus.core.event.handler :as handler]
    ["dart:core" :as dart-core]
-   ["dart:convert" :as json]))
+   ["dart:convert" :as json]
+   ["package:cljd_mongol_focus/db/bridge/forecast_bridge.dart" :as forecast-bridge]))
 
 ;; ============================================================================
 ;; Helper Functions
@@ -99,7 +100,7 @@
                        (dart-core/Future.value nil)
                        (try
                          (executor/execute-event! ctx event)
-                         (catch :default e
+                         (catch Exception e
                            (dart-core/print (str "Validation failed: " e))
                            (dart-core/Future.value nil))))
                      ;; Execute
@@ -147,16 +148,16 @@
                        ;; Convert to executable Event format
                        executable-events (map timeline-event-to-executable-event sorted-events)]
                    (dart-core/print (str "Found " (count executable-events) " events affecting Forecast"))
-                   ;; Clear existing Forecast (if needed)
-                   (if clear-forecast
-                     (do
-                       (dart-core/print "Clearing existing Forecast...")
-                       ;; TODO: Implement logic to clear Forecast
-                       ;; Need to call DAO to delete all Forecasts
-                       (dart-core/Future.value nil))
-                     (dart-core/Future.value nil))
-                   ;; Replay all events
-                   (replay-events! ctx executable-events)))))))
+                   ;; Clear existing Forecast (if needed), then replay all events
+                   (-> (if clear-forecast
+                         (do
+                           (dart-core/print "Clearing existing Forecast...")
+                           (let [{:keys [db]} ctx]
+                             (forecast-bridge/clearAllForecasts db)))
+                         (dart-core/Future.value nil))
+                       (.then (fn [_]
+                               ;; Replay all events
+                               (replay-events! ctx executable-events))))))))))
 
 (defn replay-after-timestamp!
   "Replay events after specified timestamp (rebuild Forecast)
@@ -218,13 +219,14 @@
                        sorted-events (sort-by :timestamp forecast-only-events)
                        executable-events (map timeline-event-to-executable-event sorted-events)]
                    (dart-core/print (str "Found " (count executable-events) " Forecast events"))
-                   ;; Clear existing Forecast (if needed)
-                   (if clear-forecast
-                     (do
-                       (dart-core/print "Clearing existing Forecast...")
-                       ;; TODO: Implement logic to clear Forecast
-                       (dart-core/Future.value nil))
-                     (dart-core/Future.value nil))
-                   ;; Replay all events
-                   (replay-events! ctx executable-events)))))))
+                   ;; Clear existing Forecast (if needed), then replay all events
+                   (-> (if clear-forecast
+                         (do
+                           (dart-core/print "Clearing existing Forecast...")
+                           (let [{:keys [db]} ctx]
+                             (forecast-bridge/clearAllForecasts db)))
+                         (dart-core/Future.value nil))
+                       (.then (fn [_]
+                               ;; Replay all events
+                               (replay-events! ctx executable-events))))))))))
 
