@@ -10,8 +10,14 @@ void applyTaskWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  for (final w in wheres) {
+  print('[WhereApplier] applyTaskWhere 开始应用 ${wheres.length} 个where条件');
+  
+  for (var i = 0; i < wheres.length; i++) {
+    final w = wheres[i];
+    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
+    
     final field = normalizeFieldName(w.field);
+    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'due':
@@ -42,8 +48,23 @@ void applyTaskWhere<T>(
         break;
         
       case 'completed':
-      case 'status':
         _applyBoolWhere<T, Tasks>(q, (t) => t.completed, w);
+        break;
+        
+      case 'status':
+        // Convert status string to completed boolean
+        // 'active' -> false (not completed)
+        // 'completed' -> true (completed)
+        // 'waiting' -> false (not completed, but could be handled differently)
+        final statusValue = _convertStatusToBool(w.value);
+        if (statusValue != null) {
+          final statusWhere = WhereClause(
+            field: w.field,
+            op: w.op,
+            value: statusValue,
+          );
+          _applyBoolWhere<T, Tasks>(q, (t) => t.completed, statusWhere);
+        }
         break;
         
       case 'projectid':
@@ -85,8 +106,14 @@ void applyForecastWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  for (final w in wheres) {
+  print('[WhereApplier] applyForecastWhere 开始应用 ${wheres.length} 个where条件');
+  
+  for (var i = 0; i < wheres.length; i++) {
+    final w = wheres[i];
+    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
+    
     final field = normalizeFieldName(w.field);
+    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'scheduleddate':
@@ -130,9 +157,12 @@ void applyForecastWhere<T>(
         
       default:
         // Unknown field, skip
+        print('[WhereApplier] ⚠️ 警告: 未知的Forecast字段 "$field"，跳过此where条件');
         break;
     }
   }
+  
+  print('[WhereApplier] applyForecastWhere 完成');
 }
 
 /// Apply where conditions to a Projects query
@@ -140,8 +170,14 @@ void applyProjectWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  for (final w in wheres) {
+  print('[WhereApplier] applyProjectWhere 开始应用 ${wheres.length} 个where条件');
+  
+  for (var i = 0; i < wheres.length; i++) {
+    final w = wheres[i];
+    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
+    
     final field = normalizeFieldName(w.field);
+    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'id':
@@ -172,9 +208,12 @@ void applyProjectWhere<T>(
         
       default:
         // Unknown field, skip
+        print('[WhereApplier] ⚠️ 警告: 未知的Project字段 "$field"，跳过此where条件');
         break;
     }
   }
+  
+  print('[WhereApplier] applyProjectWhere 完成');
 }
 
 /// Normalize field name (lowercase, remove hyphens)
@@ -188,10 +227,18 @@ void _applyIntWhere<T, D>(
   Expression<int> Function(D) column,
   WhereClause w,
 ) {
-  final op = normalizeOp(w.op);
-  final value = _convertToInt(w.value);
+  print('[WhereApplier] _applyIntWhere: field=${w.field}, op=${w.op}, value=${w.value}');
   
-  if (value == null) return;
+  final op = normalizeOp(w.op);
+  print('[WhereApplier] 标准化后的操作符: $op');
+  
+  final value = _convertToInt(w.value);
+  print('[WhereApplier] 转换后的int值: $value');
+  
+  if (value == null) {
+    print('[WhereApplier] ⚠️ 警告: 无法将值转换为int，跳过此where条件');
+    return;
+  }
   
   switch (op) {
     case '=':
@@ -419,6 +466,28 @@ int? _convertToInt(dynamic value) {
   if (value is String) {
     // Try to parse as int
     return int.tryParse(value);
+  }
+  return null;
+}
+
+/// Convert status string to boolean completed value
+/// 
+/// 'active' -> false (not completed)
+/// 'completed' -> true (completed)
+/// 'waiting' -> false (not completed)
+/// 
+/// Returns null if value is not a recognized status string
+bool? _convertStatusToBool(dynamic value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    final status = value.toLowerCase();
+    if (status == 'active' || status == 'waiting') {
+      return false; // Not completed
+    } else if (status == 'completed') {
+      return true; // Completed
+    }
   }
   return null;
 }

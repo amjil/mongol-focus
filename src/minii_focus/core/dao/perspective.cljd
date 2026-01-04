@@ -37,25 +37,48 @@
   - between operator's value should be a vector with two elements: [start, end]
   - Sort direction: :asc or :desc"
   [db perspective]
-  (let [bridge-instance (new bridge/PerspectiveQueryBridge db)
-        ;; Convert perspective map to Dart format
-        dart-perspective (cond-> {:entity (name (:entity perspective))}
+  (let [entity (:entity perspective)
+        _ (when (nil? entity)
+            (throw (ex-info "perspective :entity cannot be nil"
+                            {:perspective perspective
+                             :entity entity
+                             :perspective-keys (keys perspective)})))
+        bridge-instance (new bridge/PerspectiveQueryBridge db)
+        ;; Convert perspective map to Dart format with string keys
+        ;; ClojureDart keyword keys need to be explicitly converted to string keys for Dart
+        dart-perspective (cond-> {"entity" (name entity)}
                             (:filters perspective)
-                            (assoc :filters
+                            (assoc "filters"
                                    (mapv (fn [f]
-                                           {:field (name (:field f))
-                                            :op (name (:op f))
-                                            :value (:value f)})
+                                           {"field" (name (:field f))
+                                            "op" (name (:op f))
+                                            "value" (let [v (:value f)]
+                                                     (cond
+                                                       (keyword? v) (name v)
+                                                       :else v))})
                                          (:filters perspective)))
                             
                             (:order-by perspective)
-                            (assoc :orderBy
+                            (assoc "orderBy"
                                    (mapv (fn [o]
-                                           {:field (name (:field o))
-                                            :dir (name (:dir o))})
+                                           {"field" (name (:field o))
+                                            "dir" (name (:dir o))})
                                          (:order-by perspective)))
                             
                             (:limit perspective)
-                            (assoc :limit (:limit perspective)))]
-    (.queryByPerspective bridge-instance dart-perspective)))
+                            (assoc "limit" (:limit perspective)))
+        _ (when (nil? (get dart-perspective "entity"))
+            (throw (ex-info "dart-perspective entity cannot be nil after conversion"
+                            {:original-perspective perspective
+                             :dart-perspective dart-perspective
+                             :entity entity})))]
+    (try
+      (.queryByPerspective bridge-instance dart-perspective)
+      (catch Exception e
+        (throw (ex-info "Failed to query by perspective"
+                        {:error (str e)
+                         :perspective perspective
+                         :dart-perspective dart-perspective
+                         :entity entity}
+                        e))))))
 

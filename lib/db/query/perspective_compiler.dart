@@ -31,8 +31,13 @@ class Perspective {
         ?.map((f) => PerspectiveFilter.fromMap(f as Map<String, dynamic>))
         .toList() ?? [];
     
+    final source = map['source'] as String?;
+    if (source == null) {
+      throw ArgumentError('map["source"] cannot be null');
+    }
+    
     return Perspective(
-      source: map['source'] as String,
+      source: source,
       filters: filters,
       sortBy: map['sortBy'] as String?,
       groupBy: map['groupBy'] as String?,
@@ -71,9 +76,17 @@ class PerspectiveFilter {
   
   /// Create from map (for ClojureDart interop)
   factory PerspectiveFilter.fromMap(Map<String, dynamic> map) {
+    final field = map['field'] as String?;
+    final op = map['op'] as String?;
+    if (field == null) {
+      throw ArgumentError('map["field"] cannot be null');
+    }
+    if (op == null) {
+      throw ArgumentError('map["op"] cannot be null');
+    }
     return PerspectiveFilter(
-      field: map['field'] as String,
-      op: map['op'] as String,
+      field: field,
+      op: op,
       value: map['value'],
     );
   }
@@ -92,19 +105,33 @@ class PerspectiveFilter {
 /// 
 /// Handles time semantics conversion (e.g., 'today' → DateTime)
 QueryPlan compilePerspective(Perspective perspective) {
+  print('[PerspectiveCompiler] 开始编译Perspective');
+  print('[PerspectiveCompiler] 输入: source=${perspective.source}, filters=${perspective.filters.length}条');
+  
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
+  print('[PerspectiveCompiler] 当前时间: $now, 今天: $today');
   
-  final compiledWheres = perspective.filters.map((f) => compileFilter(f, today)).toList();
+  final compiledWheres = perspective.filters.map((f) {
+    print('[PerspectiveCompiler] 编译过滤器: ${f.field} ${f.op} ${f.value}');
+    final compiled = compileFilter(f, today);
+    print('[PerspectiveCompiler] 编译后: ${compiled.field} ${compiled.op} ${compiled.value}');
+    return compiled;
+  }).toList();
   
   // Normalize source name
   final source = normalizeSource(perspective.source);
+  print('[PerspectiveCompiler] 标准化source: ${perspective.source} -> $source');
   
-  return QueryPlan(
+  final plan = QueryPlan(
     source: source,
     wheres: compiledWheres,
     sortBy: perspective.sortBy,
   );
+  
+  print('[PerspectiveCompiler] 编译完成 - QueryPlan: source=$source, wheres=${compiledWheres.length}条, sortBy=${perspective.sortBy}');
+  
+  return plan;
 }
 
 /// Compile PerspectiveFilter to WhereClause

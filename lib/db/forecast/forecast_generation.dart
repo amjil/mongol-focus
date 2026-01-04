@@ -22,6 +22,10 @@ Future<void> regenerateForecastFromPerspective({
     final baseYyyyMmDd = dateTimeToYyyyMmDd(baseDate);
 
     // 1️⃣ Query Tasks using PerspectiveQueryBridge
+    // Ensure perspective has entity field
+    if (!perspective.containsKey('entity') || perspective['entity'] == null) {
+      throw ArgumentError('perspective must have a non-null "entity" field');
+    }
     final bridge = PerspectiveQueryBridge(db);
     final taskMaps = await bridge.queryByPerspective(perspective);
 

@@ -159,16 +159,16 @@
     (f/widget
      :context ctx
      :watch [dao app-state/dao
-             all-tasks (when dao (task-db/watch-all-tasks dao))
+             task-res (when dao (future (-> (task-db/get-by-id dao tid)
+                                           (.then (fn [t] {:data t})))))
              projects (when dao (project-db/watch-all-projects dao))
              perspectives (when dao (perspective-db/watch-all dao))
              {:keys [proj-id persp-ids timeline-events]} ui-state/task-detail-state]
-     :let [all-tasks (or all-tasks [])
+     :let [task (:data task-res)
            projects (or projects [])
            perspectives (or perspectives [])
-           task (some #(when (= (.-id %) tid) %) all-tasks)
-           loading (or (nil? dao) (nil? all-tasks) (nil? projects) (nil? perspectives))
-           _ (when task
+           loading (or (nil? dao) (nil? task-res))
+           _ (when (and (not loading) task)
                (when (or (nil? proj-id) (not= proj-id (.-projectId task)))
                  (ui-state/update-task-detail-state! assoc :proj-id (.-projectId task)))
                (when (nil? persp-ids)

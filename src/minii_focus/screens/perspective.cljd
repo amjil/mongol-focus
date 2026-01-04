@@ -12,6 +12,7 @@
    [minii-focus.core.db.task :as task-db]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
+   [minii-focus.core.utils.logger :as logger]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.widgets.common :as widgets]
    [minii-focus.screens.perspective-detail :as perspective-detail]))
@@ -115,7 +116,25 @@
                .scrollDirection m/Axis.horizontal
                .children
                (mapv (fn [p]
-                       (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
+                       (let [perspective-id (.-id p)
+                             pts (filter (fn [t]
+                                          (let [task-perspectives-json (.-perspectives t)
+                                                task-perspectives (if (and task-perspectives-json (not (empty? task-perspectives-json)))
+                                                                   (try
+                                                                     (let [parsed (json/jsonDecode task-perspectives-json)
+                                                                           parsed-vec (cond
+                                                                                       (vector? parsed) parsed
+                                                                                       (seq? parsed) (vec parsed)
+                                                                                       :else (vec parsed))]
+                                                                       parsed-vec)
+                                                                     (catch Exception e
+                                                                       (logger/debug "perspective" "Failed to parse task perspectives" {:task-id (.-id t)
+                                                                                                                                       :perspectives-json task-perspectives-json
+                                                                                                                                       :error (str e)})
+                                                                       []))
+                                                                   [])]
+                                            (some #(= % perspective-id) task-perspectives)))
+                                        all-tasks)
                              stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
                          (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp]
                                                                                             (let [navigator (m/Navigator.of ctx)

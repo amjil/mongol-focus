@@ -1,18 +1,20 @@
 (ns minii-focus.screens.perspective-detail
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.core.components.core :as comp]
    [minii-focus.core.components.tokens :as tokens]
    [minii-focus.core.state.app-state :as app-state]
    [minii-focus.core.db.perspective :as perspective-db]
-   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.dao.perspective :as perspective-dao]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
    [minii-focus.core.utils.logger :as logger]
    [minii-focus.core.domain.perspective.filters :as filters]
    [minii-focus.widgets.common :as widgets]
-   [minii-focus.widgets.filter-editor :as filter-editor]))
+   [minii-focus.widgets.filter-editor :as filter-editor]
+   [minii-focus.screens.task-detail :as task-detail]))
 
 (defn filter-editor-card 
   "Filter Editor Card - Use visual editor instead of JSON editing"
@@ -47,18 +49,22 @@
                                                         (toast/show-success-toast ctx "Filters saved"))))))
                               .child (comp/mongol-text-block {:text "Save Filters"}))]))))
 
+;; Map from query result is already in the right format, no conversion needed
+
 (defn perspective-detail-screen [params]
   (let [pid (:id params)
         filters-state-atom (atom [])
-        last-loaded-rules-atom (atom nil)]
+        last-loaded-rules-atom (atom nil)
+        query-result-atom (atom {:data [] :loading false :error nil})
+        last-query-filters-atom (atom nil)]
     (f/widget
      :context ctx
      :watch [dao app-state/dao
              perspective-res (when dao (future (-> (perspective-db/get-by-id dao pid)
                                                    (.then (fn [p] {:data p})))))
-             all-tasks (when dao (task-db/watch-all-tasks dao))
-             filters-state filters-state-atom]
-     :let [loading (or (nil? dao) (nil? perspective-res) (nil? all-tasks))
+             filters-state filters-state-atom
+             query-result query-result-atom]
+     :let [loading (or (nil? dao) (nil? perspective-res))
            perspective (:data perspective-res)
            db-ctx {:db (app-state/get-db) :dao dao}
            _ (when (and (not loading) perspective)
@@ -80,10 +86,61 @@
                      (.addPostFrameCallback (.-instance m/WidgetsBinding)
                                             (fn [_]
                                               (reset! filters-state-atom parsed-filters)
-                                              (reset! last-loaded-rules-atom current-rules)))
+                                              (reset! last-loaded-rules-atom current-rules)
+                                              ;; Reset query state when filters change
+                                              (reset! query-result-atom {:data [] :loading false :error nil})
+                                              (reset! last-query-filters-atom nil)))
                      nil))))
            current-filters filters-state
-           tasks (if loading [] (filter (fn [t] (some #(= % pid) (widgets/parse-json (.-perspectives t)))) (or all-tasks [])))]
+           db-instance (app-state/get-db)
+           _ (when (and (not loading) perspective db-instance (not (empty? current-filters)))
+               (let [query-loading (:loading @query-result-atom)
+                     query-error (:error @query-result-atom)
+                     filters-changed? (not= @last-query-filters-atom current-filters)]
+                 ;; Only query if:
+                 ;; 1. Not currently loading
+                 ;; 2. No error from previous query (or filters changed)
+                 ;; 3. Filters changed since last query
+                 (when (and (not query-loading)
+                           (or (nil? query-error) filters-changed?)
+                           filters-changed?)
+                   (reset! query-result-atom {:data [] :loading true :error nil})
+                   (reset! last-query-filters-atom current-filters)
+                   (logger/info "perspective-detail" "开始使用perspective查询系统查询任务" {:perspective-id pid
+                                                                                    :filters current-filters
+                                                                                    :filters-count (count current-filters)})
+                   (-> (perspective-dao/query-by-perspective! db-instance {:entity :task
+                                                                           :filters current-filters})
+                       (.then (fn [results]
+                                (logger/info "perspective-detail" "perspective查询完成" {:perspective-id pid
+                                                                                  :results-count (count results)
+                                                                                  :result-ids (mapv #(get % "id") results)})
+                                (reset! query-result-atom {:data results :loading false :error nil})))
+                       (.catchError (fn [error]
+                                     (logger/error "perspective-detail" "perspective查询失败" {:perspective-id pid
+                                                                                        :error (str error)})
+                                     ;; Set error state to prevent infinite retry
+                                     (reset! query-result-atom {:data [] :loading false :error (str error)})))))))
+           tasks (if loading
+                  []
+                  (let [query-data (:data query-result)
+                        _ (when (and (not loading) perspective)
+                            (logger/debug "perspective-detail" "查询结果" {:perspective-id pid
+                                                                        :query-loading (:loading query-result)
+                                                                        :query-results-count (count query-data)
+                                                                        :filters-count (count current-filters)
+                                                                        :has-filters (not (empty? current-filters))}))
+                        _ (when (and (not loading) perspective (not (empty? current-filters)) (not (:loading query-result)) (not (nil? @last-query-filters-atom)))
+                            (logger/info "perspective-detail" "任务查询完成" {:perspective-id pid
+                                                                        :filters-count (count current-filters)
+                                                                        :tasks-count (count query-data)
+                                                                        :task-ids (mapv #(get % "id") query-data)})
+                            (when (empty? query-data)
+                              (logger/warn "perspective-detail" "⚠️ perspective查询结果为空!" {:perspective-id pid
+                                                                                        :filters current-filters
+                                                                                        :note "使用perspective查询系统根据过滤器条件查询，但结果为空"})))
+                        result query-data]
+                    result))]
      (m/Scaffold
       .appBar (m/AppBar)
       .body (m/SafeArea
@@ -112,9 +169,19 @@
                           (m/Row
                            .children
                            (mapv (fn [t]
-                                   (m/Card
-                                    .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 16)
-                                    .child (m/ListTile
-                                            .title (comp/mongol-text-block {:text (.-title t)})
-                                            .trailing (if (.-completed t) (m/Icon m/Icons.check_circle .color m/Colors.green) nil))))
+                                   (let [task-id (get t "id")
+                                         card-content (m/Card
+                                                       .margin (m/EdgeInsets.symmetric :vertical 4 :horizontal 16)
+                                                       .child (mgl/MongolListTile
+                                                               .title (comp/mongol-text-block {:text (get t "title")})
+                                                               .trailing (if (get t "completed") (m/Icon m/Icons.check_circle .color m/Colors.green) nil)))]
+                                     (m/InkWell
+                                      .onTap (fn []
+                                               (let [navigator (m/Navigator.of ctx)
+                                                     task-detail-page (m/MaterialPageRoute
+                                                                       .builder (fn [_build-ctx]
+                                                                                 (task-detail/task-detail-screen {:id task-id})))]
+                                                 (-> navigator (.push task-detail-page)))
+                                               nil)
+                                      .child card-content)))
                                  tasks))]))))))))
