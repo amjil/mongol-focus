@@ -40,19 +40,21 @@
      .margin (m/EdgeInsets.all (tokens/space :m))
      .child (m/Padding
              .padding (m/EdgeInsets.all (tokens/space :l))
-             .child (m/Column
-                    .crossAxisAlignment m/CrossAxisAlignment.start
-                    .children
-                    [(comp/mongol-text-block {:text (.-title project) :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                     (m/SizedBox .width (tokens/space :m))
-                     (m/Row .children [(m/Icon m/Icons.info .size 20 .color (get-health-color health))
-                                       (m/SizedBox .height (tokens/space :s))
-                                       (comp/mongol-text-block {:text (str "Status: " status) :style (m/TextStyle .color (get-health-color health))})])
-                     (m/SizedBox .width (tokens/space :m))
-                    (m/Row .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
-                           .children [(mgl/MongolTextButton .onPressed (fn [] (if (= status "archived") (on-restore project) (on-archive project))) .child (comp/mongol-text-block {:text (if (= status "archived") "Restore" "Archive")}))
-                                      (m/SizedBox .height (tokens/space :m))
-                                      (mgl/MongolTextButton .onPressed (fn [] (on-save-template project)) .child (comp/mongol-text-block {:text "Save Template"}))])])))))
+             .child (m/Row
+                     .crossAxisAlignment m/CrossAxisAlignment.start
+                     .children
+                     [(comp/mongol-text-block {:text (.-title project) :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
+                      (m/SizedBox .width (tokens/space :m))
+                      (m/Column 
+                       .children [(m/Icon m/Icons.info .size 20 .color (get-health-color health))
+                                  (m/SizedBox .height (tokens/space :s))
+                                  (comp/mongol-text-block {:text (str "Status: " status) :style (m/TextStyle .color (get-health-color health))})])
+                      (m/SizedBox .width (tokens/space :m))
+                      (m/Column 
+                       .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+                       .children [(mgl/MongolTextButton .onPressed (fn [] (if (= status "archived") (on-restore project) (on-archive project))) .child (comp/mongol-text-block {:text (if (= status "archived") "Restore" "Archive")}))
+                                  (m/SizedBox .height (tokens/space :m))
+                                  (mgl/MongolTextButton .onPressed (fn [] (on-save-template project)) .child (comp/mongol-text-block {:text "Save Template"}))])])))))
 
 (defn project-progress-card [{:keys [tasks]}]
   (let [total (count tasks)
@@ -88,15 +90,28 @@
     .appBar (m/AppBar 
              .actions [(m/IconButton .icon (m/Icon m/Icons.add) .onPressed (fn [] (qe-dialog/show-add-project-dialog ctx)))])
     .body (comp/mongol-column-layout
-           {:main-width 0.3 :side-width 0.7
+           {:main-width 0.4 :side-width 0.6
             :main-column (if loading (widgets/loading-indicator)
-                             (if (empty? projects) (widgets/empty-state "No projects")
-                                 (m/ListView .scrollDirection m/Axis.horizontal .children (mapv (fn [p] (project-list-item {:project p :next-action (get next-actions (.-id p)) :health (project-db/project-health p (get next-actions (.-id p)))
-                                                                                         :on-selected (fn [sp] (ui-state/update-project-state! assoc :selected-project sp) (-> (project-db/get-project-tasks dao (.-id sp)) (.then (fn [ts] (ui-state/update-project-state! update :project-tasks assoc (.-id sp) ts)))))})) projects))))
+                             (if (empty? projects)
+                               (widgets/empty-state "No projects")
+                               (m/ListView
+                                .scrollDirection m/Axis.horizontal
+                                .children (mapv (fn [p] (project-list-item
+                                                         {:project p
+                                                          :next-action (get next-actions (.-id p))
+                                                          :health (project-db/project-health p (get next-actions (.-id p)))
+                                                          :on-selected (fn [sp] (ui-state/update-project-state! assoc :selected-project sp) (-> (project-db/get-project-tasks dao (.-id sp)) (.then (fn [ts] (ui-state/update-project-state! update :project-tasks assoc (.-id sp) ts)))))}))
+                                                projects))))
             :side-column (if-let [p selected-project]
-                           (m/ListView .scrollDirection m/Axis.horizontal .children [(project-status-card {:project p :health (project-db/project-health p (get next-actions (.-id p)))
-                                                                          :on-archive (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui})))
-                                                                          :on-restore (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui})))
-                                                                          :on-save-template (fn [_] (toast/show-info-toast ctx "Template feature in progress"))})
-                                                  (project-progress-card {:tasks (get project-tasks (.-id p) [])})])
+                           (m/SingleChildScrollView
+                            .scrollDirection m/Axis.horizontal
+                            .child
+                            (m/Row
+                             .children [(project-status-card
+                                         {:project p
+                                          :health (project-db/project-health p (get next-actions (.-id p)))
+                                          :on-archive (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui})))
+                                          :on-restore (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui})))
+                                          :on-save-template (fn [_] (toast/show-info-toast ctx "Template feature in progress"))})
+                                        (project-progress-card {:tasks (get project-tasks (.-id p) [])})]))
                            (widgets/empty-state "Select a project"))}))))
