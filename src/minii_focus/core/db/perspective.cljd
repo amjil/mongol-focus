@@ -18,17 +18,19 @@
   Parameters:
   - {:keys [id title weight weight-history created-at updated-at rules]}
   
-  Returns: PerspectivesCompanion"
+  Returns: PerspectivesCompanion
+  
+  ⚠️ Companion building must be centralized, only change here when schema changes"
   [{:keys [id title weight weight-history created-at updated-at rules]}]
-  (bridge/dart-new
-   app-db/PerspectivesCompanion
-   {:id id
-    :title title
-    :weight weight
-    :weightHistory weight-history
-    :createdAt created-at
-    :updatedAt updated-at
-    :rules rules}))
+  ;; Direct call to named constructor - cannot use apply for named parameters in ClojureDart
+  (app-db/PerspectivesCompanion.insert
+   :id id
+   :title title
+   :weight (bridge/dart-value-double-nullable weight)
+   :weightHistory (bridge/dart-value-string-nullable weight-history)
+   :createdAt created-at
+   :updatedAt updated-at
+   :rules (bridge/dart-value-string-nullable rules)))
 
 (defn insert-perspective!
   "Insert new Perspective

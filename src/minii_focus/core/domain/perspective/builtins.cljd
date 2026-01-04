@@ -7,7 +7,9 @@
   2. Today - Today (Forecast subset)
   3. Waiting - Waiting
   4. Review - Review
-  5. Focus - Focus")
+  5. Focus - Focus"
+  (:require
+   [minii-focus.core.domain.perspective.filters :as f]))
 
 ;; ============================================================================
 ;; 1. Inbox
@@ -21,8 +23,7 @@
    :name "ᠢᠨᠪᠣᠺᠰ"
    :icon :inbox
    :source :tasks
-   :filters [{:field :project-id
-              :op :is-null}]
+   :filters [(f/no-project)]
    :group-by :none
    :sort-by :created
    :display {:layout :vertical
@@ -43,9 +44,7 @@
    :name "ᠥᠨᠦᠳᠦᠷ"
    :icon :today
    :source :forecast
-   :filters [{:field :date
-              :op :==
-              :value :today}]
+   :filters [(f/eq :date :today)]
    :group-by :date
    :sort-by :urgency
    :display {:layout :vertical
@@ -66,9 +65,7 @@
    :name "ᠬᠦᠯᠡᠭᠡᠳᠡᠭᠡᠷ"
    :icon :pause
    :source :tasks
-   :filters [{:field :status
-              :op :==
-              :value :waiting}]
+   :filters [(f/waiting)]
    :group-by :project
    :sort-by :manual
    :display {:layout :vertical
@@ -89,9 +86,7 @@
    :name "ᠬᠦᠨᠢᠶᠡᠨ ᠪᠣᠳᠣᠯᠭ᠎ᠠ"
    :icon :review
    :source :projects
-   :filters [{:field :needs-review
-              :op :==
-              :value true}]
+   :filters [(f/eq :needs-review true)]
    :group-by :none
    :sort-by :next-review
    :display {:layout :vertical
@@ -112,9 +107,7 @@
    :name "ᠲᠦᠪᠡᠭᠡ"
    :icon :target
    :source :tasks
-   :filters [{:field :flagged
-              :op :==
-              :value true}]
+   :filters [(f/flagged)]
    :group-by :none
    :sort-by :manual
    :display {:layout :compact

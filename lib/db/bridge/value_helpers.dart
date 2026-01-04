@@ -30,3 +30,14 @@ Value<int> valueIntAbsent() {
   return const Value<int>.absent();
 }
 
+/// Create Value<double> for double values
+Value<double> valueDouble(double v) => Value(v);
+
+/// Create Value<double> that is absent (for optional double fields)
+Value<double> valueDoubleAbsent() {
+  return const Value<double>.absent();
+}
+
+/// Create Value<double> for nullable double values (returns absent if null)
+Value<double> valueDoubleNullable(double? v) => v == null ? const Value<double>.absent() : Value(v);
+

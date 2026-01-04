@@ -13,7 +13,8 @@
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
-   [minii-focus.widgets.common :as widgets]))
+   [minii-focus.widgets.common :as widgets]
+   [minii-focus.screens.perspective-detail :as perspective-detail]))
 
 (defn format-weight [weight]
   (str (int (* weight 100)) "%"))
@@ -116,5 +117,10 @@
                (mapv (fn [p]
                        (let [pts (filter (fn [t] (some #(= % (.-id p)) (widgets/parse-json (.-perspectives t)))) all-tasks)
                              stats {:total (count pts) :completed (count (filter #(.-completed %) pts)) :active (count (filter #(and (not (.-completed %)) (nil? (.-deferAt %))) pts))}]
-                         (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp] (show-rules-editor ctx sp))})))
+                         (perspective-list-item {:perspective p :task-stats stats :on-tap (fn [sp]
+                                                                                            (let [navigator (m/Navigator.of ctx)
+                                                                                                  detail-page (m/MaterialPageRoute
+                                                                                                               .builder (fn [_build-ctx]
+                                                                                                                         (perspective-detail/perspective-detail-screen {:id (.-id sp)})))]
+                                                                                              (-> navigator (.push detail-page))))})))
                      perspectives)))))))

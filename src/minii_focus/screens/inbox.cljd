@@ -317,32 +317,34 @@
 
 (defn filter-chips [{:keys [all-tags selected-tags on-tag-toggle projects selected-project-id on-project-select]}]
   (m/Container
-   .height 60
    .padding (m/EdgeInsets.symmetric :horizontal (tokens/space :s))
-   .child (m/Row
-           .children (vec (concat [(m/RotatedBox
-                                     .quarterTurns 1
-                                     .child (m/FilterChip
-                                             .label (m/Text "All Projects")
-                                             .selected (= selected-project-id nil)
-                                             .onSelected (fn [_] (on-project-select nil))))]
-                                  (mapv (fn [p]
-                                          (m/RotatedBox
-                                           .quarterTurns 1
-                                           .child (m/FilterChip
-                                                   .label (m/Text (.-title p))
-                                                   .selected (= selected-project-id (.-id p))
-                                                   .onSelected (fn [_] (on-project-select (.-id p))))))
-                                        projects)
-                                  [(m/Divider .height 30)]
-                                  (mapv (fn [tag]
-                                          (m/RotatedBox
-                                           .quarterTurns 1
-                                           .child (m/FilterChip
-                                                   .label (m/Text tag)
-                                                   .selected (contains? selected-tags tag)
-                                                   .onSelected (fn [_] (on-tag-toggle tag)))))
-                                        all-tags))))))
+   .child (m/SingleChildScrollView
+           .scrollDirection m/Axis.vertical
+           .child (m/Column
+                   .mainAxisSize m/MainAxisSize.min
+                   .children (vec (concat [(m/RotatedBox
+                                             .quarterTurns 1
+                                             .child (m/FilterChip
+                                                     .label (m/Text "All Projects")
+                                                     .selected (boolean (= selected-project-id nil))
+                                                     .onSelected (fn [_] (on-project-select nil))))]
+                                          (mapv (fn [p]
+                                                  (m/RotatedBox
+                                                   .quarterTurns 1
+                                                   .child (m/FilterChip
+                                                           .label (m/Text (.-title p))
+                                                           .selected (boolean (= selected-project-id (.-id p)))
+                                                           .onSelected (fn [_] (on-project-select (.-id p))))))
+                                                projects)
+                                          [(m/Divider .height 30)]
+                                          (mapv (fn [tag]
+                                                  (m/RotatedBox
+                                                   .quarterTurns 1
+                                                   .child (m/FilterChip
+                                                           .label (m/Text tag)
+                                                           .selected (boolean (contains? selected-tags tag))
+                                                           .onSelected (fn [_] (on-tag-toggle tag)))))
+                                                all-tags)))))))
 
 (defn sort-button [sort-by sort-desc on-sort-change]
   (let [current-value [sort-by sort-desc]

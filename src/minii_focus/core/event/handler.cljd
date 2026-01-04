@@ -402,14 +402,32 @@
   
   Parameters:
   - ctx: {:db AppDatabase :dao DaoBridge}
-  - payload: {:perspective-id string :rules map}
+  - payload: {:perspective-id string :rules map|string}
+    - rules: Can be a map (needs JSON encoding) or already a JSON string (use directly)
   
   Returns: Future<void>"
   [ctx payload]
   (let [{:keys [dao]} ctx
         {:keys [perspective-id rules]} payload
-        rules-json (json-encode rules)
+        rules-type (if (string? rules) "string" "other")
+        rules-preview (if (string? rules)
+                       (if (> (count rules) 200)
+                         (str (subs rules 0 200) "...")
+                         rules)
+                       (str rules))
+        ;; If rules is already a string, use directly; otherwise encode to JSON
+        rules-json (if (string? rules)
+                    rules
+                    (json-encode rules))
         now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))]
+    (logger/info "event/handler" "Handling perspective/update-rules" {:perspective-id perspective-id
+                                                                 :rules-type rules-type
+                                                                 :rules-preview rules-preview
+                                                                 :rules-length (if (string? rules) (count rules) nil)
+                                                                 :final-json-length (count rules-json)
+                                                                 :final-json-preview (if (> (count rules-json) 200)
+                                                                                       (str (subs rules-json 0 200) "...")
+                                                                                       rules-json)})
     (perspective/update-rules! dao perspective-id rules-json now)))
 
 (defn handle-perspective-update-weight

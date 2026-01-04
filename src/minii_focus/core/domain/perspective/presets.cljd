@@ -9,10 +9,12 @@
   - minii-focus.core.domain.perspective.builtins - Built-in Perspectives
   - minii-focus.core.domain.perspective.engine - Execution engine
   - minii-focus.core.domain.perspective.core - Core data structures
+  - minii-focus.core.domain.perspective.filters - Filter DSL (recommended)
   
   Usage example (new way):
   (require '[minii-focus.core.domain.perspective.builtins :as builtins]
-           '[minii-focus.core.domain.perspective.engine :as engine])
+           '[minii-focus.core.domain.perspective.engine :as engine]
+           '[minii-focus.core.domain.perspective.filters :as f])
   
   (let [perspective (builtins/get-builtin \"inbox\")
         dao (app-state/get-dao)]
@@ -20,19 +22,21 @@
         (.then (fn [result]
                 ;; Use result to render UI
                 ))))"
-  ;; Deprecated, no longer need to reference builtins
-  )
+  (:require
+   [minii-focus.core.domain.perspective.filters :as f]))
 
 (def presets
   "Preset Registry (Deprecated)
   
-  Kept for backward compatibility, but recommend using builtins/get-builtin"
+  Kept for backward compatibility, but recommend using builtins/get-builtin
+  
+  Note: Now using filter DSL, more concise and readable"
   {:today {:id :today
            :title "Today"
            :entity :task
            :resolve-time :today
-           :filters [{:field :status :op := :value :active}
-                     {:field :due-at :op :<= :value :today}]
+           ;; Use filter DSL instead of manually writing map
+           :filters [(f/active) (f/due-on-or-before :today)]
            :order-by [{:field :priority :dir :desc}]
            :limit 20}
 
@@ -40,16 +44,15 @@
           :title "This Week"
           :entity :task
           :resolve-time :week
-          :filters [{:field :status :op := :value :active}
-                    {:field :due-at :op :between :value [:week-start :week-end]}]
+          :filters [(f/active)
+                     (f/within :due-at {:start :week-start :end :week-end})]
           :order-by [{:field :due-at :dir :asc}]}
 
    :overdue {:id :overdue
              :title "Overdue"
              :entity :task
              :resolve-time :today
-             :filters [{:field :status :op := :value :active}
-                       {:field :due-at :op :< :value :today}]
+             :filters [(f/active) (f/due-before :today)]
              :order-by [{:field :due-at :dir :asc}]}})
 
 (defn get-preset

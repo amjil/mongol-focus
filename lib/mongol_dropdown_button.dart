@@ -101,6 +101,13 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
   void _show() {
     _overlay = OverlayEntry(
       builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final screenWidth = mediaQuery.size.width;
+        final screenHeight = mediaQuery.size.height;
+        
+        // Calculate the horizontal center position of the menu on screen
+        final menuLeft = (screenWidth - widget.menuWidth) / 2;
+        
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -108,12 +115,9 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
               behavior: HitTestBehavior.translucent,
               onTap: _remove,
             ),
-            CompositedTransformFollower(
-              link: _link,
-              showWhenUnlinked: false,
-              offset: widget.openToLeft
-                  ? Offset(-widget.menuWidth, 0) // Open to the left
-                  : Offset.zero, // Open to the right
+            Positioned(
+              left: menuLeft,
+              top: screenHeight / 2 - widget.maxHeight / 2,
               child: Material(
                 color: Colors.transparent,
                 clipBehavior: Clip.none,
@@ -121,9 +125,7 @@ class _MongolSelectState<T> extends State<MongolSelect<T>>
                   opacity: _fade,
                   child: ScaleTransition(
                     scale: _scale,
-                    alignment: widget.openToLeft
-                        ? Alignment.centerRight
-                        : Alignment.centerLeft,
+                    alignment: Alignment.center,
                     child: _buildMenu(context),
                   ),
                 ),

@@ -102,5 +102,22 @@
   []
   (value-helpers/valueIntAbsent))
 
+(defn dart-value-double
+  "Create Value<double> for double values"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueDouble (double v)))
+
+(defn dart-value-double-absent
+  "Create Value<double> that is absent (for optional double fields)"
+  []
+  (value-helpers/valueDoubleAbsent))
+
+(defn dart-value-double-nullable
+  "Create Value<double> for nullable double values (returns absent if null)"
+  [v]
+  ;; Use Dart helper function to ensure correct type
+  (value-helpers/valueDoubleNullable (if (some? v) (double v) nil)))
+
 (defn absent-value []
   (drift/Value. nil))
