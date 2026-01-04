@@ -34,18 +34,12 @@
                              (m/ElevatedButton
                               .onPressed (fn []
                                           (let [filters-json (filters/filters-to-json current-filters)]
-                                            (logger/info "perspective-detail" "Saving filters" {:perspective-id (.-id perspective)
-                                                                                            :filters-count (count current-filters)
-                                                                                            :filters current-filters
-                                                                                            :filters-json filters-json
-                                                                                            :json-length (count filters-json)})
                                             (-> (dispatch/dispatch-event! db-ctx
                                                                           {:type :perspective/update-rules
                                                                            :payload {:perspective-id (.-id perspective)
                                                                                      :rules filters-json}
                                                                            :source :ui})
                                                 (.then (fn [_]
-                                                        (logger/info "perspective-detail" "Filters saved successfully" {:perspective-id (.-id perspective)})
                                                         (toast/show-success-toast ctx "Filters saved"))))))
                               .child (comp/mongol-text-block {:text "Save Filters"}))]))))
 
@@ -69,19 +63,9 @@
            db-ctx {:db (app-state/get-db) :dao dao}
            _ (when (and (not loading) perspective)
                (let [current-rules (or (.-rules perspective) "[]")]
-                 (logger/debug "perspective-detail" "Loading perspective data" {:perspective-id (.-id perspective)
-                                                                           :rules current-rules
-                                                                           :rules-length (count current-rules)
-                                                                           :last-loaded-rules @last-loaded-rules-atom
-                                                                           :rules-changed? (not= @last-loaded-rules-atom current-rules)})
                  ;; Parse filters from rules JSON (reload only when rules change)
                  (when (not= @last-loaded-rules-atom current-rules)
-                   (logger/info "perspective-detail" "Starting to parse filters" {:perspective-id (.-id perspective)
-                                                                    :rules-json current-rules})
                    (let [parsed-filters (filters/json-to-filters current-rules)]
-                     (logger/info "perspective-detail" "Filters parsing completed" {:perspective-id (.-id perspective)
-                                                                      :parsed-count (count parsed-filters)
-                                                                      :parsed-filters parsed-filters})
                      ;; Use addPostFrameCallback to defer execution, avoid calling setState during build
                      (.addPostFrameCallback (.-instance m/WidgetsBinding)
                                             (fn [_]
@@ -106,15 +90,9 @@
                            filters-changed?)
                    (reset! query-result-atom {:data [] :loading true :error nil})
                    (reset! last-query-filters-atom current-filters)
-                   (logger/info "perspective-detail" "开始使用perspective查询系统查询任务" {:perspective-id pid
-                                                                                    :filters current-filters
-                                                                                    :filters-count (count current-filters)})
                    (-> (perspective-dao/query-by-perspective! db-instance {:entity :task
                                                                            :filters current-filters})
                        (.then (fn [results]
-                                (logger/info "perspective-detail" "perspective查询完成" {:perspective-id pid
-                                                                                  :results-count (count results)
-                                                                                  :result-ids (mapv #(get % "id") results)})
                                 (reset! query-result-atom {:data results :loading false :error nil})))
                        (.catchError (fn [error]
                                      (logger/error "perspective-detail" "perspective查询失败" {:perspective-id pid
@@ -124,21 +102,6 @@
            tasks (if loading
                   []
                   (let [query-data (:data query-result)
-                        _ (when (and (not loading) perspective)
-                            (logger/debug "perspective-detail" "查询结果" {:perspective-id pid
-                                                                        :query-loading (:loading query-result)
-                                                                        :query-results-count (count query-data)
-                                                                        :filters-count (count current-filters)
-                                                                        :has-filters (not (empty? current-filters))}))
-                        _ (when (and (not loading) perspective (not (empty? current-filters)) (not (:loading query-result)) (not (nil? @last-query-filters-atom)))
-                            (logger/info "perspective-detail" "任务查询完成" {:perspective-id pid
-                                                                        :filters-count (count current-filters)
-                                                                        :tasks-count (count query-data)
-                                                                        :task-ids (mapv #(get % "id") query-data)})
-                            (when (empty? query-data)
-                              (logger/warn "perspective-detail" "⚠️ perspective查询结果为空!" {:perspective-id pid
-                                                                                        :filters current-filters
-                                                                                        :note "使用perspective查询系统根据过滤器条件查询，但结果为空"})))
                         result query-data]
                     result))]
      (m/Scaffold

@@ -10,14 +10,10 @@ void applyTaskWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  print('[WhereApplier] applyTaskWhere 开始应用 ${wheres.length} 个where条件');
-  
   for (var i = 0; i < wheres.length; i++) {
     final w = wheres[i];
-    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
     
     final field = normalizeFieldName(w.field);
-    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'due':
@@ -106,14 +102,10 @@ void applyForecastWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  print('[WhereApplier] applyForecastWhere 开始应用 ${wheres.length} 个where条件');
-  
   for (var i = 0; i < wheres.length; i++) {
     final w = wheres[i];
-    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
     
     final field = normalizeFieldName(w.field);
-    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'scheduleddate':
@@ -157,12 +149,9 @@ void applyForecastWhere<T>(
         
       default:
         // Unknown field, skip
-        print('[WhereApplier] ⚠️ 警告: 未知的Forecast字段 "$field"，跳过此where条件');
         break;
     }
   }
-  
-  print('[WhereApplier] applyForecastWhere 完成');
 }
 
 /// Apply where conditions to a Projects query
@@ -170,14 +159,10 @@ void applyProjectWhere<T>(
   T q,
   List<WhereClause> wheres,
 ) {
-  print('[WhereApplier] applyProjectWhere 开始应用 ${wheres.length} 个where条件');
-  
   for (var i = 0; i < wheres.length; i++) {
     final w = wheres[i];
-    print('[WhereApplier] 处理where条件[$i]: field=${w.field}, op=${w.op}, value=${w.value} (类型: ${w.value.runtimeType})');
     
     final field = normalizeFieldName(w.field);
-    print('[WhereApplier] 标准化后的字段名: $field');
     
     switch (field) {
       case 'id':
@@ -208,12 +193,9 @@ void applyProjectWhere<T>(
         
       default:
         // Unknown field, skip
-        print('[WhereApplier] ⚠️ 警告: 未知的Project字段 "$field"，跳过此where条件');
         break;
     }
   }
-  
-  print('[WhereApplier] applyProjectWhere 完成');
 }
 
 /// Normalize field name (lowercase, remove hyphens)
@@ -227,16 +209,11 @@ void _applyIntWhere<T, D>(
   Expression<int> Function(D) column,
   WhereClause w,
 ) {
-  print('[WhereApplier] _applyIntWhere: field=${w.field}, op=${w.op}, value=${w.value}');
-  
   final op = normalizeOp(w.op);
-  print('[WhereApplier] 标准化后的操作符: $op');
   
   final value = _convertToInt(w.value);
-  print('[WhereApplier] 转换后的int值: $value');
   
   if (value == null) {
-    print('[WhereApplier] ⚠️ 警告: 无法将值转换为int，跳过此where条件');
     return;
   }
   

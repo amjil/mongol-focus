@@ -105,31 +105,21 @@ class PerspectiveFilter {
 /// 
 /// Handles time semantics conversion (e.g., 'today' → DateTime)
 QueryPlan compilePerspective(Perspective perspective) {
-  print('[PerspectiveCompiler] 开始编译Perspective');
-  print('[PerspectiveCompiler] 输入: source=${perspective.source}, filters=${perspective.filters.length}条');
-  
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  print('[PerspectiveCompiler] 当前时间: $now, 今天: $today');
   
   final compiledWheres = perspective.filters.map((f) {
-    print('[PerspectiveCompiler] 编译过滤器: ${f.field} ${f.op} ${f.value}');
-    final compiled = compileFilter(f, today);
-    print('[PerspectiveCompiler] 编译后: ${compiled.field} ${compiled.op} ${compiled.value}');
-    return compiled;
+    return compileFilter(f, today);
   }).toList();
   
   // Normalize source name
   final source = normalizeSource(perspective.source);
-  print('[PerspectiveCompiler] 标准化source: ${perspective.source} -> $source');
   
   final plan = QueryPlan(
     source: source,
     wheres: compiledWheres,
     sortBy: perspective.sortBy,
   );
-  
-  print('[PerspectiveCompiler] 编译完成 - QueryPlan: source=$source, wheres=${compiledWheres.length}条, sortBy=${perspective.sortBy}');
   
   return plan;
 }

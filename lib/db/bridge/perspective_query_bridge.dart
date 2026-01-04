@@ -46,7 +46,6 @@ class PerspectiveQueryBridge {
       }
       return result;
     } catch (e) {
-      print('[PerspectiveQueryBridge] 警告: 无法转换map类型 ${value.runtimeType}: $e');
       return {};
     }
   }
@@ -76,22 +75,16 @@ class PerspectiveQueryBridge {
   /// 
   /// Returns: List of entity maps
   Future<List<Map<String, dynamic>>> queryByPerspective(dynamic perspective) async {
-    print('[PerspectiveQueryBridge] 开始查询 - 输入参数: $perspective');
-    print('[PerspectiveQueryBridge] 输入参数类型: ${perspective.runtimeType}');
-    
     // Convert Clojure map to Dart map
     final dartPerspective = _convertToDartMap(perspective);
-    print('[PerspectiveQueryBridge] 转换后的Dart map: $dartPerspective');
     
     final entity = dartPerspective['entity'] as String?;
     if (entity == null) {
       throw ArgumentError('perspective["entity"] cannot be null');
     }
-    print('[PerspectiveQueryBridge] entity: $entity');
     
     // Convert entity to source format
     final source = entity == 'task' ? 'tasks' : entity == 'forecast' ? 'forecasts' : entity;
-    print('[PerspectiveQueryBridge] 转换后的source: $source');
     
     // Convert filters list - ensure each filter is a Dart map
     final filtersList = dartPerspective['filters'] as List<dynamic>? ?? [];
@@ -120,25 +113,13 @@ class PerspectiveQueryBridge {
       final dir = firstOrder['dir'] as String?;
       if (field != null && dir != null) {
         perspMap['sortBy'] = '$field:$dir';
-        print('[PerspectiveQueryBridge] 排序设置: $field:$dir');
       }
     }
-    
-    print('[PerspectiveQueryBridge] 转换后的perspMap: $perspMap');
-    print('[PerspectiveQueryBridge] filters数量: ${perspMap['filters'].length}');
     
     // Execute query using perspective engine
     final rawResults = await engine.executePerspectiveRaw(db, perspMap);
     
-    print('[PerspectiveQueryBridge] 查询完成 - 原始结果数量: ${rawResults.length}');
-    if (rawResults.isEmpty) {
-      print('[PerspectiveQueryBridge] ⚠️ 警告: 查询结果为空!');
-    } else {
-      print('[PerspectiveQueryBridge] 前3条结果: ${rawResults.take(3).map((r) => r.toString()).join(", ")}');
-    }
-    
     // Convert results to map format
-    print('[PerspectiveQueryBridge] 开始转换结果格式，entity: $entity');
     
     if (entity == 'task') {
       final converted = rawResults.map((task) {
@@ -158,7 +139,6 @@ class PerspectiveQueryBridge {
         };
       }).toList();
       
-      print('[PerspectiveQueryBridge] 转换完成 - 返回 ${converted.length} 条Task记录');
       return converted;
     } else if (entity == 'forecast') {
       final converted = rawResults.map((forecast) {
@@ -175,10 +155,8 @@ class PerspectiveQueryBridge {
         };
       }).toList();
       
-      print('[PerspectiveQueryBridge] 转换完成 - 返回 ${converted.length} 条Forecast记录');
       return converted;
     } else {
-      print('[PerspectiveQueryBridge] ❌ 错误: 不支持的entity类型: $entity');
       throw ArgumentError('Unsupported entity type: $entity');
     }
   }

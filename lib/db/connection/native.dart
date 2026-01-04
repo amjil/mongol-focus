@@ -21,7 +21,6 @@ Future<String> getDatabasePath() async {
 DatabaseConnection connect() {
   return DatabaseConnection.delayed(Future(() async {
     final dbPath = await getDatabasePath();
-    print("Using focus database at path $dbPath");
 
     return NativeDatabase.createBackgroundConnection(File(dbPath));
   }));

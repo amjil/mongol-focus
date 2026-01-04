@@ -23,8 +23,6 @@ DatabaseConnection connect() {
           'browser features: ${db.missingFeatures}');
     }
 
-    print("Chosen Web sqlite implementation: ${db.chosenImplementation}");
-
     final conn = db.resolvedExecutor;
     return conn;
   }));
