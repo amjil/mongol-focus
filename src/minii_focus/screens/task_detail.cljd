@@ -15,6 +15,7 @@
    [minii-focus.widgets.common :as widgets]
    [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.core.infra.bridge :as bridge]
+   [minii-focus.core.event.dispatch :as dispatch]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
 
 (defn detail-section [{:keys [title child]}]
@@ -59,7 +60,7 @@
                                   .lastDate (.add initial-date (dart-core/Duration .days 365)))
                                  (.then (fn [selected-date]
                                           (when selected-date
-                                            (let [date-ms (.millisecondsSinceEpoch selected-date)
+                                            (let [date-ms (.-millisecondsSinceEpoch selected-date)
                                                   updates (case date-type
                                                             :due (app-db/TasksCompanion
                                                                   :dueAt (bridge/dart-value-int-nullable date-ms))
@@ -104,6 +105,55 @@
                   .tooltip "Set Defer Date"
                   .onPressed (fn [] (show-date-picker :defer) nil))])])})))
 
+(defn project-select-dialog [ctx projects task-id db-ctx on-close]
+  (m/AlertDialog
+   .title (comp/mongol-text-block {:text "Select Project"})
+   .content (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children (vec (concat [(m/ListTile
+                                       .title (comp/mongol-text-block {:text "No Project"})
+                                       .onTap (fn []
+                                                (-> (dispatch/dispatch-event! db-ctx {:type :task/remove-project :payload {:task-id task-id} :source :ui})
+                                                    (.then (fn [_]
+                                                             (ui-state/update-task-detail-state! assoc :proj-id nil)
+                                                             (on-close))))
+                                                nil))]
+                                     (mapv (fn [p]
+                                             (m/ListTile
+                                              .title (comp/mongol-text-block {:text (.-title p)})
+                                              .onTap (fn []
+                                                       (-> (dispatch/dispatch-event! db-ctx {:type :task/assign-project :payload {:task-id task-id :project-id (.-id p)} :source :ui})
+                                                           (.then (fn [_]
+                                                                    (ui-state/update-task-detail-state! assoc :proj-id (.-id p))
+                                                                    (on-close))))
+                                                       nil)))
+                                           projects))))
+   .actions [(m/TextButton
+              .child (m/Text "Cancel")
+              .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+
+(defn project-section [{:keys [ctx task dao projects proj-id]}]
+  (let [db-ctx {:db (app-state/get-db) :dao dao}
+        project-title (or (some #(when (= (.-id %) proj-id) (.-title %)) projects) "None")
+        show-project-dialog (fn []
+                              (m/showDialog
+                               .context ctx
+                               .builder (fn [_] (project-select-dialog ctx projects (.-id task) db-ctx
+                                                                      (fn [] (-> (m/Navigator.of ctx) (.pop))))))
+                              nil)]
+    (detail-section
+     {:title "Project"
+      :child (m/Row
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .children
+              [(comp/mongol-text-block {:text project-title
+                                       :style (m/TextStyle .fontSize (tokens/font-size :m)
+                                                          .color (if (= project-title "None") m/Colors.grey m/Colors.black))})
+               (m/IconButton
+                .icon (m/Icon m/Icons.edit)
+                .tooltip "Set Project"
+                .onPressed show-project-dialog)])})))
+
 (defn task-detail-screen [params]
   (let [tid (:id params)]
     (f/widget
@@ -118,10 +168,14 @@
            perspectives (or perspectives [])
            task (some #(when (= (.-id %) tid) %) all-tasks)
            loading (or (nil? dao) (nil? all-tasks) (nil? projects) (nil? perspectives))
-           _ (when (and task (nil? proj-id))
-               (ui-state/update-task-detail-state! assoc :proj-id (.-projectId task) :persp-ids (widgets/parse-json (.-perspectives task)))
-               (-> (timeline-db/query-range dao 0 (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
-                   (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es))))))]
+           _ (when task
+               (when (or (nil? proj-id) (not= proj-id (.-projectId task)))
+                 (ui-state/update-task-detail-state! assoc :proj-id (.-projectId task)))
+               (when (nil? persp-ids)
+                 (ui-state/update-task-detail-state! assoc :persp-ids (widgets/parse-json (.-perspectives task))))
+               (when (nil? timeline-events)
+                 (-> (timeline-db/query-range dao 0 (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
+                     (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es)))))))]
      (m/Scaffold
       .appBar (m/AppBar .actions [(m/IconButton .icon (m/Icon m/Icons.edit)
                                                .onPressed (fn [] (qe-dialog/show-edit-task-dialog ctx task)))]))
@@ -134,6 +188,6 @@
                      .children
                      [(detail-section {:title "Title" :child (comp/mongol-text-block {:text (.-title task) :style (m/TextStyle .fontSize (tokens/font-size :l))})})
                       (date-section {:ctx ctx :task task :dao dao})
-                      (detail-section {:title "Project" :child (comp/mongol-text-block {:text (or (some #(when (= (.-id %) proj-id) (.-title %)) projects) "None")})})
+                      (project-section {:ctx ctx :task task :dao dao :projects projects :proj-id proj-id})
                       (detail-section {:title "Perspectives" :child (m/Wrap .children (mapv (fn [p] (m/RotatedBox .quarterTurns 1 .child (m/FilterChip .label (m/Text (.-title p)) .selected (some #(= % (.-id p)) persp-ids) .onSelected (fn [s] (if s (ui-state/update-task-detail-state! update :persp-ids conj (.-id p)) (ui-state/update-task-detail-state! update :persp-ids (fn [ids] (remove #(= % (.-id p)) ids)))))))) perspectives))})
                       (detail-section {:title "History" :child (if (empty? timeline-events) (m/Text "No records") (m/Column .children (mapv (fn [e] (m/Card .child (m/ListTile .title (m/Text (.-title e)) .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e))))))) timeline-events)))})]))))))

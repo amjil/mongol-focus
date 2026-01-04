@@ -28,11 +28,11 @@
      .onTap (fn [] (when on-selected (on-selected project)))
      .child (m/Padding
              .padding (m/EdgeInsets.all (tokens/space :m))
-             .child (m/Row
-                    .children
-                    [(m/Expanded .child (comp/mongol-text-block {:text (.-title project) :style (m/TextStyle .color (get-health-color health))}))
-                     (m/Column .children (vec (filter some? [(when (and (not is-on-hold) (nil? next-action)) (m/Icon m/Icons.warning .size 16 .color m/Colors.red))
-                                                          (when is-overdue (m/Icon m/Icons.schedule .size 16 .color m/Colors.orange))])))])))))
+             .child (m/Column
+                     .children
+                     [(m/Expanded .child (comp/mongol-text-block {:text (.-title project) :style (m/TextStyle .color (get-health-color health))}))
+                      (m/Column .children (vec (filter some? [(when (and (not is-on-hold) (nil? next-action)) (m/Icon m/Icons.warning .size 16 .color m/Colors.red))
+                                                              (when is-overdue (m/Icon m/Icons.schedule .size 16 .color m/Colors.orange))])))])))))
 
 (defn project-status-card [{:keys [project health on-archive on-restore on-save-template]}]
   (let [status (.-status project)]

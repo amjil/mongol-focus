@@ -242,9 +242,8 @@
   [ctx payload]
   (let [{:keys [dao]} ctx
         {:keys [task-id project-id]} payload
-        updates (bridge/dart-new
-                 app-db/TasksCompanion
-                 {:projectId project-id})]
+        updates (app-db/TasksCompanion
+                 :projectId (bridge/dart-value-string-nullable project-id))]
     (task/update-task! dao task-id updates)))
 
 (defn handle-task-assign-perspective
@@ -273,9 +272,8 @@
                                                 perspectives-list
                                                 (conj perspectives-list perspective-id))
                         perspectives-json (json-encode new-perspectives-list)
-                        updates (bridge/dart-new
-                                 app-db/TasksCompanion
-                                 {:perspectives perspectives-json})]
+                        updates (app-db/TasksCompanion
+                                 :perspectives (bridge/dart-value-string-nullable perspectives-json))]
                     (-> (task/update-task! dao task-id updates)
                         (.then (fn [_]
                                  ;; If this is a newly bound perspective, trigger Forecast auto-generation
@@ -371,9 +369,8 @@
   [ctx payload]
   (let [{:keys [dao]} ctx
         {:keys [task-id]} payload
-        updates (bridge/dart-new
-                 app-db/TasksCompanion
-                 {:projectId nil})]  ; Set to nil to remove
+        updates (app-db/TasksCompanion
+                 :projectId (bridge/dart-value-string-nullable nil))]  ; Set to nil to remove
     (task/update-task! dao task-id updates)))
 
 (defn handle-perspective-create
@@ -449,9 +446,8 @@
                                                               (json/jsonDecode existing-perspectives)
                                                               [])
                                           ;; Remove all perspectives (or can be extended to remove specific perspective)
-                                          updates (bridge/dart-new
-                                                   app-db/TasksCompanion
-                                                   {:perspectives nil})]
+                                          updates (app-db/TasksCompanion
+                                                   :perspectives (bridge/dart-value-string-nullable nil))]
                                       (task/update-task! dao task-id updates))
                                     (dart-core/print (str "Task not found: " task-id)))))
                           (.catchError (fn [error]
@@ -695,9 +691,8 @@
                                                                                :volatility default-volatility}})
                                                         ;; Update Forecast confidence (convert to 0-100)
                                                         new-confidence (int (* (:confidence calibrated) 100))
-                                                        updates (bridge/dart-new
-                                                                app-db/ForecastsCompanion
-                                                                {:confidence new-confidence})]
+                                                        updates (app-db/ForecastsCompanion
+                                                                :confidence (bridge/dart-value-int new-confidence))]
                                                     ;; Update Forecast confidence
                                                     (bridge/dart-call
                                                      forecast-bridge/updateForecast
@@ -734,9 +729,8 @@
                        ;; Default defer to tomorrow
                        (+ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch))
                           (* 24 60 60 1000)))
-        updates (bridge/dart-new
-                 app-db/TasksCompanion
-                 {:deferAt defer-date})]
+        updates (app-db/TasksCompanion
+                 :deferAt (bridge/dart-value-int-nullable defer-date))]
     (task/update-task! dao task-id updates)))
 
 (defn handle-forecast-cancel

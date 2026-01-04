@@ -23,15 +23,15 @@
   ⚠️ Companion building must be centralized, only change here when schema changes"
   [{:keys [id title created-at review-at completed status notes]}]
   (let [now (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000))] ; Timestamp in seconds
-    (bridge/dart-new
-     app-db/ProjectsCompanion.insert
-     {:id id
-      :title title
-      :createdAt (or created-at now)
-      :reviewAt review-at  ; nullable, nil will be handled automatically
-      :completed completed  ; nullable, nil will be handled automatically
-      :status (or status "active")
-      :notes notes})))  ; nullable, nil will be handled automatically
+    ;; Direct call to named constructor - cannot use apply for named parameters in ClojureDart
+    (app-db/ProjectsCompanion.insert
+     :id id
+     :title title
+     :createdAt (or created-at now)
+     :reviewAt (bridge/dart-value-int-nullable review-at)
+     :completed (if (some? completed) (bridge/dart-value-bool completed) (bridge/dart-value-bool-absent))
+     :status (bridge/dart-value-string (or status "active"))
+     :notes (bridge/dart-value-string-nullable notes))))
 
 (defn insert-project!
   "Insert new project
