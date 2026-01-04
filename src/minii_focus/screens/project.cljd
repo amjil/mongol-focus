@@ -73,12 +73,66 @@
                      (m/SizedBox .width (tokens/space :s))
                      (comp/mongol-text-block {:text (str done "/" total " tasks")})])))))
 
+(defn project-detail-dialog [{:keys [project health tasks on-archive on-restore on-save-template]}]
+  (f/widget
+   :context ctx
+   :let [size (.-size (m/MediaQuery.of ctx))
+         h (.-height size)
+         w (.-width size)]
+   (m/Dialog
+    .insetPadding m/EdgeInsets.zero
+    .child
+    (m/Container
+     .height (* h 0.9)
+     .width w
+     .color (.-surface (.-colorScheme (m/Theme.of ctx)))
+     .child
+     (m/Column
+      .mainAxisSize m/MainAxisSize.max
+      .children
+      [(m/Padding
+        .padding (m/EdgeInsets.all (tokens/space :s))
+        .child
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+         .children
+         [(m/SizedBox.shrink)
+          (m/IconButton
+           .icon (m/Icon m/Icons.close)
+           .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))]))
+       (m/Expanded
+        .child
+        (m/SingleChildScrollView
+         .scrollDirection m/Axis.horizontal
+         .child
+         (m/Row
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .children [(comp/mongol-text-block {:text "Project Details" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                     (project-status-card
+                      {:project project
+                       :health health
+                       :on-archive on-archive
+                       :on-restore on-restore
+                       :on-save-template on-save-template})
+                     (project-progress-card {:tasks tasks})])))])))))
+
+(defn show-project-detail-dialog [context project health tasks on-archive on-restore on-save-template]
+  (m/showDialog
+   .context context
+   .builder (fn [_] (project-detail-dialog
+                     {:project project
+                      :health health
+                      :tasks tasks
+                      :on-archive on-archive
+                      :on-restore on-restore
+                      :on-save-template on-save-template}))))
+
 (defn project-screen [_params]
   (f/widget
    :context ctx
    :watch [dao app-state/dao
            projects (when dao (project-db/watch-all-projects dao))
-           {:keys [selected-project next-actions project-tasks]} ui-state/project-state]
+           {:keys [next-actions]} ui-state/project-state]
    :let [loading (or (nil? dao) (nil? projects))
          projects (or projects [])
          _ (when (and (not loading) (coll? projects))
@@ -89,29 +143,25 @@
    (m/Scaffold
     .appBar (m/AppBar 
              .actions [(m/IconButton .icon (m/Icon m/Icons.add) .onPressed (fn [] (qe-dialog/show-add-project-dialog ctx)))])
-    .body (comp/mongol-column-layout
-           {:main-width 0.4 :side-width 0.6
-            :main-column (if loading (widgets/loading-indicator)
-                             (if (empty? projects)
-                               (widgets/empty-state "No projects")
-                               (m/ListView
-                                .scrollDirection m/Axis.horizontal
-                                .children (mapv (fn [p] (project-list-item
-                                                         {:project p
-                                                          :next-action (get next-actions (.-id p))
-                                                          :health (project-db/project-health p (get next-actions (.-id p)))
-                                                          :on-selected (fn [sp] (ui-state/update-project-state! assoc :selected-project sp) (-> (project-db/get-project-tasks dao (.-id sp)) (.then (fn [ts] (ui-state/update-project-state! update :project-tasks assoc (.-id sp) ts)))))}))
-                                                projects))))
-            :side-column (if-let [p selected-project]
-                           (m/SingleChildScrollView
-                            .scrollDirection m/Axis.horizontal
-                            .child
-                            (m/Row
-                             .children [(project-status-card
-                                         {:project p
-                                          :health (project-db/project-health p (get next-actions (.-id p)))
-                                          :on-archive (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui})))
-                                          :on-restore (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui})))
-                                          :on-save-template (fn [_] (toast/show-info-toast ctx "Template feature in progress"))})
-                                        (project-progress-card {:tasks (get project-tasks (.-id p) [])})]))
-                           (widgets/empty-state "Select a project"))}))))
+    .body (if loading (widgets/loading-indicator)
+            (if (empty? projects)
+              (widgets/empty-state "No projects")
+              (m/ListView
+               .scrollDirection m/Axis.horizontal
+               .children (mapv (fn [p] (project-list-item
+                                        {:project p
+                                         :next-action (get next-actions (.-id p))
+                                         :health (project-db/project-health p (get next-actions (.-id p)))
+                                         :on-selected (fn [sp]
+                                                       (-> (project-db/get-project-tasks dao (.-id sp))
+                                                           (.then (fn [ts]
+                                                                    (let [health (project-db/project-health sp (get next-actions (.-id sp)))]
+                                                                      (show-project-detail-dialog
+                                                                       ctx
+                                                                       sp
+                                                                       health
+                                                                       ts
+                                                                       (fn [ap] (-> (dispatch/dispatch-event! ctx {:type :project/archive :payload {:project-id (.-id ap)} :source :ui}) (.then (fn [_] (-> (m/Navigator.of ctx) (.pop))))))
+                                                                       (fn [rp] (-> (dispatch/dispatch-event! ctx {:type :project/restore :payload {:project-id (.-id rp)} :source :ui}) (.then (fn [_] (-> (m/Navigator.of ctx) (.pop))))))
+                                                                       (fn [_] (toast/show-info-toast ctx "Template feature in progress"))))))))}))
+                                       projects)))))))
