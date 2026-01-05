@@ -72,14 +72,6 @@
                                              {:created-dt-str (str created-dt)
                                               :error (str e)})
                                "Unknown")))]
-        (logger/debug "widgets/common" "format-date-time result"
-                      {:date-time date-time
-                       :is-number is-num
-                       :now-ms now-ms
-                       :created-ms created-ms
-                       :diff-ms diff-ms
-                       :diff-days diff-days
-                       :result result})
         result)
       (catch Exception e
         (logger/error "widgets/common" "format-date-time error"

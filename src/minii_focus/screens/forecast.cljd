@@ -24,11 +24,14 @@
                 :else m/Colors.red)]
     (m/Column
      .mainAxisSize m/MainAxisSize.min
-     .children [(m/LinearProgressIndicator
+     .children [(m/RotatedBox 
+                 .quarterTurns 1
+                 .child
+                (m/LinearProgressIndicator
                 .value (/ conf 100.0)
                 .color color
                 .backgroundColor (-> color (.withOpacity 0.2))
-                .minHeight 4)
+                .minHeight 4))
                (m/SizedBox .height 4)
                (comp/mongol-text-block {:text (str conf "%") :style (m/TextStyle .fontSize 10 .color color)})])))
 
@@ -38,21 +41,19 @@
    .child (m/Card
            .color (if selected? (-> m/Colors.blue (.withOpacity 0.12)) nil)
            .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :s))
-           .child (m/Container
-                   .width 120
-                   .child (mgl/MongolListTile
-                           .leading (m/Checkbox .value selected? .onChanged (fn [_] (on-toggle-select (.-id forecast-item))))
-                           .title (comp/mongol-text-block {:text task-title})
-                           .subtitle (m/Column
-                                     .mainAxisSize m/MainAxisSize.min
-                                     .children [(confidence-indicator (.-confidence forecast-item))])
-                           .trailing (m/Row
-                                     .mainAxisSize m/MainAxisSize.min
-                                     .children (filterv some? [(if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green .size 16) nil)
-                                                              (m/IconButton
-                                                               .icon (m/Icon m/Icons.cancel .size 16)
-                                                               .onPressed (fn [] (on-cancel (.-id forecast-item)))
-                                                               .tooltip "Cancel")])))))))
+           .child (mgl/MongolListTile
+                   .leading (m/Checkbox .value selected? .onChanged (fn [_] (on-toggle-select (.-id forecast-item))))
+                   .title (comp/mongol-text-block {:text task-title})
+                   .subtitle (m/SingleChildScrollView
+                              .scrollDirection m/Axis.horizontal
+                              .child (confidence-indicator (.-confidence forecast-item)))
+                   .trailing (m/Row
+                              .mainAxisSize m/MainAxisSize.min
+                              .children (filterv some? [(if (.-done forecast-item) (m/Icon m/Icons.check_circle .color m/Colors.green .size 16) nil)
+                                                        (m/IconButton
+                                                         .icon (m/Icon m/Icons.cancel .size 16)
+                                                         .onPressed (fn [] (on-cancel (.-id forecast-item)))
+                                                         .tooltip "Cancel")]))))))
 
 (defn batch-reschedule-dialog [ctx selected-ids db-ctx on-close]
   (let [initial-date (dart-core/DateTime.now)]
@@ -74,16 +75,16 @@
 
 (defn batch-action-bar [{:keys [ctx db-ctx selected-ids on-close]}]
   (m/Container
-   .width 80
+   .height 80
    .padding (m/EdgeInsets.all 8)
    .margin (m/EdgeInsets.all 8)
    .decoration (m/BoxDecoration 
                 .color m/Colors.blue.shade100
                 .borderRadius (m/BorderRadius.circular 12))
-   .child (m/Column
+   .child (m/Row
            .mainAxisAlignment m/MainAxisAlignment.center
            .children [(comp/mongol-text-block {:text (str (count selected-ids) " selected") :style (m/TextStyle .fontWeight m/FontWeight.bold)})
-                      (m/SizedBox .height 16)
+                      (m/SizedBox .width 16)
                       (m/IconButton 
                        .icon (m/Icon m/Icons.calendar_today)
                        .tooltip "Batch Reschedule"
@@ -108,43 +109,45 @@
   [{:keys [forecasts task-titles-map ctx db-ctx on-reorder selected-ids on-toggle-select on-cancel]}]
   (if (empty? forecasts)
     (comp/mongol-text-block {:text "No tasks" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
-    (m/ReorderableListView
-     .scrollDirection m/Axis.horizontal
-     .onReorder on-reorder
-     .children (vec (concat (when (seq selected-ids)
-                              [(m/Container
-                                .key (m/ValueKey "batch-action-bar")
-                                .child (batch-action-bar {:ctx ctx
-                                                          :db-ctx db-ctx
-                                                          :selected-ids selected-ids
-                                                          :on-close (fn [] (ui-state/update-forecast-state! assoc :selected-forecast-ids #{}))}))])
-                            (mapv (fn [f]
-                                    (m/Container
-                                     .key (m/ValueKey (.-id f))
-                                     .child (forecast-item-card
-                                             {:forecast-item f
-                                              :task-title (get task-titles-map (.-taskId f) "Loading...")
-                                              :selected? (contains? selected-ids (.-id f))
-                                              :on-toggle-select on-toggle-select
-                                              :on-cancel on-cancel
-                                              :on-tap (fn []
-                                                       (let [initial-date (dart-core/DateTime.now)]
-                                                         (-> (m/showDatePicker
-                                                              .context ctx
-                                                              .initialDate initial-date
-                                                              .firstDate (.subtract initial-date (dart-core/Duration .days 30))
-                                                              .lastDate (.add initial-date (dart-core/Duration .days 365)))
-                                                             (.then (fn [selected-date]
-                                                                      (when selected-date
-                                                                        (let [new-date (time/ts->yyyymmdd (int (/ (.millisecondsSinceEpoch selected-date) 1000)))]
-                                                                          (dispatch/dispatch-event!
-                                                                           db-ctx
-                                                                           {:type :forecast/reschedule
-                                                                            :payload {:forecast-id (.-id f)
-                                                                                      :date new-date}
-                                                                            :source :ui}))))))
-                                                             nil))})))
-                                  forecasts))))))
+    (m/Column
+     .children
+     [(if (seq selected-ids)
+        (batch-action-bar {:ctx ctx
+                           :db-ctx db-ctx
+                           :selected-ids selected-ids
+                           :on-close (fn [] (ui-state/update-forecast-state! assoc :selected-forecast-ids #{}))})
+        (m/SizedBox.shrink))
+      (m/ReorderableListView
+       .scrollDirection m/Axis.horizontal
+       .onReorder on-reorder
+       .children
+       (mapv (fn [f]
+               (m/Container
+                .key (m/ValueKey (.-id f))
+                .child (forecast-item-card
+                        {:forecast-item f
+                         :task-title (get task-titles-map (.-taskId f) "Loading...")
+                         :selected? (contains? selected-ids (.-id f))
+                         :on-toggle-select on-toggle-select
+                         :on-cancel on-cancel
+                         :on-tap (fn []
+                                   (let [initial-date (dart-core/DateTime.now)]
+                                     (-> (m/showDatePicker
+                                          .context ctx
+                                          .initialDate initial-date
+                                          .firstDate (.subtract initial-date (dart-core/Duration .days 30))
+                                          .lastDate (.add initial-date (dart-core/Duration .days 365)))
+                                         (.then (fn [selected-date]
+                                                  (when selected-date
+                                                    (let [new-date (time/ts->yyyymmdd (int (/ (.millisecondsSinceEpoch selected-date) 1000)))]
+                                                      (dispatch/dispatch-event!
+                                                       db-ctx
+                                                       {:type :forecast/reschedule
+                                                        :payload {:forecast-id (.-id f)
+                                                                  :date new-date}
+                                                        :source :ui}))))))
+                                     nil))})))
+             forecasts))])))
 
 (defn forecast-stats-card [{:keys [forecasts]}]
   (let [total (count forecasts)
@@ -160,11 +163,11 @@
      .child (m/Container
              .width 200
              .padding (m/EdgeInsets.all (tokens/space :m))
-             .child (m/Column
+             .child (m/Row
                      .crossAxisAlignment m/CrossAxisAlignment.start
                      .children [(comp/mongol-text-block {:text "Forecast Statistics" :style (m/TextStyle .fontSize 16 .fontWeight m/FontWeight.bold)})
-                               (m/SizedBox .height 16)
-                               (m/Row
+                               (m/SizedBox .width 16)
+                               (m/Column
                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                                 .children [(comp/mongol-text-block {:text "Completion Rate" :style (m/TextStyle .fontSize 12)})
                                           (comp/mongol-text-block {:text (str completion-rate "%")
@@ -173,6 +176,9 @@
                                                                                               (>= completion-rate 80) m/Colors.green
                                                                                               (>= completion-rate 50) m/Colors.orange
                                                                                               :else m/Colors.red))})])
+                                (m/RotatedBox 
+                                 .quarterTurns 1
+                                 .child
                                (m/LinearProgressIndicator
                                 .value (/ completion-rate 100.0)
                                 .color (cond
@@ -180,9 +186,9 @@
                                         (>= completion-rate 50) m/Colors.orange
                                         :else m/Colors.red)
                                 .backgroundColor (-> m/Colors.grey (.withOpacity 0.2))
-                                .minHeight 6)
-                               (m/SizedBox .height 16)
-                               (m/Row
+                                .minHeight 6))
+                               (m/SizedBox .width 16)
+                               (m/Column
                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                                 .children [(comp/mongol-text-block {:text "Average Confidence" :style (m/TextStyle .fontSize 12)})
                                           (comp/mongol-text-block {:text (str avg-confidence "%")
@@ -191,6 +197,10 @@
                                                                                               (>= avg-confidence 70) m/Colors.green
                                                                                               (>= avg-confidence 40) m/Colors.orange
                                                                                               :else m/Colors.red))})])
+                                                                                              
+                               (m/RotatedBox 
+                                .quarterTurns 1
+                                .child 
                                (m/LinearProgressIndicator
                                 .value (/ avg-confidence 100.0)
                                 .color (cond
@@ -198,13 +208,13 @@
                                         (>= avg-confidence 40) m/Colors.orange
                                         :else m/Colors.red)
                                 .backgroundColor (-> m/Colors.grey (.withOpacity 0.2))
-                                .minHeight 6)
-                               (m/SizedBox .height 16)
-                               (m/Row
+                                .minHeight 6))
+                               (m/SizedBox .width 16)
+                               (m/Column
                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                                 .children [(comp/mongol-text-block {:text "Total" :style (m/TextStyle .fontSize 12)})
                                           (comp/mongol-text-block {:text (str total) :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})])
-                               (m/Row
+                               (m/Column
                                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                                 .children [(comp/mongol-text-block {:text "Completed" :style (m/TextStyle .fontSize 12)})
                                           (comp/mongol-text-block {:text (str completed) :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold .color m/Colors.green)})])])))))
@@ -243,28 +253,34 @@
 (defn overload-warning-dialog [ctx date forecasts daily-capacity db-ctx]
   (let [overload-count (- (count forecasts) daily-capacity)
         suggestion (str "Suggest moving " overload-count " tasks to future dates")]
-    (m/AlertDialog
-     .title (comp/mongol-text-block {:text "Forecast Overload Warning" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
-     .content (m/Column
-                .mainAxisSize m/MainAxisSize.min
-                .children [(comp/mongol-text-block {:text (str "Date: " (widgets/format-yyyymmdd date))})
-                           (m/SizedBox .height 8)
-                           (comp/mongol-text-block {:text (str "Current Tasks: " (count forecasts))})
-                           (comp/mongol-text-block {:text (str "Daily Capacity: " (int daily-capacity)) :style (m/TextStyle .color m/Colors.blue)})
-                           (comp/mongol-text-block {:text (str "Overload Count: " overload-count) :style (m/TextStyle .color m/Colors.red .fontWeight m/FontWeight.bold)})
-                           (m/SizedBox .height 16)
-                           (comp/mongol-text-block {:text suggestion :style (m/TextStyle .fontSize 14)})])
-     .actions [(m/TextButton
-                .child (m/Text "Cancel")
-                .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
-               (m/TextButton
-                .child (m/Text "Auto Optimize")
-                .onPressed (fn []
-                             (-> (optimize-overload db-ctx forecasts date daily-capacity)
-                                 (.then (fn [_]
-                                          (toast/show-success-toast ctx (str "Optimized " overload-count " tasks"))
-                                          (-> (m/Navigator.of ctx) (.pop)))))
-                             nil))])))
+    (m/Dialog
+     .child (m/Row
+             .mainAxisSize m/MainAxisSize.min
+             .children [(m/Padding
+                         .padding (m/EdgeInsets.all 24)
+                         .child (m/Row
+                                 .mainAxisSize m/MainAxisSize.min
+                                 .children [(comp/mongol-text-block {:text "Forecast Overload Warning" :style (m/TextStyle .fontWeight m/FontWeight.bold)})
+                                            (m/SizedBox .height 16)
+                                            (comp/mongol-text-block {:text (str "Date: " (widgets/format-yyyymmdd date))})
+                                            (m/SizedBox .height 8)
+                                            (comp/mongol-text-block {:text (str "Current Tasks: " (count forecasts))})
+                                            (comp/mongol-text-block {:text (str "Daily Capacity: " (int daily-capacity)) :style (m/TextStyle .color m/Colors.blue)})
+                                            (comp/mongol-text-block {:text (str "Overload Count: " overload-count) :style (m/TextStyle .color m/Colors.red .fontWeight m/FontWeight.bold)})
+                                            (m/SizedBox .height 16)
+                                            (comp/mongol-text-block {:text suggestion :style (m/TextStyle .fontSize 14)})]))
+                        (m/ButtonBar
+                         .children [(mgl/MongolTextButton
+                                     .child (comp/mongol-text-block {:text "Cancel"})
+                                     .onPressed (fn [] (-> (m/Navigator.of ctx) (.pop))))
+                                    (mgl/MongolTextButton
+                                     .child (comp/mongol-text-block {:text "Auto Optimize"})
+                                     .onPressed (fn []
+                                                  (-> (optimize-overload db-ctx forecasts date daily-capacity)
+                                                      (.then (fn [_]
+                                                               (toast/show-success-toast ctx (str "Optimized " overload-count " tasks"))
+                                                               (-> (m/Navigator.of ctx) (.pop)))))
+                                                  nil))])]))))
 
 (defn view-type-selector [view-type on-change]
   (m/SegmentedButton
@@ -342,9 +358,9 @@
                                                                          (when (> (count forecasts) daily-capacity)
                                                                            (m/showDialog
                                                                             .context ctx
-                                                                            .builder (fn [_] (overload-warning-dialog ctx d forecasts daily-capacity db-ctx)))))
+                                                                            .builder (fn [_] (overload-warning-dialog ctx d forecasts daily-capacity db-ctx))))
+                                                                         nil)
                                                                 .child (m/Container 
-                                                                        .width 80
                                                                         .margin (m/EdgeInsets.all 4)
                                                                         .decoration (m/BoxDecoration 
                                                                                      .color (if (> (count forecasts) daily-capacity) m/Colors.orange.shade50 m/Colors.blue.shade50)
@@ -359,12 +375,13 @@
                                                                                           (comp/mongol-text-block 
                                                                                            {:text (str (count forecasts) "/" (int daily-capacity))
                                                                                             :style (m/TextStyle .color (if (> (count forecasts) daily-capacity) m/Colors.red m/Colors.blue))})
-                                                                                          (when (> (count forecasts) daily-capacity)
+                                                                                          (if (> (count forecasts) daily-capacity)
                                                                                             (m/Row
                                                                                              .mainAxisAlignment m/MainAxisAlignment.center
                                                                                              .children [(m/Icon m/Icons.warning .color m/Colors.orange .size 16)
                                                                                                        (m/SizedBox .width 4)
-                                                                                                       (comp/mongol-text-block {:text "Overload" :style (m/TextStyle .fontSize 10 .color m/Colors.orange)})]))])))]
+                                                                                                       (comp/mongol-text-block {:text "Overload" :style (m/TextStyle .fontSize 10 .color m/Colors.orange)})])
+                                                                                            (m/SizedBox.shrink))])))]
                                                                [(reorderable-forecast-list
                                                                  {:forecasts forecasts
                                                                   :task-titles-map task-titles-map

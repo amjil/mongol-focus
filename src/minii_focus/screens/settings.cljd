@@ -187,20 +187,21 @@
    .margin (m/EdgeInsets.all (tokens/space :m))
    .child (m/Padding
            .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Column
+           .child (m/Row
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
                    [(comp/mongol-text-block {:text "App Information" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height 8)
+                    (m/SizedBox .width 8)
                     (comp/mongol-text-block {:text "Mongol Focus v1.0.0"})
-                    (m/SizedBox .height 8)
+                    (m/SizedBox .width 8)
                     (comp/mongol-text-block {:text "A productivity app for managing tasks and focus sessions" :style (m/TextStyle .fontSize (tokens/font-size :s) .color (tokens/color :text-weak))})]))))
 
 (defn settings-screen [_params]
   (let [dao (app-state/get-dao)]
     (f/widget
      :context ctx
-     (m/Scaffold)
+     (m/Scaffold
+      .appBar (m/AppBar))
      .body
      (m/SafeArea)
      (m/ListView
@@ -214,11 +215,11 @@
         .margin (m/EdgeInsets.all (tokens/space :m))
         .child (m/Padding
                 .padding (m/EdgeInsets.all (tokens/space :m))
-                .child (m/Column
+                .child (m/Row
                         .crossAxisAlignment m/CrossAxisAlignment.start
                         .children
                         [(comp/mongol-text-block {:text "Data Management" :style (m/TextStyle .fontSize (tokens/font-size :l) .fontWeight m/FontWeight.bold)})
-                         (m/SizedBox .height 16)
+                         (m/SizedBox .width 16)
                          (mgl/MongolListTile
                           .leading (m/Icon m/Icons.download)
                           .title (comp/mongol-text-block {:text "Export All Data"})

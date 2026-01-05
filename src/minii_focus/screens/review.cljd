@@ -10,6 +10,10 @@
    [minii-focus.core.domain.review.aggregate :as aggregate]
    [minii-focus.core.domain.calibration.review-to-forecast :as calibration]
    [minii-focus.core.db.review :as review-db]
+   [minii-focus.core.db.task :as task-db]
+   [minii-focus.core.db.forecast :as forecast-db]
+   [minii-focus.core.db.timeline :as timeline-db]
+   [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.core.event.dispatch :as dispatch]
    [minii-focus.core.utils.toast :as toast]
    [minii-focus.widgets.common :as widgets]))
@@ -23,21 +27,23 @@
     (comp/mongol-text-block {:text label :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})]))
 
 (defn overview-card [{:keys [overview]}]
-  (m/Card
-   .margin (m/EdgeInsets.all (tokens/space :m))
-   .child (m/Padding
-           .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Row
-                   .children
-                   [(m/Column
-                     .mainAxisAlignment m/MainAxisAlignment.center
-                     .children [(comp/mongol-text-block {:text "Overview" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})])
-                    (m/SizedBox .width 24)
-                    (stat-item {:label "Completed" :value (:task-completed overview) :color m/Colors.green})
-                    (m/SizedBox .width 16)
-                    (stat-item {:label "Forecast" :value (:forecast-completed overview)})
-                    (m/SizedBox .width 16)
-                    (stat-item {:label "Skipped" :value (:forecast-skipped overview) :color m/Colors.orange})]))))
+  (m/SingleChildScrollView
+   .child
+   (m/Card
+    .margin (m/EdgeInsets.all (tokens/space :m))
+    .child (m/Padding
+            .padding (m/EdgeInsets.all (tokens/space :m))
+            .child (m/Column
+                    .children
+                    [(m/Column
+                      .mainAxisAlignment m/MainAxisAlignment.center
+                      .children [(comp/mongol-text-block {:text "Overview" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})])
+                     (m/SizedBox .width 24)
+                     (stat-item {:label "Completed" :value (:task-completed overview) :color m/Colors.green})
+                     (m/SizedBox .width 16)
+                     (stat-item {:label "Forecast" :value (:forecast-completed overview)})
+                     (m/SizedBox .width 16)
+                     (stat-item {:label "Skipped" :value (:forecast-skipped overview) :color m/Colors.orange})])))))
 
 (defn perspective-review-item [{:keys [my-ctx db-ctx data]}]
   (let [p (:perspective data)
@@ -69,13 +75,14 @@
                                      (m/TextButton
                                       .child (m/Text "Apply")
                                       .onPressed (fn []
-                                                   (dispatch/dispatch-event! 
+                                                   (dispatch/dispatch-event!
                                                     db-ctx
                                                     {:type :perspective/update-weight
                                                      :payload {:perspective-id pid
                                                                :weight @w-atom}
                                                      :source :ui})
-                                                   (-> (m/Navigator.of ctx) (.pop))))]))))
+                                                   (-> (m/Navigator.of ctx) (.pop))))])))
+              nil)
      .child (m/Card
              .margin (m/EdgeInsets.symmetric :horizontal (tokens/space :xs) :vertical (tokens/space :s))
              .child (m/Container
@@ -232,7 +239,6 @@
                             :actual actual}))
                        sorted-reviews)]
     (m/Container
-     .height 120
      .margin (m/EdgeInsets.all (tokens/space :s))
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
@@ -275,13 +281,12 @@
                           :duration (.-actualDuration r)})
                        sorted-reviews)]
     (m/Container
-     .height 120
      .margin (m/EdgeInsets.all (tokens/space :s))
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
              .children
              [(comp/mongol-text-block {:text "Focus Duration Trend" :style (m/TextStyle .fontSize 14 .fontWeight m/FontWeight.bold)})
-              (m/SizedBox .height 8)
+              (m/SizedBox .width 8)
               (if (empty? chart-data)
                 (comp/mongol-text-block {:text "No data" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
                 (m/Row
@@ -314,7 +319,6 @@
                             :score score}))
                        sorted-reviews)]
     (m/Container
-     .height 120
      .margin (m/EdgeInsets.all (tokens/space :s))
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
@@ -366,7 +370,6 @@
                           :actual-duration (.-actualDuration r)})
                        sorted-reviews)]
     (m/Container
-     .height 150
      .margin (m/EdgeInsets.all (tokens/space :s))
      .child (m/Column
              .crossAxisAlignment m/CrossAxisAlignment.start
@@ -554,31 +557,19 @@
    .margin (m/EdgeInsets.all (tokens/space :m))
    .child (m/Padding
            .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Column
+           .child (m/Row
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
                    [(comp/mongol-text-block {:text "Statistics Trend" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height 16)
+                    (m/SizedBox .width 16)
                     (completion-rate-chart {:reviews reviews})
-                    (m/SizedBox .height 16)
+                    (m/SizedBox .width 16)
                     (focus-duration-chart {:reviews reviews})
-                    (m/SizedBox .height 16)
+                    (m/SizedBox .width 16)
                     (mood-score-chart {:reviews reviews})
-                    (m/SizedBox .height 16)
+                    (m/SizedBox .width 16)
                     (comparison-chart {:reviews reviews})]))))
 
-(defn get-historical-reviews
-  "Get historical reviews for visualization
-  Returns: Future<List<Review>>"
-  [dao]
-  (-> (review-db/watch-all-reviews dao)
-      (.then (fn [reviews-stream]
-               ;; Convert Stream to Future by taking first value
-               (if (seq? reviews-stream)
-                 (if (vector? reviews-stream)
-                   (first reviews-stream)
-                   reviews-stream)
-                 reviews-stream)))))
 
 (defn review-detail-dialog [ctx review]
   (let [period-start (.-periodStart review)
@@ -705,7 +696,8 @@
     (m/InkWell
      .onTap (fn [] (m/showDialog
                     .context ctx
-                    .builder (fn [_] (review-detail-dialog ctx review))))
+                    .builder (fn [_] (review-detail-dialog ctx review)))
+              nil)
      .child (m/Card
              .margin (m/EdgeInsets.symmetric :vertical (tokens/space :xs) :horizontal (tokens/space :m))
              .child (m/Padding
@@ -727,14 +719,14 @@
    .margin (m/EdgeInsets.all (tokens/space :m))
    .child (m/Padding
            .padding (m/EdgeInsets.all (tokens/space :m))
-           .child (m/Column
+           .child (m/Row
                    .crossAxisAlignment m/CrossAxisAlignment.start
                    .children
                    [(comp/mongol-text-block {:text "Review History" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)})
-                    (m/SizedBox .height 16)
+                    (m/SizedBox .width 16)
                     (if (empty? reviews)
                       (comp/mongol-text-block {:text "No history" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
-                      (m/Column
+                      (m/Row
                        .mainAxisSize m/MainAxisSize.min
                        .children (vec (map (fn [review]
                                             (review-history-item {:review review :ctx ctx}))
@@ -746,19 +738,36 @@
     (f/widget
      :context my-ctx
      :watch [{:keys [period-type]} ui-state/review-state
-             review-data (future (aggregate/aggregate-review-data! dao period-type))
-             historical-reviews (future (get-historical-reviews dao))]
-     :let [loading (nil? review-data)
-           reviews-list (or historical-reviews [])]
+             tasks (when dao (task-db/watch-all-tasks dao))
+             forecasts (when dao (let [now (dart-core/DateTime.now)
+                                       start-yyyymmdd (+ (* (.year now) 10000)
+                                                         (* (.month now) 100)
+                                                         (.day now))]
+                                   (forecast-db/watch-by-date dao start-yyyymmdd)))
+             perspectives (when dao (perspective-db/watch-all dao))
+             historical-reviews (when dao (review-db/watch-all-reviews dao))
+             timeline-events (when dao (let [{:keys [start end]} (aggregate/get-period-boundaries period-type)
+                                             start-ts (int (/ (.-millisecondsSinceEpoch start) 1000))
+                                             end-ts (int (/ (.-millisecondsSinceEpoch end) 1000))]
+                                         (timeline-db/watch-range dao start-ts end-ts)))]
+     :let [tasks-list (if (seq? tasks) (if (vector? tasks) (first tasks) tasks) (if (nil? tasks) [] tasks))
+           forecasts-list (if (seq? forecasts) (if (vector? forecasts) (first forecasts) forecasts) (if (nil? forecasts) [] forecasts))
+           events-list (if (seq? timeline-events) (if (vector? timeline-events) (first timeline-events) timeline-events) (if (nil? timeline-events) [] []))
+           perspectives-list (if (seq? perspectives) (if (vector? perspectives) (first perspectives) perspectives) (if (nil? perspectives) [] perspectives))
+           review-data (when (and tasks-list forecasts-list events-list perspectives-list)
+                         (aggregate/aggregate-review-data tasks-list forecasts-list events-list perspectives-list period-type))
+           loading (nil? review-data)
+           reviews-list (if (seq? historical-reviews) (if (vector? historical-reviews) (first historical-reviews) historical-reviews) (or historical-reviews []))]
      (m/Scaffold
-      .appBar (m/AppBar 
-               .actions [(m/IconButton 
+      .appBar (m/AppBar
+               .actions [(m/IconButton
                           .icon (m/Icon m/Icons.check)
-                          .onPressed (fn [] 
+                          .onPressed (fn []
                                        (when review-data
                                          (m/showDialog
                                           .context my-ctx
-                                          .builder (fn [ctx] (review-submit-dialog ctx review-data db-ctx))))))
+                                          .builder (fn [ctx] (review-submit-dialog ctx review-data db-ctx))))
+                                       nil))
                          (m/IconButton
                           .icon (m/Icon m/Icons.tune)
                           .tooltip "Calibration"
@@ -766,7 +775,8 @@
                                        (when review-data
                                          (m/showDialog
                                           .context my-ctx
-                                          .builder (fn [ctx] (calibration-suggestion-dialog ctx review-data))))))
+                                          .builder (fn [ctx] (calibration-suggestion-dialog ctx review-data))))
+                                       nil))
                          (m/PopupMenuButton
                           .onSelected (fn [v] (ui-state/update-review-state! assoc :period-type v))
                           .itemBuilder (fn [_] [(m/PopupMenuItem .value :day .child (m/Text "Day"))
@@ -776,13 +786,39 @@
               (widgets/loading-indicator)
               (if (nil? review-data)
                 (widgets/empty-state "No data for this period")
-                (m/ListView
-                 .scrollDirection m/Axis.horizontal
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.max
+                 .crossAxisAlignment m/CrossAxisAlignment.start
                  .children
-                 [(overview-card {:overview (:overview review-data)})
-                  (m/Container 
-                   .padding (m/EdgeInsets.all 16)
-                   .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)}))
-                  (m/Row .children (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))
-                  (visualization-section {:reviews reviews-list})
-                  (review-history-section {:reviews reviews-list :ctx my-ctx})])))))))
+                 [(m/Expanded
+                   .flex 1
+                   .child
+                   (m/SingleChildScrollView
+                    .scrollDirection m/Axis.horizontal
+                    .child
+                    (m/Row
+                     .children
+                     [(overview-card {:overview (:overview review-data)})
+                      (visualization-section {:reviews reviews-list})])))
+
+                  (m/Expanded
+                   .flex 1
+                   .child
+                   (m/Row
+                    .crossAxisAlignment m/CrossAxisAlignment.stretch
+                    .children
+                    [(m/Expanded
+                      .flex 1
+                      .child
+                      (m/Row
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .children
+                       [(m/Container
+                         .padding (m/EdgeInsets.all 16)
+                         .child (comp/mongol-text-block {:text "Perspectives" :style (m/TextStyle .fontSize 18 .fontWeight m/FontWeight.bold)}))
+                        (m/Row
+                         .children
+                         (mapv (fn [p-data] (perspective-review-item {:my-ctx my-ctx :db-ctx db-ctx :data p-data})) (:perspectives review-data)))]))
+                     (m/Expanded
+                      .flex 1
+                      .child (review-history-section {:reviews reviews-list :ctx my-ctx}))]))])))))))

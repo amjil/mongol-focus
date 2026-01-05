@@ -13,20 +13,24 @@
    [minii-focus.core.db.project :as project-db]
    [minii-focus.core.db.perspective :as perspective-db]
    [minii-focus.widgets.common :as widgets]
-   [minii-focus.widgets.quick_entry_dialog :as qe-dialog]
    [minii-focus.core.infra.bridge :as bridge]
    [minii-focus.core.event.dispatch :as dispatch]
    ["package:cljd_mongol_focus/db/app_database.dart" :as app-db]))
 
+(declare task-detail-screen)
+
 (defn detail-section [{:keys [title child]}]
-  (m/Container
-   .padding (m/EdgeInsets.all (tokens/space :m))
-   .child (m/Column
-           .crossAxisAlignment m/CrossAxisAlignment.start
-           .children
-           [(comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
-            (m/SizedBox .height (tokens/space :s))
-            child])))
+  (m/SingleChildScrollView
+   .child
+   (m/Container
+    .padding (m/EdgeInsets.all (tokens/space :m))
+    .child (m/Column
+            .mainAxisSize m/MainAxisSize.min
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :m) .fontWeight m/FontWeight.bold)})
+             (m/SizedBox .height (tokens/space :s))
+             child]))))
 
 (defn format-date
   "Format timestamp (milliseconds) to YYYY-MM-DD string"
@@ -154,8 +158,38 @@
                 .tooltip "Set Project"
                 .onPressed show-project-dialog)])})))
 
+
+
+(defn action-buttons-section [{:keys [ctx task db-ctx]}]
+  (detail-section
+   {:title "Actions"
+    :child (m/Column
+            .crossAxisAlignment m/CrossAxisAlignment.start
+            .children
+            [(m/ElevatedButton
+              .onPressed (fn []
+                           (-> (dispatch/dispatch-event! db-ctx {:type :task/complete :payload {:task-id (.-id task)} :source :ui})
+                               (.then (fn [_]
+                                        (m/Navigator.pop ctx)))
+                               (.catchError (fn [e] (dart-core/print (str "Error completing task: " e)))))
+                           nil)
+              .child (m/Text "Mark as Completed"))
+             (m/SizedBox .height (tokens/space :s))
+             (m/ElevatedButton
+              .onPressed (fn []
+                           (-> (dispatch/dispatch-event! db-ctx {:type :task/archive :payload {:task-id (.-id task)} :source :ui})
+                               (.then (fn [_]
+                                        (m/Navigator.pop ctx)))
+                               (.catchError (fn [e] (dart-core/print (str "Error archiving task: " e)))))
+                           nil)
+              .style (m/ButtonStyle
+                      .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
+              .child (m/Text "Archive Task"))])}))
+
 (defn task-detail-screen [params]
-  (let [tid (:id params)]
+  (let [tid (:id params)
+        editing-state (atom false)
+        title-state (atom "")]
     (f/widget
      :context ctx
      :watch [dao app-state/dao
@@ -163,11 +197,14 @@
                                            (.then (fn [t] {:data t})))))
              projects (when dao (project-db/watch-all-projects dao))
              perspectives (when dao (perspective-db/watch-all dao))
-             {:keys [proj-id persp-ids timeline-events]} ui-state/task-detail-state]
+             {:keys [proj-id persp-ids timeline-events]} ui-state/task-detail-state
+             editing editing-state
+             title title-state]
      :let [task (:data task-res)
            projects (or projects [])
            perspectives (or perspectives [])
            loading (or (nil? dao) (nil? task-res))
+           db-ctx {:db (app-state/get-db) :dao dao}
            _ (when (and (not loading) task)
                (when (or (nil? proj-id) (not= proj-id (.-projectId task)))
                  (ui-state/update-task-detail-state! assoc :proj-id (.-projectId task)))
@@ -175,19 +212,101 @@
                  (ui-state/update-task-detail-state! assoc :persp-ids (widgets/parse-json (.-perspectives task))))
                (when (nil? timeline-events)
                  (-> (timeline-db/query-range dao 0 (int (/ (-> (dart-core/DateTime.now) (.-millisecondsSinceEpoch)) 1000)))
-                     (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es)))))))]
+                     (.then (fn [es] (ui-state/update-task-detail-state! assoc :timeline-events (filter #(= (.-entityId %) tid) es))))))
+               (when (and (not editing) (empty? title))
+                 (reset! title-state (.-title task))))]
      (m/Scaffold
-      .appBar (m/AppBar .actions [(m/IconButton .icon (m/Icon m/Icons.edit)
-                                               .onPressed (fn [] (qe-dialog/show-edit-task-dialog ctx task)))]))
-     .body 
-     (m/SafeArea)
-     (if loading (widgets/loading-indicator)
-                (if (nil? task) (widgets/empty-state "Not found")
-                    (m/ListView
-                     .scrollDirection m/Axis.horizontal
-                     .children
-                     [(detail-section {:title "Title" :child (comp/mongol-text-block {:text (.-title task) :style (m/TextStyle .fontSize (tokens/font-size :l))})})
-                      (date-section {:ctx ctx :task task :dao dao})
-                      (project-section {:ctx ctx :task task :dao dao :projects projects :proj-id proj-id})
-                      (detail-section {:title "Perspectives" :child (m/Wrap .children (mapv (fn [p] (m/RotatedBox .quarterTurns 1 .child (m/FilterChip .label (m/Text (.-title p)) .selected (boolean (some #(= % (.-id p)) persp-ids)) .onSelected (fn [s] (if s (ui-state/update-task-detail-state! update :persp-ids conj (.-id p)) (ui-state/update-task-detail-state! update :persp-ids (fn [ids] (remove #(= % (.-id p)) ids)))))))) perspectives))})
-                      (detail-section {:title "History" :child (if (empty? timeline-events) (m/Text "No records") (m/Column .children (mapv (fn [e] (m/Card .child (m/ListTile .title (m/Text (.-title e)) .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e))))))) timeline-events)))})]))))))
+      .appBar (m/AppBar
+               .actions (vec (concat
+                             (if editing
+                               [(m/IconButton
+                                 .icon (m/Icon m/Icons.check)
+                                 .onPressed (fn []
+                                             (when (and task (not (empty? title)))
+                                               (let [updates (app-db/TasksCompanion
+                                                              :title (bridge/dart-value-string title))]
+                                                 (-> (task-db/update-task! dao (.-id task) updates)
+                                                     (.then (fn [_]
+                                                              (reset! editing-state false)
+                                                              ;; Refresh task
+                                                              (-> (task-db/get-by-id dao tid)
+                                                                  (.then (fn [t]
+                                                                           (when t
+                                                                             (reset! title-state (.-title t)))))))))
+                                                 nil))
+                                             nil))
+                                (m/IconButton
+                                 .icon (m/Icon m/Icons.close)
+                                 .onPressed (fn []
+                                             (reset! editing-state false)
+                                             (when task
+                                               (reset! title-state (.-title task)))
+                                             nil))]
+                               [(m/IconButton
+                                 .icon (m/Icon m/Icons.edit)
+                                 .onPressed (fn []
+                                             (when task
+                                               (reset! title-state (.-title task))
+                                               (reset! editing-state true))
+                                             nil))])
+                             [(m/IconButton
+                               .icon (m/Icon m/Icons.refresh)
+                               .tooltip "Refresh"
+                               .onPressed (fn []
+                                           (when dao
+                                             (-> (task-db/get-by-id dao tid)
+                                                 (.then (fn [t]
+                                                          (when t
+                                                            (reset! title-state (.-title t))
+                                                            (ui-state/update-task-detail-state! assoc :proj-id (.-projectId t))
+                                                            (ui-state/update-task-detail-state! assoc :persp-ids (widgets/parse-json (.-perspectives t))))))))))])))
+      .body
+      (m/SafeArea
+       .child (if loading (widgets/loading-indicator)
+               (if (nil? task) (widgets/empty-state "Not found")
+                   (m/ListView
+                    .scrollDirection m/Axis.horizontal
+                    .children
+                    [(detail-section {:title "Title"
+                                     :child (if editing
+                                             (m/ConstrainedBox
+                                              .constraints (m/BoxConstraints .minHeight 100 .maxHeight 200)
+                                              .child (m/TextField
+                                                      .controller (m/TextEditingController .text title)
+                                                      .onChanged (fn [value] (reset! title-state value))
+                                                      .autofocus true
+                                                      .decoration (m/InputDecoration
+                                                                   .labelText "Task title"
+                                                                   .border (m/OutlineInputBorder))))
+                                             (comp/mongol-text-block {:text title :style (m/TextStyle .fontSize (tokens/font-size :l))}))})
+                     (date-section {:ctx ctx :task task :dao dao})
+                     (project-section {:ctx ctx :task task :dao dao :projects projects :proj-id proj-id})
+                     (detail-section {:title "Perspectives"
+                                     :child (m/Wrap
+                                             .spacing (tokens/space :s)
+                                             .runSpacing (tokens/space :s)
+                                             .children
+                                             (mapv (fn [p]
+                                                     (m/RotatedBox
+                                                      .quarterTurns 1
+                                                      .child (m/FilterChip
+                                                              .label (m/Text (.-title p))
+                                                              .selected (boolean (some #(= % (.-id p)) persp-ids))
+                                                              .onSelected (fn [s]
+                                                                           (if s
+                                                                             (dispatch/dispatch-event! db-ctx {:type :task/assign-perspective :payload {:task-id tid :perspective-id (.-id p)} :source :ui})
+                                                                             (dispatch/dispatch-event! db-ctx {:type :task/remove-perspective :payload {:task-id tid} :source :ui}))
+                                                                           nil))))
+                                                   perspectives))})
+                     (action-buttons-section {:ctx ctx :task task :db-ctx db-ctx})
+                     (detail-section {:title "History"
+                                      :child (if (empty? timeline-events)
+                                              (m/Text "No records")
+                                              (m/Column
+                                               .children
+                                               (mapv (fn [e]
+                                                       (m/Card
+                                                        .child (m/ListTile
+                                                                .title (m/Text (.-title e))
+                                                                .subtitle (m/Text (widgets/format-date-time (dart-core/DateTime.fromMillisecondsSinceEpoch (.-timestamp e)))))))
+                                                     timeline-events)))})]))))))))

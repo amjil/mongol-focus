@@ -14,7 +14,6 @@
   - Perspective Review data (aggregated by Perspective)
   - Action Review data (key tasks, postponed ≥2 times, abandoned)"
   (:require
-   ["dart:async" :as async]
    ["dart:convert" :as dart-convert]
    ["dart:core" :as dart-core]
    [minii-focus.core.db.task :as task-db]
@@ -25,6 +24,21 @@
 ;; ============================================================================
 ;; Helper Functions
 ;; ============================================================================
+
+(defn normalize-to-list
+  "Normalize data to a list, handling Stream and other types
+  
+  Parameters:
+  - data: any (List, Stream, nil, etc.)
+  
+  Returns: List (empty list if data is nil or not a sequence)"
+  [data]
+  (cond
+    (nil? data) []
+    (seq? data) (if (vector? data)
+                  (first data)
+                  data)
+    :else []))
 
 (defn parse-json
   "Parse JSON string
@@ -101,8 +115,9 @@
   
   Returns: DateTime"
   [date]
-  (let [weekday (.weekday date)  ; 1=Monday, 7=Sunday
-        days-to-monday (mod (- weekday 1) 7)]
+  (let [weekday (int (.-weekday date))  ; 1=Monday, 7=Sunday
+        weekday-minus-1 (int (- weekday 1))
+        days-to-monday (int (mod weekday-minus-1 7))]
     (.subtract date (dart-core/Duration :days days-to-monday))))
 
 (defn end-of-week
@@ -113,7 +128,7 @@
   
   Returns: DateTime"
   [date]
-  (let [weekday (.weekday date)
+  (let [weekday (.-weekday date)
         days-to-sunday (- 7 weekday)]
     (-> date
         (.add (dart-core/Duration :days days-to-sunday))
@@ -129,7 +144,7 @@
   
   Returns: DateTime"
   [date]
-  (dart-core/DateTime. (.year date) (.month date) 1))
+  (dart-core/DateTime. (.-year date) (.-month date) 1))
 
 (defn end-of-month
   "Calculate end time of the month containing the specified date (last day 23:59:59)
@@ -307,15 +322,18 @@
 ;; Main Query Function
 ;; ============================================================================
 
-(defn aggregate-review-data!
-  "Aggregate Review data
+(defn aggregate-review-data
+  "Aggregate Review data from provided data sources
   
   Parameters:
-  - dao: DaoBridge instance
+  - tasks: List<Task>
+  - forecasts: List<Forecast>
+  - timeline-events: List<TimelineEvent>
+  - perspectives: List<Perspective>
   - period-type: :day | :week | :month
   - selected-date: DateTime? (optional)
   
-  Returns: Future<map>
+  Returns: map
   
   Return format:
   {:overview {:task-completed N
@@ -331,62 +349,119 @@
                    :forecast-done-count N
                    :focus-minutes N}]
    :actions {:completed [...] :postponed [...] :abandoned [...]}}"
+  [tasks forecasts timeline-events perspectives period-type & [selected-date]]
+  (let [{:keys [start end]} (get-period-boundaries period-type selected-date)
+        start-ts (int (/ (.-millisecondsSinceEpoch start) 1000))
+        end-ts (int (/ (.-millisecondsSinceEpoch end) 1000))
+        
+        ;; Normalize data - handle Stream results
+        tasks-list (normalize-to-list tasks)
+        forecasts-list (normalize-to-list forecasts)
+        events-list (normalize-to-list timeline-events)
+        perspectives-list (normalize-to-list perspectives)
+        
+        ;; Filter forecasts by date range
+        start-yyyymmdd (+ (* (.-year start) 10000)
+                          (* (.-month start) 100)
+                          (.-day start))
+        end-yyyymmdd (+ (* (.-year end) 10000)
+                        (* (.-month end) 100)
+                        (.-day end))
+        filtered-forecasts (filter
+                            (fn [f]
+                              (let [scheduled-date (.-scheduledDate f)]
+                                (and (>= scheduled-date start-yyyymmdd)
+                                     (<= scheduled-date end-yyyymmdd))))
+                            forecasts-list)
+        
+        ;; Aggregate data
+        perspective-stats (aggregate-by-perspective
+                           tasks-list
+                           filtered-forecasts
+                           events-list
+                           perspectives-list
+                           start-ts
+                           end-ts)
+        
+        ;; Overview
+        total-completed (count (filter
+                               (fn [task]
+                                 (and (:completed task)
+                                      (>= (:created-at task) start-ts)
+                                      (<= (:created-at task) end-ts)))
+                               (map task->map tasks-list)))
+        total-forecast-done (count (filter :done (map forecast->map filtered-forecasts)))
+        total-forecast-skipped (count (filter :skipped (map forecast->map filtered-forecasts)))
+        
+        ;; Action Review
+        actions (get-action-tasks tasks-list start-ts end-ts)]
+    
+    {:overview {:task-completed total-completed
+                :forecast-completed total-forecast-done
+                :forecast-skipped total-forecast-skipped
+                :postponed-count (count (:postponed actions))
+                :abandoned-count (count (:abandoned actions))
+                :perspective-distribution perspective-stats}
+     :perspectives (vec (vals perspective-stats))
+     :actions actions
+     :period {:type period-type
+              :start start-ts
+              :end end-ts}}))
+
+(defn aggregate-review-data!
+  "Aggregate Review data (deprecated - use aggregate-review-data instead)
+  
+  This function is kept for backward compatibility but should not be used.
+  Use aggregate-review-data with data from watch instead."
   [dao period-type & [selected-date]]
   (let [{:keys [start end]} (get-period-boundaries period-type selected-date)
-        start-ts (int (/ (.millisecondsSinceEpoch start) 1000))
-        end-ts (int (/ (.millisecondsSinceEpoch end) 1000))
+        start-ts (int (/ (.-millisecondsSinceEpoch start) 1000))
+        end-ts (int (/ (.-millisecondsSinceEpoch end) 1000))
         
         ;; Query all data
-        ;; Note: watch-all-tasks and watch-all return Stream, need to convert to Future first
-        tasks-promise (-> (task-db/watch-all-tasks dao)
-                          (.then (fn [tasks]
-                                   (if (seq? tasks)
-                                     (if (vector? tasks)
-                                       (first tasks)
-                                       tasks)
-                                     tasks))))
+        ;; Note: watch-all-tasks and watch-all return Stream, use .first to get Future
+        tasks-stream (task-db/watch-all-tasks dao)
+        tasks-promise (-> (.first tasks-stream)
+                          (.then (fn [tasks-list]
+                                   (if (seq? tasks-list)
+                                     (if (vector? tasks-list)
+                                       (first tasks-list)
+                                       tasks-list)
+                                     tasks-list))))
         
         ;; Forecast query: need to query forecasts for all dates in the period
         ;; Simplified: query all forecasts, then filter in memory
         ;; TODO: Can be optimized to database layer query in the future
-        start-yyyymmdd (+ (* (.year start) 10000)
-                          (* (.month start) 100)
-                          (.day start))
-        end-yyyymmdd (+ (* (.year end) 10000)
-                        (* (.month end) 100)
-                        (.day end))
-        forecasts-promise (-> (forecast-db/watch-by-date dao start-yyyymmdd)
-                              (.then (fn [forecasts]
-                                       (let [forecasts-list (if (seq? forecasts)
-                                                             (if (vector? forecasts)
-                                                               (first forecasts)
-                                                               forecasts)
-                                                             forecasts)]
+        start-yyyymmdd (+ (* (.-year start) 10000)
+                          (* (.-month start) 100)
+                          (.-day start))
+        end-yyyymmdd (+ (* (.-year end) 10000)
+                        (* (.-month end) 100)
+                        (.-day end))
+        forecasts-stream (forecast-db/watch-by-date dao start-yyyymmdd)
+        forecasts-promise (-> (.first forecasts-stream)
+                              (.then (fn [forecasts-list]
+                                       (let [list (if (seq? forecasts-list)
+                                                    (if (vector? forecasts-list)
+                                                      (first forecasts-list)
+                                                      forecasts-list)
+                                                    forecasts-list)]
                                          (filter
                                           (fn [f]
                                             (let [scheduled-date (.-scheduledDate f)]
                                               (and (>= scheduled-date start-yyyymmdd)
                                                    (<= scheduled-date end-yyyymmdd))))
-                                          forecasts-list)))))
+                                          list)))))
         
         timeline-promise (timeline-db/query-range dao start-ts end-ts)
-        perspectives-promise (-> (perspective-db/watch-all dao)
-                                  (.then (fn [perspectives-stream]
-                                           ;; Stream needs to be converted to List
-                                           (let [completer (async/Completer.)]
-                                            (.listen perspectives-stream
-                                                     (fn [perspectives-list]
-                                                       (if (not (.isCompleted completer))
-                                                         (.complete completer
-                                                                    (if (seq? perspectives-list)
-                                                                      (if (vector? perspectives-list)
-                                                                        (first perspectives-list)
-                                                                        perspectives-list)
-                                                                      perspectives-list))
-                                                         nil))
-                                                     :onError (fn [error]
-                                                               (.completeError completer error)))
-                                             (.future completer)))))]
+        perspectives-stream (perspective-db/watch-all dao)
+        perspectives-promise (-> (.first perspectives-stream)
+                                 (.then (fn [perspectives-list]
+                                          (if (seq? perspectives-list)
+                                            (if (vector? perspectives-list)
+                                              (first perspectives-list)
+                                              perspectives-list)
+                                            perspectives-list))))]
     
     (-> (dart-core/Future.wait [tasks-promise
                                  forecasts-promise

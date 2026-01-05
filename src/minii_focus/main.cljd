@@ -1,6 +1,7 @@
 (ns minii-focus.main
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    ["dart:core" :as dart-core]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
@@ -15,8 +16,13 @@
    [minii-focus.screens.project :as project]
    [minii-focus.screens.perspective :as perspective]
    [minii-focus.screens.today :as today]
+   [minii-focus.screens.timeline :as timeline]
+   [minii-focus.screens.settings :as settings]
+   [minii-focus.screens.review :as review]
+   [minii-focus.screens.forecast :as forecast]
    [minii-focus.widgets.quick-entry-dialog :as qe-dialog]
-   [minii-focus.core.state.ui-state :as ui-state]))
+   [minii-focus.core.state.ui-state :as ui-state]
+   [minii-focus.core.components.core :as comp]))
 
 ;; Initialize application
 (defn init-app! []
@@ -88,12 +94,72 @@
                          .floatingActionButton (m/FloatingActionButton
                                                 .onPressed (fn [] (qe-dialog/show-quick-entry-dialog ctx))
                                                 .child (m/Icon m/Icons.add))
+                         .drawer (m/Drawer
+                                  .child
+                                  (m/Builder
+                                   .builder (fn [drawer-ctx]
+                                             (m/SafeArea 
+                                              .child
+                                             (m/SingleChildScrollView
+                                              .scrollDirection m/Axis.horizontal
+                                              .child
+                                              (m/Row
+                                               .children (vec (concat
+                                                               [(comp/mongol-text-block {:text "Mongol Focus" :style (m/TextStyle .fontSize 24 .fontWeight m/FontWeight.bold)})]
+                                                               [(mgl/MongolListTile
+                                                                 .leading (m/Icon m/Icons.timeline)
+                                                                 .title (comp/mongol-text-block {:text "Timeline"})
+                                                                 .onTap (fn []
+                                                                          (-> (m/Navigator.of drawer-ctx) (.pop))
+                                                                          (let [navigator (m/Navigator.of drawer-ctx)
+                                                                                timeline-page (m/MaterialPageRoute
+                                                                                               .builder (fn [_build-ctx]
+                                                                                                         (timeline/timeline-screen nil)))]
+                                                                            (-> navigator (.push timeline-page)))
+                                                                          nil))
+                                                                (mgl/MongolListTile
+                                                                 .leading (m/Icon m/Icons.calendar_view_week)
+                                                                 .title (comp/mongol-text-block {:text "Forecast"})
+                                                                 .onTap (fn []
+                                                                          (-> (m/Navigator.of drawer-ctx) (.pop))
+                                                                          (let [navigator (m/Navigator.of drawer-ctx)
+                                                                                forecast-page (m/MaterialPageRoute
+                                                                                               .builder (fn [_build-ctx]
+                                                                                                         (forecast/forecast-screen nil)))]
+                                                                            (-> navigator (.push forecast-page)))
+                                                                          nil))
+                                                                (mgl/MongolListTile
+                                                                 .leading (m/Icon m/Icons.reviews)
+                                                                 .title (comp/mongol-text-block {:text "Review"})
+                                                                 .onTap (fn []
+                                                                          (-> (m/Navigator.of drawer-ctx) (.pop))
+                                                                          (let [navigator (m/Navigator.of drawer-ctx)
+                                                                                review-page (m/MaterialPageRoute
+                                                                                             .builder (fn [_build-ctx]
+                                                                                                       (review/review-screen nil)))]
+                                                                            (-> navigator (.push review-page)))
+                                                                          nil))
+                                                                (mgl/MongolListTile
+                                                                 .leading (m/Icon m/Icons.settings)
+                                                                 .title (comp/mongol-text-block {:text "Settings"})
+                                                                 .onTap (fn []
+                                                                          (-> (m/Navigator.of drawer-ctx) (.pop))
+                                                                          (let [navigator (m/Navigator.of drawer-ctx)
+                                                                                settings-page (m/MaterialPageRoute
+                                                                                               .builder (fn [_build-ctx]
+                                                                                                         (settings/settings-screen nil)))]
+                                                                            (-> navigator (.push settings-page)))
+                                                                          nil))
+                                                                (m/VerticalDivider)
+                                                                (mgl/MongolListTile
+                                                                 .leading (m/Icon m/Icons.info)
+                                                                 .title (comp/mongol-text-block {:text "About"}))]))))))))
                          .bottomNavigationBar (m/BottomNavigationBar
-                                              .type m/BottomNavigationBarType.fixed
-                                              .currentIndex (min @current-index (dec (count bottom-items)))
-                                              .onTap set-page!
-                                              .items (into []
-                                                          (for [{:keys [title icon]} bottom-items]
-                                                            (m/BottomNavigationBarItem
-                                                             .icon (m/Icon icon)
-                                                             .label title))))))))))))
+                                               .type m/BottomNavigationBarType.fixed
+                                               .currentIndex (min @current-index (dec (count bottom-items)))
+                                               .onTap set-page!
+                                               .items (into []
+                                                            (for [{:keys [title icon]} bottom-items]
+                                                              (m/BottomNavigationBarItem
+                                                               .icon (m/Icon icon)
+                                                               .label title))))))))))))
