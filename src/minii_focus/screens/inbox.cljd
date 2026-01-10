@@ -425,19 +425,9 @@
            .child (if loading
                     (widgets/loading-indicator)
                     (m/Row
-                     .children (vec (concat [(search-bar search-text
-                                                         (fn [text]
-                                                           (ui-state/update-inbox-state! assoc :search-text text)))
-                                              (filter-chips {:all-tags all-tags
-                                                             :selected-tags selected-tags
-                                                             :on-tag-toggle (fn [tag]
-                                                                              (ui-state/update-inbox-state!
-                                                                               update :selected-tags
-                                                                               (fn [tags] (if (contains? tags tag) (disj tags tag) (conj tags tag)))))
-                                                             :projects projects
-                                                             :selected-project-id selected-project-id
-                                                             :on-project-select (fn [pid]
-                                                                                  (ui-state/update-inbox-state! assoc :selected-project-id pid))})
+                     .children (vec (concat [(m/Container
+                                              .key (m/ValueKey "quick-input-button")
+                                              .child (quick-input-button ctx))
                                               (m/Expanded
                                                .child (if (empty? filtered-tasks)
                                                        (comp/mongol-text-block {:text "No tasks" :style (m/TextStyle .fontSize 12 .color (tokens/color :text-weak))})
@@ -458,9 +448,7 @@
                                                                                 updates (app-db/TasksCompanion
                                                                                         :createdAt (bridge/dart-value-int new-created-at))]
                                                                             (task/update-task! dao (.-id t) updates))))))
-                                                        .children (vec (concat (cond-> [(m/Container
-                                                                                         .key (m/ValueKey "quick-input-button")
-                                                                                         .child (quick-input-button ctx))]
+                                                        .children (vec (concat (cond-> []
                                                                                   (seq selected-task-ids) (conj (m/Container
                                                                                                                 .key (m/ValueKey "batch-action-bar")
                                                                                                                 .child (batch-action-bar {:ctx ctx

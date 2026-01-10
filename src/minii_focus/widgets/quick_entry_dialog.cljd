@@ -42,9 +42,10 @@
         dao (app-state/get-dao)]
     (f/widget
      :context ctx
-     :watch [history-items (future (inbox-db/watch-all-new dao))
-             tasks (future (-> (task-db/watch-all-tasks dao)
-                               (.then (fn [ts] (if (seq? ts) (if (vector? ts) (first ts) ts) ts)))))]
+     :managed [tasks (-> (task-db/watch-all-tasks dao)
+                         (.then (fn [ts] (if (seq? ts) (if (vector? ts) (first ts) ts) ts))))
+               :dispose false]
+     :watch [history-items (inbox-db/watch-all-new dao)]
      :let [size (.-size (m/MediaQuery.of ctx))
            h (.-height size)
            w (.-width size)

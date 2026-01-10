@@ -346,9 +346,6 @@
              events (timeline/watch-range dao start-ts (+ start-ts 86399))]
      :let [effective-stats (if (seq events) (ui-state/calculate-today-stats events) today-stats)]
      (m/Scaffold
-      .appBar (m/AppBar
-               .backgroundColor (tokens/color :bg-focus))
-      .backgroundColor (tokens/color :bg-focus)
       .body (m/Row
              .children
              (filterv some?
