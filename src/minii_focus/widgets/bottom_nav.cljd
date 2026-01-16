@@ -1,0 +1,51 @@
+(ns minii-focus.widgets.bottom-nav
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter/services.dart" :as s]
+            [minii-focus.state.store :refer [app-ui-state]]))
+
+(defn main-navigation-bar []
+  (f/widget
+   :watch [{:keys [selected-nav-id]} app-ui-state]
+   :get {{{bg .-surfaceContainer
+           indicator .-secondaryContainer
+           active-icon .-onSecondaryContainer} .-colorScheme} m/Theme}
+   
+   (m/NavigationBar.
+    .backgroundColor bg
+    .indicatorColor indicator
+    ;; 更新索引映射逻辑
+    .selectedIndex (case selected-nav-id 
+                     "today" 0 
+                     "logbook" 1 
+                     "settings" 2 
+                     0)
+    
+    .onDestinationSelected 
+    (fn [i]
+      (s/HapticFeedback.mediumImpact)
+      (swap! app-ui-state assoc :selected-nav-id 
+             (case (int i)
+               0 "today"
+               1 "logbook"
+               2 "settings"
+               "today")))
+    
+    .destinations 
+    [(m/NavigationDestination.
+      .icon (m/Icon. m/Icons.wb_sunny_outlined)
+      .selectedIcon (m/Icon. m/Icons.wb_sunny .color active-icon)
+      .label "Өнөөдөр"
+      )
+      
+     (m/NavigationDestination.
+      .icon (m/Icon. m/Icons.auto_stories_outlined)
+      .selectedIcon (m/Icon. m/Icons.auto_stories .color active-icon)
+      .label "Түүх"
+      )
+     
+     (m/NavigationDestination.
+      .icon (m/Icon. m/Icons.settings_outlined)
+      .selectedIcon (m/Icon. m/Icons.settings .color active-icon)
+      .label "Тохиргоо"
+      )]))) ;; 设置 (Settings)

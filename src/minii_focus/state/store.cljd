@@ -1,0 +1,14 @@
+(ns minii-focus.state.store)
+
+(defonce app-ui-state
+  (atom {:selected-nav-id "today"
+         :is-sidebar-open false
+         :selected-task nil
+         ;; 新增设置相关的状态
+         :settings {:dark-mode? false
+                    :notifications? true
+                    :language "Монгол"}}))
+
+;; 定义一个方便更新设置的工具函数
+(defn update-setting! [key value]
+  (swap! app-ui-state assoc-in [:settings key] value))

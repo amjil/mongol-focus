@@ -1,0 +1,95 @@
+(ns minii-focus.widgets.input-dialog
+  (:require 
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]
+   [virtual-keyboard.keyboard :as keyboard]
+   [components.tokens :as tokens]
+   [components.dialog :as dialog]
+   [components.text :as text]
+   [components.text-field :as text-field]
+   [minii-focus.widgets.action-toolbar :as action-toolbar]))
+
+(defn generic-input-dialog
+  [{:keys [title initial-text initial-notes on-submit]}]
+  ;; 1. 将状态升级为 Map，同时保存标题和备注
+  (let [data-atom (atom {:title initial-text :notes initial-notes})]
+    (f/widget
+      ;; 2. 管理两个 Controller
+      :managed [title-ctrl (m/TextEditingController .text initial-text)
+                notes-ctrl (m/TextEditingController .text initial-notes)]
+      :get {{{:flds [surfaceVariant onSurface outlineVariant]} .-colorScheme
+             {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
+      (dialog/vertical-custom-dialog
+        {:width-factor 1
+         :height-factor 0.95
+         :inset-padding m/EdgeInsets.zero
+         :child 
+         (m/Column
+          .children
+          [;; --- 上半部分：主体编辑器 ---
+           (m/Expanded
+            .child
+            (m/Stack
+             .children
+             [(m/Row
+                .crossAxisAlignment m/CrossAxisAlignment.stretch
+                .children
+                [;; 左侧装饰/标题区域
+                 (m/Container
+                  .alignment m/Alignment.topCenter
+                  .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+                  .decoration (m/BoxDecoration 
+                                .border (m/Border .right (m/BorderSide .color surfaceVariant .width 1.5)))
+                  .child (text/text-block 
+                           {:text title
+                            :style (.copyWith titleLarge 
+                                     .fontWeight m/FontWeight.bold
+                                     .color onSurface)}))
+                 
+                 ;; 右侧输入区域：标题 + 备注
+                 (m/Expanded
+                  .child 
+                  (m/Padding
+                   .padding (m/EdgeInsets.all (tokens/space :l))
+                   .child (m/Row ;; 使用 Row 垂直排列两个输入框
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [;; --- 标题输入框 ---
+                     (text-field/text-field 
+                      {:controller title-ctrl
+                       :autofocus true
+                       :max-lines 1 ;; 标题通常只有一行
+                       :on-changed #(swap! data-atom assoc :title %)})
+                     
+                     ;; 视觉分割线
+                     (m/Padding 
+                      .padding (m/EdgeInsets.symmetric .vertical (tokens/space :m))
+                      .child (m/VerticalDivider .color outlineVariant .thickness 0.5))
+                     
+                     ;; --- 备注输入框 ---
+                     (m/Expanded ;; 备注占用剩余空间
+                      .child
+                      (text-field/text-field 
+                       {:controller notes-ctrl
+                        :hint-text "Add notes here..." ;; 提示词
+                        :max-lines nil ;; 支持无限行
+                        :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
+                        :on-changed #(swap! data-atom assoc :notes %)}))])))])
+              
+              ;; --- Things 风格浮动工具栏 ---
+              (f/widget
+                :watch [data data-atom]
+                (action-toolbar/floating-action-toolbar 
+                  {:is-active (not (empty? (:title data)))
+                   :on-paste (fn [] ;; 粘贴逻辑
+                               )
+                   ;; 提交整个 Map
+                   :on-submit #(on-submit @data-atom)}))]))
+
+           ;; --- 下半部分：键盘区域 ---
+           (m/Container
+            .decoration (m/BoxDecoration 
+                          .border (m/Border .top (m/BorderSide .color surfaceVariant .width 0.5)))
+            .child (keyboard/keyboard {}))])}))))
+
+

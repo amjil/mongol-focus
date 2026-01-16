@@ -1,0 +1,164 @@
+(ns minii-focus.widgets.main-list
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter/services.dart" :as s]
+            ["package:mongol/mongol.dart" :as mgl]
+            ["dart:async" :as async]
+            [minii-focus.logic.db :as db]
+            [minii-focus.logic.task-actions :as actions]
+            [minii-focus.pages.task-detail :as task-detail-page]
+            [minii-focus.state.store :refer [app-ui-state]]
+            [minii-focus.widgets.task-card :as task-card]
+            [components.tokens :as tokens]))
+
+(defn- title-entry-animation
+  "为大背景标题提供从左侧滑入并淡出的动画"
+  [{:keys [child]}]
+  (f/widget
+   (m/TweenAnimationBuilder.
+    .tween (m/Tween. .begin 0.0 .end 1.0)
+    .duration (dart:core/Duration. .milliseconds 800) ;; 动画时长比卡片长
+    .curve m/Curves.easeOutQuad ;; 更平缓的曲线
+    .builder (fn [ctx value child]
+               (m/Opacity.
+                .opacity value
+                .child (m/Transform.translate
+                        ;; 从左侧滑入，偏移量较大
+                        .offset (m/Offset. (* -50.0 (- 1.0 value)) 0.0)
+                        .child child))))
+   .child child))
+
+(defn- entry-animation
+  "为组件提供淡入和位移效果，并使用 Future 实现真正的延迟加载"
+  [{:keys [child i]}]
+  (f/widget
+   :let [delay-ms (* i 80) ;; 稍微缩短一点延迟，让流动感更顺滑
+         duration-ms 600]
+   ;; 1. 使用 FutureBuilder 来实现等待效果
+   (m/FutureBuilder.
+    .future (async/Future.delayed (dart:core/Duration. .milliseconds delay-ms) (fn [] true))
+    .builder (fn [_ctx snapshot]
+               ;; 2. 只有当 Future 完成后（hasData），才展示动画
+               (if (.-hasData snapshot)
+                 (m/TweenAnimationBuilder.
+                  .tween (m/Tween. .begin 0.0 .end 1.0)
+                  .duration (dart:core/Duration. .milliseconds duration-ms)
+                  .curve m/Curves.easeOutCubic 
+                  .child child
+                  .builder (fn [_ctx value child]
+                             (m/Opacity.
+                              .opacity value
+                              .child (m/Transform.translate
+                                      .offset (m/Offset. 0.0 (* 25.0 (- 1.0 value)))
+                                      .child child))))
+                 ;; 3. 在等待延迟期间，返回一个透明的占位符，保持布局占位
+                 (m/Opacity. .opacity 0.0 .child child))))))
+
+;; --- 1. 空状态视图 (垂直蒙古文) ---
+
+(defn- empty-state-view [title]
+  (f/widget
+   :context ctx
+   :get {{{primary .-primary} .-colorScheme
+          {titleLarge .-titleLarge} .-textTheme} m/Theme}
+   (m/Center.
+    .child
+    (m/Stack. ;; 使用 Stack 来叠加装饰层和文字层
+     .alignment m/Alignment.center
+     .children
+     [;; 1. 后层：巨大的装饰性图标 (水印感)
+      (m/Opacity.
+       .opacity 0.03
+       .child (m/Icon. m/Icons.filter_vintage
+                       .size 240.0))
+
+      ;; 2. 前层：垂直排版的文字和引导图标
+      (m/Column.
+       .mainAxisSize m/MainAxisSize.min
+       .children
+       [;; 引导图标
+        (m/Icon. m/Icons.assignment_turned_in_outlined
+                 .color (.withOpacity primary 0.4)
+                 .size 48.0)
+
+        (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :l)))
+
+        ;; 垂直标题
+        (mgl/MongolText. (str title "-т ажил алга")
+                         .style titleLarge
+                         .textAlign mgl/MongolTextAlign.center)
+
+        (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
+
+        ;; 引导文案 (浅色)
+        (mgl/MongolText. "Шинэ ажил нэмэх бол доорх товчийг дарна уу" ;; "点击下方按钮添加新任务"
+                         .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])]))))
+;; --- 2. 任务流主视图 (横向卷轴) ---
+
+(defn task-stream-view []
+  (f/widget
+   :get {{{primary .-primary} .-colorScheme} m/Theme}
+   :watch [{:keys [selected-nav-id]} app-ui-state
+           tasks (stream
+                  (map (fn [tasks]
+                         (map (fn [task] (.-data task)) tasks)))
+                  (map (fn [[_er _st]] []))
+                  :as-values (case selected-nav-id
+                               "today"   (db/watch-active-tasks)
+                               "logbook" (db/watch-logbook)
+                               (db/watch-active-tasks)))]
+   :let [display-title (case selected-nav-id
+                         "today"   "Өнөөдөр"
+                         "logbook" "Түүх"
+                         "Ажил")]
+
+   (m/AnimatedSwitcher.
+    .duration (dart:core/Duration. .milliseconds 400)
+    .child
+    (if (empty? tasks)
+      ;; 1. 空状态：手动包裹 Container 以添加唯一的 Key
+      (m/Container.
+       .key (m/ValueKey. (str "empty-" selected-nav-id))
+       .child (empty-state-view display-title))
+
+      ;; 2. 列表状态：ListView 已经自带了 Key
+      (m/ListView.builder
+       .key (m/ValueKey. (str "list-" selected-nav-id))
+       .scrollDirection m/Axis.horizontal
+       .padding (m/EdgeInsets.symmetric .horizontal 30.0)
+       .itemCount (inc (count tasks))
+       .itemBuilder
+       (fn [ctx i]
+         (if (zero? i)
+           ;; 大标题也可以加动画，i=0
+           (title-entry-animation
+            {:child (m/Container.
+                     .alignment m/Alignment.topLeft
+                     .child (mgl/MongolText. display-title
+                                             .style (m/TextStyle
+                                                     .fontSize 36.0
+                                                     .fontWeight m/FontWeight.w900
+                                                     .color primary)))})
+
+
+           (let [task (nth tasks (dec i))]
+             (entry-animation
+              {:i i ;; 这里的索引 i 会让卡片依次滑入
+               :child
+               (m/Padding.
+                .padding (m/EdgeInsets.only .right 12.0 .top 20.0 .bottom 20.0)
+                .child
+                (task-card/task-item
+                 {:id         (get task "id")
+                  :title      (get task "title")
+                  :notes      (get task "notes")
+                  :is-done?   (if (or (zero? (get task "is_done")) (nil? (get task "is_done")))
+                                false true)
+                  :on-tap     (fn []
+                                ;; 1. 将当前任务对象存入全局状态
+                                (swap! app-ui-state assoc :selected-task task)
+                                ;; 2. 跳转到详情页
+                                (m/Navigator.push
+                                 ctx
+                                 (m/MaterialPageRoute.
+                                  .builder (fn [_] (task-detail-page/task-detail-page)))))}))})))))))))

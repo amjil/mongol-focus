@@ -1,6 +1,0 @@
-(ns minii-focus.core.state.router)
-
-(defonce router-state
-  (atom {:route :inbox
-         :params nil}))
-

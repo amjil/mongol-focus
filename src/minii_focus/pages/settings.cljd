@@ -1,0 +1,54 @@
+(ns minii-focus.pages.settings
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]
+   [minii-focus.state.store :as store] ;; 引入你的 store
+   [components.setting :as sett]))
+
+(defn settings-page []
+  (f/widget
+    ;; 监听全局状态，state 变量将包含 atom 的当前值
+    :watch [state store/app-ui-state]
+    :get {{{:flds [surface]} .-colorScheme} m/Theme}
+    (m/Scaffold
+      .backgroundColor surface
+      .body
+      (m/SingleChildScrollView
+        .scrollDirection m.Axis/horizontal
+        .child
+        (m/Row
+          .crossAxisAlignment m.CrossAxisAlignment/start
+          .children
+          [;; --- 分组 1：通用设置 ---
+           (sett/settings-section
+             "Ерөнхий" ; General
+             [{:title "Харанхуй горим"
+               :leading m.Icons/dark_mode
+               :value (get-in state [:settings :dark-mode?])
+               :on-changed #(store/update-setting! :dark-mode? %)}
+              
+              {:title "Мэдэгдэл"
+               :leading m.Icons/notifications_active
+               :value (get-in state [:settings :notifications?])
+               :on-changed #(store/update-setting! :notifications? %)}])
+
+           ;; --- 分组 2：界面偏好 ---
+           (sett/settings-section
+             "Харагдац" ; Appearance
+             [{:title "Sidebar нээх"
+               :leading m.Icons/menu_open
+               ;; 复用你已有的 sidebar 状态
+               :value (:is-sidebar-open state)
+               :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
+              
+              {:title "Хэл"
+               :subtitle (get-in state [:settings :language])
+               :leading m.Icons/language
+               :on-tap #(store/update-setting! :language "English")}])
+
+           ;; --- 分组 3：应用信息 ---
+           (sett/settings-section
+             "Апп"
+             [{:title "Хувилбар"
+               :subtitle "1.0.0"
+               :leading m.Icons/info_outline}])])))))

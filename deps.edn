@@ -4,7 +4,15 @@
          :sha "0375b3d0e0dfcd5ca5c97f2148124cb7e0d0a7d3"}
         amjil/mongol-virtual-keyboard
         {:git/url "https://github.com/amjil/mongol-virtual-keyboard.git"
-         :sha "1f3e40d9b1d7be45820e0b1b1bc6a5322a79e3f9"}
+         :sha "1f3e40d9b1d7be45820e0b1b1bc6a5322a79e3f9"} 
+        amjil/mongol-date-picker
+        {:git/url "https://github.com/amjil/mongol-date-picker.git"
+         :sha "dbbb93cc8a558dbd599bce42f110e8a662b8612a"}
+        amjil/mgl-components
+        {;:git/url "https://github.com/amjil/mgl-components.git"
+         ;:sha "e9b479caad37767e0c6d759ae417cc6589e68d4c"
+         :local/root "../mgl-components"
+         }
         }
  :aliases {:cljd {:main-opts ["-m" "cljd.build"]}}
  :cljd/opts {:kind :flutter

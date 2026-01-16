@@ -1,0 +1,73 @@
+(ns minii-focus.logic.task
+  (:require [clojure.string :as str]))
+
+;; --- 纯函数：不依赖任何 UI 框架 ---
+
+(defn mark-done [items id]
+  (mapv (fn [item]
+          (if (and (= (:type item) :task) (= (:id item) id))
+            (update item :is-done? not)
+            item))
+        items))
+
+(defn delete-it [items id]
+  (filterv (fn [item]
+             (or (not= (:type item) :task)
+                 (not= (:id item) id)))
+           items))
+
+(defn reorder-done-to-bottom [items id]
+  (let [task (first (filter #(= (:id %) id) items))
+        others (filterv #(not= (:id %) id) items)]
+    (if task
+      (conj others task)
+      items)))
+
+(defn add-task [items text]
+  (let [new-task {:id (.toString (dart:core/DateTime.now))
+                  :type :task
+                  :text text
+                  :is-done? false}]
+    ;; 插入到搜索栏（假设是第一个）之后
+    (vec (cons (first items) 
+               (cons new-task (rest items))))))
+
+
+(defn- has-active-tasks?
+  "从当前位置开始往后找，直到遇到下一个 header 之前，是否有未完成的任务"
+  [items start-idx]
+  (->> (subvec items (inc start-idx)) ;; 获取当前元素之后的所有元素
+       (take-while #(not= (:type %) :header)) ;; 只看属于本组的任务
+       (some #(and (= (:type %) :task) (not (:is-done? %)))))) ;; 是否有活跃任务
+
+(defn get-visible-items
+  "根据业务规则过滤掉空的分组标题"
+  [items]
+  (if (empty? items)
+    []
+    (reduce-kv
+     (fn [acc idx item]
+       (cond
+         ;; 1. 如果是搜索框，始终保留
+         (= (:type item) :search)
+         (conj acc item)
+
+         ;; 2. 如果是分组标题，检查其后是否有未完成任务
+         (= (:type item) :header)
+         (if (has-active-tasks? items idx)
+           (conj acc item)
+           acc) ;; 该组全是已完成任务，隐藏标题
+
+         ;; 3. 如果是任务，根据你的需求决定：
+         ;; 方案 A：隐藏已完成任务（像 Things 的待办视图）
+         ;; 方案 B：始终显示（已完成的会排到最后）
+         (= (:type item) :task)
+         (if-not (:is-done? item)
+           (conj acc item)
+           acc) ;; 这里暂定隐藏已完成任务，让界面保持清爽
+
+         :else acc))
+     []
+     items)))
+
+

@@ -1,0 +1,36 @@
+(ns minii-focus.widgets.sidebar
+  (:require [minii-focus.state.store :refer [app-ui-state]]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl] 
+            [cljd.flutter :as f]))
+
+(defn nav-item [ctx {:keys [id title icon]}]
+  (f/widget
+   ;; 监听全局 UI 状态
+   :watch [{:keys [selected-nav-id]} app-ui-state]
+   :let [is-selected (= selected-nav-id id)]
+   
+   (mgl/MongolListTile.
+    .selected is-selected
+    ;; 蒙古文通常需要垂直展示，但 ListTile 默认是横向的
+    ;; 这里我们利用选中的颜色变化来给用户反馈
+    .leading (m/Icon icon .color (if is-selected m/Colors.blue m/Colors.grey))
+    .title (mgl/MongolText title
+                           .style (m/TextStyle
+                                   .fontWeight (if is-selected m/Bold m/Normal)
+                                   .color (if is-selected m/Colors.blue m/Colors.black)))
+    .onTap (fn []
+             ;; 1. 更新全局状态，这会触发主页面的数据库流切换
+             (swap! app-ui-state assoc :selected-nav-id id)
+
+             ;; 2. 如果是在 Drawer 中，点击后关闭侧边栏
+             (let [scaffold-state (m/Scaffold.of ctx)]
+               (when (.hasDrawer scaffold-state)
+                 (.closeDrawer scaffold-state)))))))
+
+(defn sidebar-content [ctx]
+  (m/ListView
+   .scrollDirection m/Axis.vertical
+   .children
+   [(nav-item ctx {:id "today"   :title "ᠥᠨᠥᠳᠥᠷ" :icon m/Icons.today})
+    (nav-item ctx {:id "logbook" :title "ᠲᠡᠮᠳᠡᠭᠯᠡᠯ" :icon m/Icons.archive})]))

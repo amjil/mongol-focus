@@ -1,0 +1,194 @@
+(ns minii-focus.logic.db
+  (:require ["package:cljd_mongol_focus/database.dart" :as drift]
+            ["package:drift/drift.dart" :as d]
+            ["dart:core" :as dc]
+            ["dart:async" :as async]))
+
+;; =============================================================================
+;; 1. 数据库实例管理
+;; =============================================================================
+
+(defonce db (atom nil))
+
+(defn initialize-database!
+  "初始化数据库。直接在 f/run 的 :init 中 await 此函数。"
+  []
+  (let [instance (await (drift/initDriftDatabase))]
+    (reset! db instance)
+    (dart:core/print "Minii Focus SQLite 数据库连接成功 (Reactive Mode)")))
+
+;; =============================================================================
+;; 2. 响应式查询 (Returns Dart Streams)
+;; =============================================================================
+
+(defn watch-active-tasks
+  "监听活跃任务流。
+   逻辑：未完成 (is_done = false)，按用户排序 (display_order) 升序排列。"
+  []
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT * FROM tasks WHERE is_done = false ORDER BY display_order ASC, created_at DESC"))
+     
+      
+    (async/Stream.empty)))
+
+
+(defn watch-tasks-by-category
+  "按分类监听任务流。"
+  [cat-id]
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT * FROM tasks WHERE category_id = ? AND is_done = false ORDER BY display_order ASC"
+      .variables [(d/Variable cat-id)]))
+    (async/Stream.empty)))
+
+(defn watch-logbook
+  "监听日志本流。
+   逻辑：已完成 (is_done = true)，按完成时间倒序排列。"
+  []
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT * FROM tasks WHERE is_done = true ORDER BY completed_at DESC"))
+    (async/Stream.empty)))
+
+(defn watch-all-categories
+  "监听侧边栏的所有分类清单。"
+  []
+  (if-let [^drift/AppDatabase database @db]
+    (.watch (.select database (.-categories database)))
+    (async/Stream.empty)))
+
+;; =============================================================================
+;; 3. 写入操作 (CRUD)
+;; =============================================================================
+
+(defn add-task!
+  [{:keys [title notes category-id priority] :or {priority 0}}]
+  (if-let [^drift/AppDatabase database @db]
+    (let [companion (drift/TasksCompanion.insert
+                      :title title
+                      :notes (if notes (d/Value ^String notes) (d/Value.absent))
+                      ;; 关键点：为 absent 结果也提供类型参考，或者直接对结果进行强转
+                      :categoryId (if category-id 
+                                    (d/Value ^int category-id) 
+                                    (d/Value nil))
+                      :priority (d/Value ^int priority)
+                      :isDone (d/Value false)
+                      :displayOrder (d/Value 0.0))]
+      (.insert (.into database (.-tasks database)) companion))
+    (throw (ex-info "数据库未初始化" {}))))
+
+(defn toggle-task-status!
+  "切换任务状态。
+   如果 is-done 为 true，则自动记录完成时间 (completed_at)。"
+  [id is-done]
+  (if-let [^drift/AppDatabase database @db]
+    (let [now (dart:core/DateTime.now)
+          query (doto (.update database (.-tasks database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))]
+      (.write query
+              (drift/TasksCompanion.
+               .isDone (d/Value is-done)
+               .completedAt (if is-done (d/Value now) (d/Value nil)))))
+    (throw (ex-info "数据库未初始化" {}))))
+
+(defn string-value [v]
+  (if (nil? v)
+    (d/Value.absent)
+    (d/Value. ^String v)))
+
+(def task-field->companion
+  {:due-date
+   (fn [v]
+     (drift/TasksCompanion.
+      .dueDate (d/Value v)))
+
+   :priority
+   (fn [v]
+     (drift/TasksCompanion.
+      .priority (d/Value v)))
+
+   :title-and-notes
+   (fn [{:keys [title notes]}]
+     (dart:core/print (str "title:" title))
+     (dart:core/print (str "notes:" notes))
+     (let [title (string-value title)
+           notes (string-value notes)]
+       (drift/TasksCompanion.
+        .title title
+        .notes notes)))
+
+   :is-done
+   (fn [v]
+     (drift/TasksCompanion.
+      .isDone (d/Value v)))})
+
+(defn update-task!
+  [id field value]
+  (if-let [build (get task-field->companion field)]
+    (if-let [^drift/AppDatabase db-inst @db]
+      (let [query (doto (.update db-inst (.-tasks db-inst))
+                    (.where (fn [tbl]
+                              (.equals (.-id tbl) id))))
+            companion (build value)]
+        (.write query companion))
+      (throw (ex-info "数据库未初始化" {})))
+    (throw (ex-info "Unknown task field" {:field field}))))
+
+(defn delete-task!
+  "永久删除任务。"
+  [id]
+  (if-let [^drift/AppDatabase database @db]
+    (.go
+     (doto (.delete database (.-tasks database))
+       (.where (fn [tbl] (.equals (.-id tbl) id)))))
+    (throw (ex-info "数据库未初始化" {}))))
+
+(defn update-task-order!
+  "更新任务排序权重 (用于拖拽重排)。"
+  [id new-order]
+  (if-let [^drift/AppDatabase database @db]
+    (let [query (doto (.update database (.-tasks database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))]
+      (.write query (drift/TasksCompanion. .displayOrder (d/Value new-order))))
+    (throw (ex-info "数据库未初始化" {}))))
+
+;; =============================================================================
+;; 4. 分类操作 (Category)
+;; =============================================================================
+
+(defn add-category!
+  "新建清单分类。"
+  [name icon-code]
+  (if-let [^drift/AppDatabase database @db]
+    (let [companion (drift/CategoriesCompanion.insert
+                     .name name
+                     .iconCode (if icon-code (d/Value icon-code) (d/Value.absent)))]
+      (.insert (.into database (.-categories database)) companion))
+    (throw (ex-info "数据库未初始化" {}))))
+
+
+(defn delete-category! [id]
+  (if-let [^drift/AppDatabase db-inst @db]
+    (.go
+     (doto (.delete db-inst (.-categories db-inst))
+       (.where (fn [tbl] (.equals (.-id tbl) (d/Variable. id))))))
+    (throw (ex-info "数据库未初始化" {}))))
+
+
+(defn watch-categories
+  "使用 SQL 监听所有分类清单。
+   逻辑：按 id 排序（或你可以改为 display_order）。"
+  []
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT * FROM categories ORDER BY id ASC"))
+    (async/Stream.empty)))

@@ -1,0 +1,47 @@
+(ns minii-focus.widgets.fab
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:flutter/services.dart" :as s]
+            ["dart:core" :as dc]))
+
+(defn task-fab
+  "极致扁平解构版 FAB"
+  [{:keys [on-pressed scroll-controller]}]
+  (let [is-scrolled? (atom false)]
+    (f/widget
+     ;; 1. 层层递进式解构：Theme -> ColorScheme -> 具体颜色
+     :get {{{bg .-primaryContainer
+             fg .-onPrimaryContainer} .-colorScheme} m/Theme}
+     :watch [scrolled? is-scrolled?]
+     ;; 2. 响应式监听滚动
+     :bg-watcher ([^m/ScrollPosition {offset .-pixels} scroll-controller]
+                  (let [currently-scrolled? (> offset 50)]
+                    (when (not= @is-scrolled? currently-scrolled?)
+                      (reset! is-scrolled? currently-scrolled?))))
+
+     (m/AnimatedScale.
+      .scale (if scrolled? 0.0 1.0)
+      .duration (dc/Duration. .milliseconds 250)
+      .child
+      (m/TweenAnimationBuilder.
+       .tween (m/Tween. .begin 0.0 .end 1.0)
+       .duration (dc/Duration. .milliseconds 1000)
+       .curve m/Curves.elasticOut
+       .builder (fn [_ value child]
+                  (m/Transform.
+                   .alignment m/Alignment.center
+                   .transform (let [m4 (m/Matrix4.identity)]
+                                (.setEntry m4 3 3 (max 0.01 value))
+                                (.rotateZ m4 (* 3.14159 2 (- 1.0 value)))
+                                m4)
+                   .child child))
+       .child
+       (m/FloatingActionButton.
+        .onPressed (fn []
+                     (s/HapticFeedback.heavyImpact)
+                     (on-pressed))
+        ;; 3. 直接使用解构出来的 bg 和 fg 变量
+        .backgroundColor bg
+        .foregroundColor fg
+        .elevation 4.0
+        .child (m/Icon. m/Icons.add_rounded .size 32.0)))))))

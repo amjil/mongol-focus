@@ -1,0 +1,100 @@
+(ns minii-focus.pages.task-detail
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [minii-focus.logic.db :as db]
+            [minii-focus.state.store :as store]
+            [minii-focus.logic.task-actions :as actions]
+            [components.bottom-sheet :as bs] ;; 引入你的组件
+            [mongol-date-picker.picker :as picker]
+            ["package:intl/intl.dart" :as intl]
+            ["dart:core" :as dc]))
+
+;; 优先级配置数据
+(def priority-options
+  [{:type :header :title "Select Priority"}
+   {:title "High"   :icon m/Icons.label_important_rounded :value 2}
+   {:title "Medium" :icon m/Icons.label_rounded           :value 1}
+   {:title "Low"    :icon m/Icons.label_outline_rounded   :value 0}])
+
+(defn task-detail-page []
+  (f/widget
+   :context ctx
+   :watch [{task :selected-task} store/app-ui-state]
+   :let [title (get task "title")
+         notes (get task "notes")
+         task-id (get task "id")
+         due-date (get task "due_date")
+         priority (get task "priority")]
+   :get {{{bg .-surface primary .-primary} .-colorScheme} m/Theme}
+
+   (m/Scaffold.
+    .backgroundColor bg
+    .appBar (m/AppBar. .backgroundColor m/Colors.transparent .elevation 0
+                       .leading (m/IconButton. .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
+                                               .onPressed (fn [] (m/Navigator.pop ctx))))
+    .body
+    (if (nil? task)
+      (m/Center. .child (m/CircularProgressIndicator.))
+      (m/SingleChildScrollView.
+       .scrollDirection m/Axis.horizontal
+       .child
+       (m/Row.
+        .crossAxisAlignment m/CrossAxisAlignment.start
+        .children
+        [;; --- A. Title (Hero) ---
+         (m/Padding.
+          .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
+          .child (m/Hero.
+                  .tag task-id
+                  .child (m/Material.
+                          .color m/Colors.transparent
+                          .child (mgl/MongolText. title .style (m/TextStyle. .fontSize 48.0 .fontWeight m/FontWeight.w900 .color primary)))))
+
+         (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
+
+         ;; --- B. Notes Area ---
+         (m/Padding.
+          .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
+          .child (mgl/MongolText. notes .style (m/TextStyle. .fontSize 16.0 .color primary)))
+         ;; ... (保持不变)
+
+         (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
+
+         (mgl/MongolListTile.
+          .leading (m/Icon. m/Icons.calendar_today_rounded .color (if due-date primary m/Colors.grey))
+          .title (mgl/MongolText. (if due-date (.format (intl/DateFormat "yyyy-MM-dd") due-date) "Set Date"))
+          .onTap (fn []
+                   (picker/show-picker ctx (fn [d] (db/update-task! task-id :due-date d))
+                                       :initial-date (or due-date (dc/DateTime.now))
+                                       :show-time false)))
+
+         (mgl/MongolListTile.
+          .leading (m/Icon. m/Icons.label_important_outline
+                            .color (case (or priority 0) 2 m/Colors.red 1 m/Colors.orange 0 m/Colors.blue m/Colors.grey))
+          .title (mgl/MongolText. "Priority")
+          .onTap (fn []
+                   (bs/bottom-sheet
+                    ctx
+                    ;; 动态生成带有回调的 items
+                    (map (fn [item]
+                           (if (= (:type item) :header)
+                             item
+                             (assoc item :on-tap #(db/update-task! task-id :priority (:value item)))))
+                         priority-options)
+                    :height-factor 0.35)))
+
+         (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
+
+         ;; --- C. Functional Area ---
+         (m/Padding.
+          .padding (m/EdgeInsets.only .bottom 40.0)
+          .child
+          (mgl/MongolFilledButton
+           .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes}))
+           .child (m/Column. .mainAxisSize m/MainAxisSize.min
+                             .children [(m/Icon. m/Icons.edit_note)
+                                        (m/SizedBox. .height 8)
+                                        (mgl/MongolText. "Edit")])))
+
+         ]))))))

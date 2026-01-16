@@ -1,0 +1,66 @@
+(ns minii-focus.pages.home
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            [minii-focus.state.store :refer [app-ui-state]]
+            [minii-focus.widgets.main-list :as list]
+            [minii-focus.widgets.bottom-nav :as nav]
+            [minii-focus.widgets.fab :as fab]
+            [minii-focus.widgets.app-drawer :as drawer]
+            [minii-focus.pages.settings :as settings]
+            [minii-focus.logic.task-actions :as actions]
+            ["dart:core" :as dc]))
+
+(defn home-page []
+  (f/widget
+   :context ctx
+   ;; 1. 声明滚动控制器，用于 FAB 的自动收缩和 MainList 的滚动绑定
+   :let [scroll-controller (m/ScrollController.)]
+
+   ;; 2. 监听导航状态，决定 Body 显示哪个页面
+   :watch [{:keys [selected-nav-id]} app-ui-state]
+
+   ;; 3. 极致解构主题颜色，确保 Scaffold 背景与全局一致
+   :get {{{bg .-surface} .-colorScheme} m/Theme}
+
+   (m/Scaffold.
+    .backgroundColor bg
+
+    ;; 侧边栏：包含品牌展示和功能入口
+    .drawer (drawer/main-drawer)
+
+    ;; 动态 Body 切换逻辑
+    .body
+    (m/SafeArea.
+     .child
+     (m/AnimatedSwitcher.
+      .duration (dc/Duration. .milliseconds 300)
+      ;; 切换页面时的平滑淡入淡出
+      .transitionBuilder (fn [child animation]
+                           (m/FadeTransition. .opacity animation .child child))
+      .child
+      (case selected-nav-id
+        "today"    (m/Container.
+                    .key (m/ValueKey. "page-today")
+                    .child (list/task-stream-view))
+
+        "logbook"  (m/Center.
+                    .key (m/ValueKey. "page-logbook")
+                    .child (list/task-stream-view)) ;; 历史页面占位
+
+        "settings" (m/Container.
+                    .key (m/ValueKey. "page-settings")
+                    .child (settings/settings-page))
+
+        ;; 默认回退到今天
+        (list/task-stream-view))))
+
+    ;; 底部导航栏
+    .bottomNavigationBar (nav/main-navigation-bar)
+
+    ;; 智能 FAB：仅在“今天”页面显示，并支持滚动隐藏
+    .floatingActionButton
+    (if (= selected-nav-id "today")
+      (fab/task-fab
+       {:scroll-controller scroll-controller
+        :on-pressed (fn [] (actions/open-task-editor ctx))})
+      (m/SizedBox.shrink)))))

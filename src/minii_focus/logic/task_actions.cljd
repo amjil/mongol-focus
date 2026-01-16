@@ -1,0 +1,81 @@
+(ns minii-focus.logic.task-actions
+  (:require
+   [minii-focus.widgets.input-dialog :as input-dialog]
+   [minii-focus.logic.db :as db] ;; 注意这里已经改为 logic 目录
+   [components.tokens :as tokens]
+   [components.dialog :as dialog]
+   [components.text :as text]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["package:flutter/material.dart" :as m]))
+
+
+(defn open-task-editor 
+  "弹出任务编辑器。
+   如果不传 task-map，则为新建模式。
+   如果传了 {:id ... :title ... :notes ...}，则为编辑模式。"
+  ([ctx] (open-task-editor ctx nil))
+  ([ctx task-map]
+   (let [{:keys [id title notes]} task-map
+         is-edit? (some? id)]
+     (m/showDialog
+      .context ctx
+      .builder 
+      (fn [ctx]
+        (input-dialog/generic-input-dialog
+         {:title (if is-edit? "Засах" "Шинэ") ;; 蒙文：编辑 / 新建
+          :initial-text (or title "")
+          :initial-notes (or notes "")
+          ;; 这里的 data 是从 dialog 的 data-atom 传出来的 {:title ... :notes ...}
+          :on-submit (fn [new-data]
+                       (let [final-task (if is-edit? 
+                                          (assoc new-data :id id) ;; 如果是编辑，补回 ID
+                                          new-data)]
+                         (if is-edit?
+                           (db/update-task! id 
+                                            :title-and-notes 
+                                            {:title (:title new-data) :notes (:notes new-data)})
+                           (db/add-task! final-task)))
+                       ;; 提交后关闭对话框
+                       (m/Navigator.pop ctx))}))))))
+
+(defn delete-task-confirm 
+  "弹出自定义删除确认框
+   ctx: 当前弹窗的 context
+   editor-ctx: 编辑器对话框的 context
+   id: 任务 ID"
+  [ctx editor-ctx id]
+  (m/showDialog
+   .context ctx
+   .builder 
+   (fn [ctx]
+     (dialog/vertical-custom-dialog
+      {:width-factor 0.8
+       :height-factor 0.4 ;; 竖排按钮可能需要稍微多一点高度空间
+       :child 
+       (m/Padding.
+        .padding (m/EdgeInsets.all (tokens/space :l))
+        .child
+        (m/Row. ;; 改为 Row 布局，符合蒙文从左向右的排版逻辑
+         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+         .children
+         [;; 1. 左侧：提示文案 (竖排)
+          (text/text-block {:text "Устгах уу?" ;; 确定删除？
+                            :style (m/TextStyle .fontSize 18.0 .fontWeight m/FontWeight.bold)})
+          
+          ;; 2. 右侧：操作按钮组 (纵向排列按钮)
+          (m/Column.
+           .mainAxisAlignment m/MainAxisAlignment.end
+           .children
+           [(mgl/MongolElevatedButton. ;; 蒙文版 Elevated Button
+             .onPressed (fn [] 
+                          (db/delete-task! id)
+                          (m/Navigator.pop ctx)        
+                          (m/Navigator.pop editor-ctx))
+             .style (m/ElevatedButton.styleFrom .backgroundColor m/Colors.red)
+             .child (m/Text. "Устгах")) ;; 删除
+            
+            (m/SizedBox. .height (tokens/space :s))
+            
+            (mgl/MongolTextButton. ;; 蒙文版 Text Button
+             .onPressed #(m/Navigator.pop ctx)
+             .child (m/Text. "Болих"))])]))}))))
