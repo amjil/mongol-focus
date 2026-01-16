@@ -14,29 +14,29 @@
 (defn home-page []
   (f/widget
    :context ctx
-   ;; 1. 声明滚动控制器，用于 FAB 的自动收缩和 MainList 的滚动绑定
+   ;; 1. Declare scroll controller for FAB auto-collapse and MainList scroll binding
    :let [scroll-controller (m/ScrollController.)]
 
-   ;; 2. 监听导航状态，决定 Body 显示哪个页面
+   ;; 2. Watch navigation state to determine which page to display in Body
    :watch [{:keys [selected-nav-id]} app-ui-state]
 
-   ;; 3. 极致解构主题颜色，确保 Scaffold 背景与全局一致
+   ;; 3. Deeply destructure theme colors to ensure Scaffold background matches global theme
    :get {{{bg .-surface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
     .appBar (m/AppBar .actions [(search-button/filter-aware-search-button)])
     .backgroundColor bg
 
-    ;; 侧边栏：包含品牌展示和功能入口
+    ;; Sidebar: Contains brand display and feature entries
     .drawer (drawer/main-drawer)
 
-    ;; 动态 Body 切换逻辑
+    ;; Dynamic Body switching logic
     .body
     (m/SafeArea.
      .child
      (m/AnimatedSwitcher.
       .duration (dc/Duration. .milliseconds 300)
-      ;; 切换页面时的平滑淡入淡出
+      ;; Smooth fade in/out when switching pages
       .transitionBuilder (fn [child animation]
                            (m/FadeTransition. .opacity animation .child child))
       .child
@@ -47,19 +47,19 @@
 
         "logbook"  (m/Center.
                     .key (m/ValueKey. "page-logbook")
-                    .child (list/task-stream-view)) ;; 历史页面占位
+                    .child (list/task-stream-view)) ;; History page placeholder
 
         "settings" (m/Container.
                     .key (m/ValueKey. "page-settings")
                     .child (settings/settings-page))
 
-        ;; 默认回退到今天
+        ;; Default fallback to today
         (list/task-stream-view))))
 
-    ;; 底部导航栏
+    ;; Bottom Navigation Bar
     .bottomNavigationBar (nav/main-navigation-bar)
 
-    ;; 智能 FAB：仅在“今天”页面显示，并支持滚动隐藏
+    ;; Smart FAB: Only displayed on "today" page, supports scroll hiding
     .floatingActionButton
     (if (= selected-nav-id "today")
       (fab/task-fab

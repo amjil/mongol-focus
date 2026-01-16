@@ -2,12 +2,12 @@
   (:require
    ["package:flutter/material.dart" :as m]
    [cljd.flutter :as f]
-   [minii-focus.state.store :as store] ;; 引入你的 store
+   [minii-focus.state.store :as store] ;; Import your store
    [components.setting :as sett]))
 
 (defn settings-page []
   (f/widget
-    ;; 监听全局状态，state 变量将包含 atom 的当前值
+    ;; Watch global state, state variable will contain the current value of atom
     :watch [state store/app-ui-state]
     :get {{{:flds [surface]} .-colorScheme} m/Theme}
     (m/Scaffold
@@ -19,7 +19,7 @@
         (m/Row
           .crossAxisAlignment m.CrossAxisAlignment/start
           .children
-          [;; --- 分组 1：通用设置 ---
+          [;; --- Group 1: General Settings ---
            (sett/settings-section
              "Ерөнхий" ; General
              [{:title "Харанхуй горим"
@@ -32,12 +32,12 @@
                :value (get-in state [:settings :notifications?])
                :on-changed #(store/update-setting! :notifications? %)}])
 
-           ;; --- 分组 2：界面偏好 ---
+           ;; --- Group 2: Interface Preferences ---
            (sett/settings-section
              "Харагдац" ; Appearance
              [{:title "Sidebar нээх"
                :leading m.Icons/menu_open
-               ;; 复用你已有的 sidebar 状态
+               ;; Reuse your existing sidebar state
                :value (:is-sidebar-open state)
                :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
               
@@ -46,7 +46,7 @@
                :leading m.Icons/language
                :on-tap #(store/update-setting! :language "English")}])
 
-           ;; --- 分组 3：应用信息 ---
+           ;; --- Group 3: App Information ---
            (sett/settings-section
              "Апп"
              [{:title "Хувилбар"

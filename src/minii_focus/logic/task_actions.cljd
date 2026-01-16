@@ -2,7 +2,7 @@
   (:require
    [minii-focus.widgets.input-dialog :as input-dialog]
    [minii-focus.logic.db :as db]
-   [minii-focus.state.store :as store] ;; 引入 store 以便操作 UI 状态
+   [minii-focus.state.store :as store] ;; Import store to manipulate UI state
    [components.tokens :as tokens]
    [components.dialog :as dialog]
    [components.text :as text]
@@ -10,20 +10,20 @@
    ["package:flutter/material.dart" :as m]))
 
 (defn open-task-editor 
-  "弹出任务编辑器。
-   支持新建模式和编辑模式。
-   is-edit? 模式下会更新详情页监听的 selected-task。"
+  "Open task editor dialog.
+   Supports both create and edit modes.
+   In is-edit? mode, it will update the selected-task that the detail page is watching."
   ([ctx] (open-task-editor ctx nil))
   ([ctx task-map]
    (let [{:keys [id title notes]} task-map
          is-edit? (some? id)]
      (m/showDialog
       .context ctx
-      .barrierDismissible false ;; 强制用户操作或点击取消
+      .barrierDismissible false ;; Force user to take action or click cancel
       .builder 
       (fn [ctx]
         (input-dialog/generic-input-dialog
-         {:title (if is-edit? "Засах" "Шинэ даалгавар") ;; 编辑 / 新建任务
+         {:title (if is-edit? "Засах" "Шинэ даалгавар") ;; Edit / New Task
           :initial-text (or title "")
           :initial-notes (or notes "")
           :on-submit (fn [new-data]
@@ -31,14 +31,14 @@
                              new-notes (:notes new-data)]
                          (if is-edit?
                            (do
-                             ;; 1. 更新数据库
+                             ;; 1. Update database
                              (db/update-task! id 
                                               :title-and-notes 
                                               {:title new-title :notes new-notes})
-                             ;; 2. 同步更新 Store 中的选中任务，确保详情页 UI 立即刷新
+                             ;; 2. Synchronously update selected task in Store to ensure detail page UI refreshes immediately
                              (swap! store/app-ui-state update :selected-task 
                                     merge {"title" new-title "notes" new-notes}))
-                           ;; 新建模式
+                           ;; Create mode
                            (db/add-task! {:title new-title :notes new-notes}))
                          
                          (m/Navigator.pop ctx)))
@@ -49,7 +49,7 @@
   (m/showDialog
    .context ctx
    .builder 
-   (fn [dialog-ctx] ;; 改名为 dialog-ctx 避免与外部 ctx 混淆
+   (fn [dialog-ctx] ;; Renamed to dialog-ctx to avoid confusion with outer ctx
      (dialog/vertical-custom-dialog
       {:width-factor 0.8
        :height-factor 0.35
@@ -70,12 +70,12 @@
            [(mgl/MongolElevatedButton.
              .onPressed (fn [] 
                           (db/delete-task! id)
-                          (m/Navigator.pop dialog-ctx) ;; 关闭确认对话框
+                          (m/Navigator.pop dialog-ctx) ;; Close confirmation dialog
                           (if editor-ctx
-                            (m/Navigator.pop editor-ctx) ;; 关闭编辑器
-                            (m/Navigator.pop ctx)))      ;; 从详情页跳转回列表
+                            (m/Navigator.pop editor-ctx) ;; Close editor
+                            (m/Navigator.pop ctx)))      ;; Navigate back to list from detail page
              .style (m/ElevatedButton.styleFrom .backgroundColor m/Colors.red)
-             .child (mgl/MongolText. "Устгах" .style (m/TextStyle. .color m/Colors.white))) ;; 改为白色
+             .child (mgl/MongolText. "Устгах" .style (m/TextStyle. .color m/Colors.white))) ;; Changed to white
 
             (m/SizedBox. .height (tokens/space :s))
             

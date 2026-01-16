@@ -14,7 +14,7 @@
    (m/NavigationBar.
     .backgroundColor bg
     .indicatorColor indicator
-    ;; 更新索引映射逻辑
+    ;; Update index mapping logic
     .selectedIndex (case selected-nav-id 
                      "today" 0 
                      "logbook" 1 
@@ -48,4 +48,4 @@
       .icon (m/Icon. m/Icons.settings_outlined)
       .selectedIcon (m/Icon. m/Icons.settings .color active-icon)
       .label "Тохиргоо"
-      )]))) ;; 设置 (Settings)
+      )]))) ;; Settings

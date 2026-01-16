@@ -13,7 +13,7 @@
     .right (tokens/space :m))
    (m/Container
     .decoration (m/BoxDecoration
-                 .color (-> surface (.withOpacity 0.8)) ;; 半透明背景
+                 .color (-> surface (.withOpacity 0.8)) ;; Semi-transparent background
                  .borderRadius (m/BorderRadius.circular 32)
                  .boxShadow [(m/BoxShadow
                               .color (-> m/Colors.black (.withOpacity 0.1))
@@ -21,14 +21,14 @@
                               .offset (m/Offset 0 4))]))
    (m/Padding
     .padding (m/EdgeInsets.all (tokens/space :xs)))
-   (m/Column ;; 蒙古文环境下，工具栏也可以是纵向排列的
+   (m/Column ;; In Mongolian environment, toolbar can also be vertically arranged
     .mainAxisSize m/MainAxisSize.min
     .children
     [(m/IconButton
       .icon (m/Icon m/Icons.paste_rounded)
       .onPressed on-paste)
      (m/SizedBox .height (tokens/space :xs))
-     ;; 主操作按钮：Things 风格的大圆钮
+     ;; Main action button: Things-style large round button
      (m/AnimatedContainer
       .duration (dart:core/Duration .milliseconds 200)
       .curve m/Curves.easeInOut
@@ -36,6 +36,6 @@
                    .color (if is-active primary (-> primary (.withOpacity 0.3)))
                    .shape m/BoxShape.circle)
       .child (m/IconButton
-              .icon (m/Icon m/Icons.arrow_upward_rounded ;; 向上箭头代表提交至列表
+              .icon (m/Icon m/Icons.arrow_upward_rounded ;; Upward arrow represents submit to list
                             .color (if is-active onPrimary (-> onPrimary (.withOpacity 0.5))))
               .onPressed (when is-active on-submit)))])))

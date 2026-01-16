@@ -5,15 +5,15 @@
             ["dart:core" :as dc]))
 
 (defn task-fab
-  "极致扁平解构版 FAB"
+  "Extremely flat destructured FAB"
   [{:keys [on-pressed scroll-controller]}]
   (let [is-scrolled? (atom false)]
     (f/widget
-     ;; 1. 层层递进式解构：Theme -> ColorScheme -> 具体颜色
+     ;; 1. Progressive destructuring: Theme -> ColorScheme -> specific colors
      :get {{{bg .-primaryContainer
              fg .-onPrimaryContainer} .-colorScheme} m/Theme}
      :watch [scrolled? is-scrolled?]
-     ;; 2. 响应式监听滚动
+     ;; 2. Reactive scroll listener
      :bg-watcher ([^m/ScrollPosition {offset .-pixels} scroll-controller]
                   (let [currently-scrolled? (> offset 50)]
                     (when (not= @is-scrolled? currently-scrolled?)
@@ -40,7 +40,7 @@
         .onPressed (fn []
                      (s/HapticFeedback.heavyImpact)
                      (on-pressed))
-        ;; 3. 直接使用解构出来的 bg 和 fg 变量
+        ;; 3. Directly use destructured bg and fg variables
         .backgroundColor bg
         .foregroundColor fg
         .elevation 4.0

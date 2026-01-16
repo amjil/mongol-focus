@@ -3,7 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]))
 
-;; --- 1. 常量配置 ---
+;; --- 1. Constant Configuration ---
 (def category-icons
   [{:name "Folder" :code 0xe2a3} {:name "Work" :code 0xe11c}
    {:name "Home" :code 0xe318} {:name "Study" :code 0xe54d}
@@ -12,7 +12,7 @@
    {:name "Idea" :code 0xe3ad} {:name "Travel" :code 0xe539}
    {:name "Food" :code 0xe2e2} {:name "Money" :code 0xe041}])
 
-;; --- 2. 内部组件：图标选择器内容 ---
+;; --- 2. Internal Component: Icon Picker Content ---
 (defn icon-picker-content [{:keys [on-select]}]
   (m/GridView.builder
    .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount 
@@ -28,7 +28,7 @@
                      .icon (m/Icon. (m/IconData. (:code icon) .fontFamily "MaterialIcons") 
                                    .size 30.0))))))
 
-;; --- 3. 核心组件：分类卡片 (自适应蒙文宽度) ---
+;; --- 3. Core Component: Category Card (Adaptive Mongolian Width) ---
 (defn category-card [{:keys [id name icon-code is-selected on-tap on-long-press]}]
   (f/widget
    :context ctx
@@ -58,14 +58,14 @@
                                        .style (m/TextStyle. .color on-surface .fontSize 14.0
                                                            .fontWeight (if is-selected m/FontWeight.bold m/FontWeight.normal))))]))))))
 
-;; --- 4. 详情页/搜索页：分类选择对话框内部布局 ---
+;; --- 4. Detail Page/Search Page: Category Selection Dialog Internal Layout ---
 (defn category-picker-content 
   [{:keys [categories current-id on-select on-search-tap selected-icon-code on-icon-press]}]
   (f/widget
    :get {{{primary .-primary} .-colorScheme} m/Theme}
    (m/Column.
     .children
-    [;; 搜索与图标选择 Row
+    [;; Search and Icon Selection Row
      (m/Padding.
       .padding (m/EdgeInsets.symmetric .horizontal 16.0)
       .child 
@@ -86,7 +86,7 @@
 
      (m/Divider. .height 24.0)
 
-     ;; 分类横向列表 (复用下面的 list-view 逻辑)
+     ;; Category Horizontal List (Reuse list-view logic below)
      (m/Expanded.
       .child
       (m/ListView.builder
@@ -103,9 +103,9 @@
              :is-selected (= (get cat "id") current-id)
              :on-tap #(on-select (get cat "id"))})))))])))
 
-;; --- 5. 主页面：滚动组件布局 ---
+;; --- 5. Main Page: Scroll Component Layout ---
 
-;; 新增按钮
+;; Add Button
 (defn add-category-button [{:keys [on-tap]}]
   (f/widget
    :get {{{primary .-primary} .-colorScheme} m/Theme}
@@ -116,7 +116,7 @@
      .onPressed on-tap
      .icon (m/Icon. m/Icons.add_circle_outline .size 32.0 .color primary)))))
 
-;; 主列表排列布局
+;; Main List Arrangement Layout
 (defn category-scroll-layout [{:keys [categories selected-id on-add-tap on-item-tap on-item-long-press]}]
   (m/Row.
    .children

@@ -4,11 +4,11 @@
   (atom {:selected-nav-id "today"
          :is-sidebar-open false
          :selected-task nil
-         ;; 新增设置相关的状态
+         ;; Add settings-related state
          :settings {:dark-mode? false
                     :notifications? true
                     :language "Монгол"}}))
 
-;; 定义一个方便更新设置的工具函数
+;; Define a convenient utility function for updating settings
 (defn update-setting! [key value]
   (swap! app-ui-state assoc-in [:settings key] value))

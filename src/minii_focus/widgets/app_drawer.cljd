@@ -48,7 +48,7 @@
        .padding (m/EdgeInsets.all 20.0)
        .child (mgl/MongolText "Цэс" .style (m/TextStyle. .fontWeight m/FontWeight.bold .fontSize 18.0)))
 
-      ;; --- B. 菜单列表：水平滚动设计 ---
+      ;; --- B. Menu List: Horizontal Scroll Design ---
       (m/Expanded.
        .child
        (m/SingleChildScrollView.
@@ -63,7 +63,7 @@
             :bg-color primary 
             :fg-color on-surface
             :on-tap (fn [ctx] 
-                      (.pop (m/Navigator.of ctx)) ;; 关掉 drawer
+                      (.pop (m/Navigator.of ctx)) ;; Close drawer
                       (m/Navigator.push ctx (m/MaterialPageRoute. .builder (fn [ctx] (settings/settings-page)))))})
           (drawer-item 
            {:icon m/Icons.info_outline 

@@ -11,7 +11,7 @@
             ["package:intl/intl.dart" :as intl]
             ["dart:core" :as dc]))
 
-;; --- 1. 优先级配置数据 (蒙古文本地化) ---
+;; --- 1. Priority Configuration Data (Mongolian Localization) ---
 
 (def ^:private priority-options
   [{:type :header :title "Урьтамж сонгох"}
@@ -19,7 +19,7 @@
    {:title "Дунд"    :icon m/Icons.label_rounded           :value 1}
    {:title "Бага"    :icon m/Icons.label_outline_rounded   :value 0}])
 
-;; --- 2. 页面主组件 ---
+;; --- 2. Main Page Component ---
 
 (defn task-detail-page []
   (f/widget
@@ -30,7 +30,7 @@
          notes     (get task "notes")
          due-date  (get task "due_date")
          priority  (get task "priority")
-         ;; 直接从数据库关联查询结果中提取
+         ;; Extract directly from database join query result
          cat-id    (get task "category_id")
          cat-name  (get task "category_name")
          cat-icon  (get task "category_icon")]
@@ -53,7 +53,7 @@
        (m/Row.
         .crossAxisAlignment m/CrossAxisAlignment.start
         .children
-        [;; --- A. 标题区域 (Hero 动画) ---
+        [;; --- A. Title Area (Hero Animation) ---
          (m/Padding.
           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
           .child (m/Hero.
@@ -67,7 +67,7 @@
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         ;; --- B. 备注内容区域 ---
+         ;; --- B. Notes Content Area ---
          (m/Padding.
           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
           .child (mgl/MongolText. (or notes "")
@@ -75,9 +75,9 @@
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         ;; --- C. 元数据属性区域 ---
+         ;; --- C. Metadata Properties Area ---
 
-         ;; 1. 日期块 (已修正)
+         ;; 1. Date Block (Fixed)
          (m/GestureDetector.
           .onTap (fn []
                    (picker/show-picker ctx (fn [d] (db/update-task! task-id :due-date d))
@@ -92,7 +92,7 @@
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
-         ;; 2. 优先级块 (已修正)
+         ;; 2. Priority Block (Fixed)
          (m/GestureDetector.
           .onTap (fn []
                    (bs/bottom-sheet
@@ -115,7 +115,7 @@
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
-         ;; 3. 分类块 (修正点：将 .onTap 移出，改用 GestureDetector 包裹)
+         ;; 3. Category Block (Fix: Move .onTap out, wrap with GestureDetector)
          (m/GestureDetector.
           .onTap (fn []
                    (category/show-category-picker
@@ -131,14 +131,14 @@
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         ;; --- D. 功能操作区域 ---
+         ;; --- D. Action Operations Area ---
          (m/Padding.
           .padding (m/EdgeInsets.only .bottom 40.0 .right 40.0)
           .child
           (m/Column.
            .mainAxisSize m/MainAxisSize.min
            .children
-           [;; 编辑/修改按钮
+           [;; Edit/Modify Button
             (mgl/MongolFilledButton.
              .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes}))
              .child (m/Column. .mainAxisSize m/MainAxisSize.min
@@ -148,7 +148,7 @@
 
             (m/SizedBox. .height 16.0)
 
-            ;; 删除按钮
+            ;; Delete Button
             (mgl/MongolTextButton.
              .style (m/ButtonStyle. .foregroundColor (m/MaterialStateProperty.all m/Colors.red))
              .onPressed (fn []

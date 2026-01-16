@@ -11,10 +11,10 @@
 
 (defn generic-input-dialog
   [{:keys [title initial-text initial-notes on-submit]}]
-  ;; 1. 将状态升级为 Map，同时保存标题和备注
+  ;; 1. Upgrade state to Map, saving both title and notes
   (let [data-atom (atom {:title initial-text :notes initial-notes})]
     (f/widget
-      ;; 2. 管理两个 Controller
+      ;; 2. Manage two Controllers
       :managed [title-ctrl (m/TextEditingController .text initial-text)
                 notes-ctrl (m/TextEditingController .text initial-notes)]
       :get {{{:flds [surfaceVariant onSurface outlineVariant]} .-colorScheme
@@ -26,7 +26,7 @@
          :child 
          (m/Column
           .children
-          [;; --- 上半部分：主体编辑器 ---
+          [;; --- Upper Part: Main Editor ---
            (m/Expanded
             .child
             (m/Stack
@@ -34,7 +34,7 @@
              [(m/Row
                 .crossAxisAlignment m/CrossAxisAlignment.stretch
                 .children
-                [;; 左侧装饰/标题区域
+                [;; Left Decoration/Title Area
                  (m/Container
                   .alignment m/Alignment.topCenter
                   .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
@@ -46,47 +46,47 @@
                                      .fontWeight m/FontWeight.bold
                                      .color onSurface)}))
                  
-                 ;; 右侧输入区域：标题 + 备注
+                 ;; Right Input Area: Title + Notes
                  (m/Expanded
                   .child 
                   (m/Padding
                    .padding (m/EdgeInsets.all (tokens/space :l))
-                   .child (m/Row ;; 使用 Row 垂直排列两个输入框
+                   .child (m/Row ;; Use Row to vertically arrange two input fields
                     .crossAxisAlignment m/CrossAxisAlignment.start
                     .children
-                    [;; --- 标题输入框 ---
+                    [;; --- Title Input Field ---
                      (text-field/text-field 
                       {:controller title-ctrl
                        :autofocus true
-                       :max-lines 1 ;; 标题通常只有一行
+                       :max-lines 1 ;; Titles are usually single line
                        :on-changed #(swap! data-atom assoc :title %)})
                      
-                     ;; 视觉分割线
+                     ;; Visual Divider
                      (m/Padding 
                       .padding (m/EdgeInsets.symmetric .vertical (tokens/space :m))
                       .child (m/VerticalDivider .color outlineVariant .thickness 0.5))
                      
-                     ;; --- 备注输入框 ---
-                     (m/Expanded ;; 备注占用剩余空间
+                     ;; --- Notes Input Field ---
+                     (m/Expanded ;; Notes take remaining space
                       .child
                       (text-field/text-field 
                        {:controller notes-ctrl
-                        :hint-text "Add notes here..." ;; 提示词
-                        :max-lines nil ;; 支持无限行
+                        :hint-text "Add notes here..." ;; Hint text
+                        :max-lines nil ;; Support unlimited lines
                         :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
                         :on-changed #(swap! data-atom assoc :notes %)}))])))])
               
-              ;; --- Things 风格浮动工具栏 ---
+              ;; --- Things-style Floating Toolbar ---
               (f/widget
                 :watch [data data-atom]
                 (action-toolbar/floating-action-toolbar 
                   {:is-active (not (empty? (:title data)))
-                   :on-paste (fn [] ;; 粘贴逻辑
+                   :on-paste (fn [] ;; Paste logic
                                )
-                   ;; 提交整个 Map
+                   ;; Submit entire Map
                    :on-submit #(on-submit @data-atom)}))]))
 
-           ;; --- 下半部分：键盘区域 ---
+           ;; --- Lower Part: Keyboard Area ---
            (m/Container
             .decoration (m/BoxDecoration 
                           .border (m/Border .top (m/BorderSide .color surfaceVariant .width 0.5)))

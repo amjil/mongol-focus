@@ -31,7 +31,7 @@
       (m/Container.
        .padding (m/EdgeInsets.all (tokens/space :m))
        .decoration (m/BoxDecoration.
-                    ;; 1. 背景反馈：完成后颜色变淡
+                    ;; 1. Background Feedback: Color fades after completion
                     .color (if (true? is-done?) (.withOpacity outlineVariant 0.2) surface)
                     .borderRadius (m/BorderRadius.circular (tokens/radius :l))
                     .boxShadow [(m/BoxShadow.
@@ -43,7 +43,7 @@
         .mainAxisSize m/MainAxisSize.min
         .crossAxisAlignment m/CrossAxisAlignment.center
         .children
-        [;; --- A. Checkbox 交互 ---
+        [;; --- A. Checkbox Interaction ---
          (m/Padding.
           .padding (m/EdgeInsets.only .right (tokens/space :s))
           .child
@@ -51,12 +51,12 @@
            .value is-done?
            .activeColor primary
            .onChanged (fn [v]
-                        ;; 2. 触感反馈：给用户一个轻微的震动确认
+                        ;; 2. Haptic Feedback: Give user a light vibration confirmation
                         (s/HapticFeedback.mediumImpact)
-                        ;; 3. 调用通用更新函数
+                        ;; 3. Call general update function
                         (db/update-task! id :is-done v))))
 
-         ;; --- B. 文字点击区 ---
+         ;; --- B. Text Click Area ---
          (m/GestureDetector.
           .onTap on-tap
           .child
@@ -64,7 +64,7 @@
            .mainAxisSize m/MainAxisSize.min
            .crossAxisAlignment m/CrossAxisAlignment.start
            .children
-           [;; 标题：完成后添加中划线和颜色变灰
+           [;; Title: Add strikethrough and gray color after completion
             (m/Hero.
              .tag id
              .child
@@ -76,11 +76,11 @@
                .style (m/TextStyle.
                        .fontSize 18.0
                        .fontWeight m/FontWeight.bold
-                       ;; 4. 文本视觉反馈
+                       ;; 4. Text Visual Feedback
                        .color (if is-done? m/Colors.grey onSurface)
                        .decoration (if is-done? m/TextDecoration.lineThrough m/TextDecoration.none)))))
 
-            ;; 备注：完成后同样变淡
+            ;; Notes: Also fade after completion
             (if (not (empty? notes))
               (m/Padding.
                .padding (m/EdgeInsets.only .left (tokens/space :m))

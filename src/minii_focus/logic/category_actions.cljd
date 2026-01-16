@@ -12,7 +12,7 @@
             [components.dialog :as dialog]
             [clojure.string :as str]))
 
-;; --- 1. 删除确认逻辑 ---
+;; --- 1. Delete Confirmation Logic ---
 
 (defn- show-confirm-delete [ctx id name]
   (m/showDialog
@@ -36,7 +36,7 @@
                                (m/Navigator.pop ctx))
                   .child (mgl/MongolText. "УСТГАХ" .style (m/TextStyle. .color m/Colors.white)))]}))))
 
-;; --- 2. 图标选择逻辑 ---
+;; --- 2. Icon Selection Logic ---
 
 (defn- open-icon-picker [ctx on-select]
   (m/showDialog
@@ -51,11 +51,11 @@
                   .onPressed #(m/Navigator.pop c)
                   .child (mgl/MongolText. "БОЛИХ"))]}))))
 
-;; --- 3. 搜索与新增分类弹窗 ---
+;; --- 3. Search and Add Category Dialog ---
 
 (defn- open-add-category-dialog [ctx categories selected-icon-code-atom]
   (let [results-state (atom [])
-        temp-text-atom (atom "")] ;; 用于同步键盘输入的内容
+        temp-text-atom (atom "")] ;; Used to synchronize keyboard input content
     (m/showDialog
      .context ctx
      .builder
@@ -66,13 +66,13 @@
                 current-text temp-text-atom]
         :get {{{on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
         (dialog/vertical-custom-dialog
-         {:title "ШИНЭ АНГИЛАЛ" ;; 蒙文：新分类
+         {:title "ШИНЭ АНГИЛАЛ" ;; Mongolian: New Category
           :height-factor 0.8
           :width-factor 0.9
           :body 
           (m/Column.
            .children
-           [;; 1. 输入显示区
+           [;; 1. Input Display Area
             (m/Padding.
              .padding (m/EdgeInsets.all (tokens/space :m))
              .child
@@ -92,24 +92,24 @@
                            :autofocus true
                            :on-changed (fn [t] 
                                          (reset! temp-text-atom t)
-                                         ;; 同时也保留搜索已有分类的功能
+                                         ;; Also keep the function to search existing categories
                                          (reset! results-state 
                                                  (if (str/blank? t) []
                                                      (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t)) categories))))}))
                  
-                 ;; 如果有重名提示（可选）
+                 ;; If there's a duplicate name hint (optional)
                  (when (seq results)
                    (m/Padding.
                     .padding (m/EdgeInsets.only .top 8.0)
                     .child (mgl/MongolText. "Ийм нэртэй ангилал байна" 
                                            .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0))))])
                
-               ;; 2. 候选词浮层
+               ;; 2. Candidates Overlay
                (keyboard/candidates nil)]))
 
             (m/Spacer.)
 
-            ;; 3. 自定义键盘
+            ;; 3. Custom Keyboard
             (keyboard/keyboard
              {:controller controller
               :on-changed (fn [t] 
@@ -128,10 +128,10 @@
                          (when-not (str/blank? @temp-text-atom)
                            (db/add-category! @temp-text-atom @selected-icon-code-atom)
                            (m/Navigator.pop ctx)))
-            .child (mgl/MongolText. "ХАДГАЛАХ")) ;; 蒙文：保存
+            .child (mgl/MongolText. "ХАДГАЛАХ")) ;; Mongolian: Save
            ]}))))))
 
-;; --- 4. 核心：分类选择对话框 (详情页/搜索页用) ---
+;; --- 4. Core: Category Selection Dialog (for Detail Page/Search Page) ---
 
 (defn show-category-picker [ctx {:keys [current-id on-select]}]
   (let [selected-icon-code (atom 0xe2a3)]
@@ -159,7 +159,7 @@
                      .onPressed #(m/Navigator.pop ctx)
                      .child (mgl/MongolText. "ХААХ"))]}))))))
 
-;; --- 5. 核心：主页面分类滚动视图 ---
+;; --- 5. Core: Main Page Category Scroll View ---
 
 (defn category-scroll-view []
   (f/widget

@@ -24,7 +24,7 @@
                  :else "Хайх")
       .onPressed (fn [] (search-actions/open-search-dialog ctx) nil))
      
-     ;; 当过滤生效时，显示一个指示圆点
+     ;; When filter is active, show an indicator dot
      (if is-filtered
        (m/Positioned
         .top 12.0

@@ -7,23 +7,23 @@
 
 
 (defn section-header
-  "分组标题组件：垂直排列的组名"
+  "Group title component: vertically arranged group names"
   [title]
   (f/widget
    :get {{{:flds [primary onSurfaceVariant]} .-colorScheme
           {:flds [titleMedium]} .-textTheme} m/Theme}
    (m/Container
-    .width 60.0 ;; 较窄的宽度，起到间隔和标注作用
+    .width 60.0 ;; Narrow width, serves as spacing and labeling
     .margin (m/EdgeInsets.only .right (tokens/space :s))
     .alignment m/Alignment.topCenter
     .child 
     (m/Column
      .children
-     [;; 装饰小圆点或短线，对齐 Things 风格
+     [;; Decorative small dot or short line, aligned with Things style
       (m/Container .width 4 .height 4 
                    .decoration (m/BoxDecoration .color primary .shape m/BoxShape.circle))
       (m/SizedBox .height 12)
-      ;; 使用你的 text-block
+      ;; Use your text-block
       (text/text-block 
        {:text title
         :style (.copyWith titleMedium 
