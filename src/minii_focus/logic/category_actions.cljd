@@ -1,0 +1,178 @@
+(ns minii-focus.logic.category-actions
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [components.tokens :as tokens]
+            [components.text-field :as text-field]
+            [virtual-keyboard.keyboard :as keyboard]
+            [minii-focus.logic.db :as db]
+            [minii-focus.state.store :refer [app-ui-state]]
+            [minii-focus.widgets.category :as cat-ui]
+            [components.input-dialog :as input-dialog]
+            [components.dialog :as dialog]
+            [clojure.string :as str]))
+
+;; --- 1. 删除确认逻辑 ---
+
+(defn- show-confirm-delete [ctx id name]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [ctx]
+     (dialog/vertical-custom-dialog
+      {:title "АНХААР!"
+       :height-factor 0.35
+       :width-factor 0.8
+       :body (m/Center.
+              .child (mgl/MongolText. (str "'" name "' ангиллыг устгах уу?")
+                                     .style (m/TextStyle. .fontSize 16.0)))
+       :actions [(mgl/MongolTextButton.
+                  .onPressed #(m/Navigator.pop ctx)
+                  .child (mgl/MongolText. "БОЛИХ"))
+                 (mgl/MongolElevatedButton.
+                  .style (m/ButtonStyle. .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
+                  .onPressed (fn [] 
+                               (db/delete-category! id)
+                               (m/Navigator.pop ctx))
+                  .child (mgl/MongolText. "УСТГАХ" .style (m/TextStyle. .color m/Colors.white)))]}))))
+
+;; --- 2. 图标选择逻辑 ---
+
+(defn- open-icon-picker [ctx on-select]
+  (m/showDialog
+   .context ctx
+   .builder 
+   (fn [c] 
+     (dialog/vertical-custom-dialog
+      {:title "ДҮРС СОНГОХ"
+       :height-factor 0.5
+       :body (cat-ui/icon-picker-content {:on-select on-select})
+       :actions [(mgl/MongolTextButton.
+                  .onPressed #(m/Navigator.pop c)
+                  .child (mgl/MongolText. "БОЛИХ"))]}))))
+
+;; --- 3. 搜索与新增分类弹窗 ---
+
+(defn- open-add-category-dialog [ctx categories selected-icon-code-atom]
+  (let [results-state (atom [])
+        temp-text-atom (atom "")] ;; 用于同步键盘输入的内容
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [ctx]
+       (f/widget
+        :managed [controller (m/TextEditingController .text "")]
+        :watch [results results-state
+                current-text temp-text-atom]
+        :get {{{on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
+        (dialog/vertical-custom-dialog
+         {:title "ШИНЭ АНГИЛАЛ" ;; 蒙文：新分类
+          :height-factor 0.8
+          :width-factor 0.9
+          :body 
+          (m/Column.
+           .children
+           [;; 1. 输入显示区
+            (m/Padding.
+             .padding (m/EdgeInsets.all (tokens/space :m))
+             .child
+             (m/Stack.
+              .children
+              [(m/Column.
+                .children
+                [(m/Container.
+                  .constraints (m/BoxConstraints. .minHeight 120.0)
+                  .padding (m/EdgeInsets.all (tokens/space :s))
+                  .decoration (m/BoxDecoration.
+                               .border (m/Border.all .color (.withOpacity on-surface 0.1))
+                               .borderRadius (m/BorderRadius.circular 12))
+                  .child (text-field/text-field
+                          {:controller controller
+                           :hint "Нэр бичих..."
+                           :autofocus true
+                           :on-changed (fn [t] 
+                                         (reset! temp-text-atom t)
+                                         ;; 同时也保留搜索已有分类的功能
+                                         (reset! results-state 
+                                                 (if (str/blank? t) []
+                                                     (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t)) categories))))}))
+                 
+                 ;; 如果有重名提示（可选）
+                 (when (seq results)
+                   (m/Padding.
+                    .padding (m/EdgeInsets.only .top 8.0)
+                    .child (mgl/MongolText. "Ийм нэртэй ангилал байна" 
+                                           .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0))))])
+               
+               ;; 2. 候选词浮层
+               (keyboard/candidates nil)]))
+
+            (m/Spacer.)
+
+            ;; 3. 自定义键盘
+            (keyboard/keyboard
+             {:controller controller
+              :on-changed (fn [t] 
+                            (reset! temp-text-atom t)
+                            (reset! results-state 
+                                    (if (str/blank? t) []
+                                        (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t)) categories))))})])
+          
+          :actions 
+          [(mgl/MongolTextButton.
+            .onPressed #(m/Navigator.pop ctx)
+            .child (mgl/MongolText. "БОЛИХ"))
+           
+           (mgl/MongolElevatedButton.
+            .onPressed (fn []
+                         (when-not (str/blank? @temp-text-atom)
+                           (db/add-category! @temp-text-atom @selected-icon-code-atom)
+                           (m/Navigator.pop ctx)))
+            .child (mgl/MongolText. "ХАДГАЛАХ")) ;; 蒙文：保存
+           ]}))))))
+
+;; --- 4. 核心：分类选择对话框 (详情页/搜索页用) ---
+
+(defn show-category-picker [ctx {:keys [current-id on-select]}]
+  (let [selected-icon-code (atom 0xe2a3)]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [ctx]
+       (f/widget
+        :watch [categories (stream
+                            (map (fn [rows] (map (fn [row] (.-data row)) rows)))
+                            (map (fn [_] []))
+                            :as-values (db/watch-categories))
+                icon-code selected-icon-code]
+        (dialog/vertical-custom-dialog
+         {:title "АНГИЛАЛ СОНГОХ"
+          :height-factor 0.6
+          :body (cat-ui/category-picker-content
+                 {:categories categories
+                  :current-id current-id
+                  :selected-icon-code icon-code
+                  :on-select (fn [id] (on-select id) (m/Navigator.pop ctx))
+                  :on-icon-press #(open-icon-picker ctx (fn [code] (reset! selected-icon-code code)))
+                  :on-search-tap #(open-add-category-dialog ctx categories selected-icon-code)})
+          :actions [(mgl/MongolTextButton.
+                     .onPressed #(m/Navigator.pop ctx)
+                     .child (mgl/MongolText. "ХААХ"))]}))))))
+
+;; --- 5. 核心：主页面分类滚动视图 ---
+
+(defn category-scroll-view []
+  (f/widget
+   :context ctx
+   :watch [categories (stream
+                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
+                       (map (fn [_] []))
+                       :as-values (db/watch-categories))
+           {:keys [selected-category-id]} app-ui-state]
+   (cat-ui/category-scroll-layout
+    {:categories categories
+     :selected-id selected-category-id
+     :on-add-tap #(open-add-category-dialog ctx categories (atom 0xe2a3))
+     :on-item-tap #(swap! app-ui-state assoc :selected-category-id %)
+     :on-item-long-press #(when (and % (not= %2 "All"))
+                            (show-confirm-delete ctx % %2))})))

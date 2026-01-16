@@ -6,6 +6,7 @@
             [minii-focus.widgets.bottom-nav :as nav]
             [minii-focus.widgets.fab :as fab]
             [minii-focus.widgets.app-drawer :as drawer]
+            [minii-focus.widgets.search-button :as search-button]
             [minii-focus.pages.settings :as settings]
             [minii-focus.logic.task-actions :as actions]
             ["dart:core" :as dc]))
@@ -23,6 +24,7 @@
    :get {{{bg .-surface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
+    .appBar (m/AppBar .actions [(search-button/filter-aware-search-button)])
     .backgroundColor bg
 
     ;; 侧边栏：包含品牌展示和功能入口

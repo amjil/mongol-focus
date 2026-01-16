@@ -1,0 +1,156 @@
+(ns minii-focus.logic.search-actions
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [minii-focus.logic.db :as db]
+            [minii-focus.state.store :as store]
+            ;; 修改此处：引入 cat-actions 而不是原 widgets.category
+            [minii-focus.logic.category-actions :as cat-actions] 
+            [components.dialog :as dialog]
+            [components.tokens :as tokens]
+            [virtual-keyboard.keyboard :as keyboard]
+            [components.text-field :as text-field]))
+
+(defn open-search-dialog [ctx]
+  (let [search-term-atom (atom "")]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [ctx]
+       (f/widget
+        :managed [controller (m/TextEditingController .text "")]
+        :watch [term search-term-atom
+                ;; 监听全局状态中的分类 ID，用于过滤搜索结果
+                {cat-id :selected-category-id} store/app-ui-state
+                db-items (stream 
+                           (map (fn [rows] (take 10 (map #(.-data %) rows))))
+                           (map (fn [_] []))
+                           :as-values (db/watch-tasks-filtered 
+                                        {:search-term term 
+                                         :category-id cat-id}))]
+        :get {{{on-surface .-onSurface primary .-primary surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
+        
+        (dialog/vertical-custom-dialog
+         {:title "ХАЙХ" 
+          :width-factor 1.0
+          :height-factor 0.95 
+          :inset-padding m/EdgeInsets.zero
+          :body 
+          (m/Column.
+           .children
+           [;; --- 1. 顶部：关闭按钮 ---
+            (m/Align.
+             .alignment m/Alignment.topRight
+             .child (m/IconButton. 
+                     .icon (m/Icon. m/Icons.close) 
+                     .onPressed #(m/Navigator.pop ctx)))
+
+            ;; --- 2. 核心交互区 ---
+            (m/Expanded.
+             .child
+             (m/Padding.
+              .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :m))
+              .child
+              (m/Stack.
+               .children
+               [;; --- 底层布局 ---
+                (m/Row.
+                 .crossAxisAlignment m/CrossAxisAlignment.stretch 
+                 .children
+                 [;; A. 输入框
+                  (m/IntrinsicWidth.
+                   .child
+                   (m/Container.
+                    .constraints (m/BoxConstraints. .minWidth 80.0 .maxWidth 140.0)
+                    .padding (m/EdgeInsets.all (tokens/space :s))
+                    .decoration (m/BoxDecoration.
+                                 .border (m/Border.all .color (.withOpacity on-surface 0.1))
+                                 .borderRadius (m/BorderRadius.circular 12))
+                    .child (text-field/text-field
+                            {:controller controller
+                             :hint "Бичих..."
+                             :autofocus true
+                             :max-lines nil
+                             :on-changed (fn [t] (reset! search-term-atom t))})))
+
+                  ;; B. 中间：分类筛选按钮
+                  (m/Padding.
+                   .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s))
+                   .child
+                   (m/Column.
+                    .children
+                    [(m/IconButton.
+                      .icon (m/Icon. (if cat-id m/Icons.filter_list m/Icons.filter_list_off)
+                                     .color (if cat-id primary nil))
+                      ;; 修改此处：调用新的逻辑层接口
+                      .onPressed (fn []
+                                   (cat-actions/show-category-picker
+                                    ctx
+                                    {:current-id cat-id
+                                     :on-select (fn [id] (swap! store/app-ui-state assoc :selected-category-id id))})
+                                   nil))
+                     (when cat-id
+                       (m/Container. .width 6.0 .height 6.0 
+                                     .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle)))]))
+
+                  ;; C. 右侧：结果预览卡片
+                  (m/Expanded.
+                   .child 
+                   (if (seq db-items)
+                     (m/ListView.builder
+                      .scrollDirection m/Axis.horizontal
+                      .itemCount (count db-items)
+                      .itemBuilder (fn [ctx idx]
+                                     (let [task (nth db-items idx)]
+                                       (m/Padding.
+                                        .padding (m/EdgeInsets.only .right (tokens/space :s))
+                                        .child
+                                        (m/GestureDetector.
+                                         .onTap #(do (swap! store/app-ui-state assoc :selected-task task)
+                                                     (m/Navigator.pop ctx)
+                                                     (m/Navigator.pushNamed ctx "/task-detail")
+                                                     nil)
+                                         .child
+                                         (m/IntrinsicWidth.
+                                          .child
+                                          (m/Container.
+                                           .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 16.0)
+                                           .decoration (m/BoxDecoration.
+                                                        .color surface-variant
+                                                        .borderRadius (m/BorderRadius.circular 12.0)
+                                                        .border (m/Border.all .color (.withOpacity on-surface 0.05)))
+                                           .child (mgl/MongolText. (get task "title")
+                                                                  .style (m/TextStyle. .fontSize 15.0 
+                                                                                      .height 1.2 
+                                                                                      .color on-surface)))))))))
+                     (m/Center. .child (mgl/MongolText. "Илэрцгүй" .style (m/TextStyle. .color (.withOpacity on-surface 0.3))))))])
+
+                ;; --- 中层：键盘候选词浮层 ---
+                (keyboard/candidates nil)])))
+
+            ;; --- 3. 底部：虚拟键盘 ---
+            (m/SizedBox. .height (tokens/space :m))
+            (keyboard/keyboard
+              {:controller controller
+               :on-changed (fn [t] (reset! search-term-atom t))})])
+
+          :actions 
+          [(m/IconButton.
+            .icon (m/Icon. m/Icons.backspace_outlined)
+            .onPressed (fn [] 
+                         (.clear controller) 
+                         (reset! search-term-atom "")
+                         nil))
+           
+           (m/Spacer.)
+
+           (mgl/MongolElevatedButton.
+            .onPressed (fn []
+                         (swap! store/app-ui-state assoc :search-term @search-term-atom)
+                         (m/Navigator.pop ctx)
+                         nil)
+            .child (mgl/MongolText. "ХААХ")) ;; 修改为更贴切的“关闭”
+           
+           (mgl/MongolTextButton.
+            .onPressed (fn [] (m/Navigator.pop ctx) nil)
+            .child (mgl/MongolText. "БОЛИХ"))]}))))))

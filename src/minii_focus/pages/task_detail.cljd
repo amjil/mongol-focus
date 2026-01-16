@@ -5,34 +5,45 @@
             [minii-focus.logic.db :as db]
             [minii-focus.state.store :as store]
             [minii-focus.logic.task-actions :as actions]
-            [components.bottom-sheet :as bs] ;; 引入你的组件
+            [minii-focus.logic.category-actions :as category]
+            [components.bottom-sheet :as bs]
             [mongol-date-picker.picker :as picker]
             ["package:intl/intl.dart" :as intl]
             ["dart:core" :as dc]))
 
-;; 优先级配置数据
-(def priority-options
-  [{:type :header :title "Select Priority"}
-   {:title "High"   :icon m/Icons.label_important_rounded :value 2}
-   {:title "Medium" :icon m/Icons.label_rounded           :value 1}
-   {:title "Low"    :icon m/Icons.label_outline_rounded   :value 0}])
+;; --- 1. 优先级配置数据 (蒙古文本地化) ---
+
+(def ^:private priority-options
+  [{:type :header :title "Урьтамж сонгох"}
+   {:title "Өндөр"   :icon m/Icons.label_important_rounded :value 2}
+   {:title "Дунд"    :icon m/Icons.label_rounded           :value 1}
+   {:title "Бага"    :icon m/Icons.label_outline_rounded   :value 0}])
+
+;; --- 2. 页面主组件 ---
 
 (defn task-detail-page []
   (f/widget
    :context ctx
    :watch [{task :selected-task} store/app-ui-state]
-   :let [title (get task "title")
-         notes (get task "notes")
-         task-id (get task "id")
-         due-date (get task "due_date")
-         priority (get task "priority")]
+   :let [task-id   (get task "id")
+         title     (get task "title")
+         notes     (get task "notes")
+         due-date  (get task "due_date")
+         priority  (get task "priority")
+         ;; 直接从数据库关联查询结果中提取
+         cat-id    (get task "category_id")
+         cat-name  (get task "category_name")
+         cat-icon  (get task "category_icon")]
    :get {{{bg .-surface primary .-primary} .-colorScheme} m/Theme}
 
    (m/Scaffold.
     .backgroundColor bg
-    .appBar (m/AppBar. .backgroundColor m/Colors.transparent .elevation 0
-                       .leading (m/IconButton. .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
-                                               .onPressed (fn [] (m/Navigator.pop ctx))))
+    .appBar (m/AppBar. 
+             .backgroundColor m/Colors.transparent 
+             .elevation 0
+             .leading (m/IconButton. 
+                       .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
+                       .onPressed (fn [] (m/Navigator.pop ctx))))
     .body
     (if (nil? task)
       (m/Center. .child (m/CircularProgressIndicator.))
@@ -42,59 +53,105 @@
        (m/Row.
         .crossAxisAlignment m/CrossAxisAlignment.start
         .children
-        [;; --- A. Title (Hero) ---
+        [;; --- A. 标题区域 (Hero 动画) ---
          (m/Padding.
           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
           .child (m/Hero.
                   .tag task-id
                   .child (m/Material.
                           .color m/Colors.transparent
-                          .child (mgl/MongolText. title .style (m/TextStyle. .fontSize 48.0 .fontWeight m/FontWeight.w900 .color primary)))))
+                          .child (mgl/MongolText. (or title "")
+                                                  .style (m/TextStyle. .fontSize 48.0
+                                                                       .fontWeight m/FontWeight.w900
+                                                                       .color primary)))))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         ;; --- B. Notes Area ---
+         ;; --- B. 备注内容区域 ---
          (m/Padding.
           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
-          .child (mgl/MongolText. notes .style (m/TextStyle. .fontSize 16.0 .color primary)))
-         ;; ... (保持不变)
+          .child (mgl/MongolText. (or notes "")
+                                  .style (m/TextStyle. .fontSize 16.0 .color primary)))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         (mgl/MongolListTile.
-          .leading (m/Icon. m/Icons.calendar_today_rounded .color (if due-date primary m/Colors.grey))
-          .title (mgl/MongolText. (if due-date (.format (intl/DateFormat "yyyy-MM-dd") due-date) "Set Date"))
+         ;; --- C. 元数据属性区域 ---
+
+         ;; 1. 日期块 (已修正)
+         (m/GestureDetector.
           .onTap (fn []
                    (picker/show-picker ctx (fn [d] (db/update-task! task-id :due-date d))
                                        :initial-date (or due-date (dc/DateTime.now))
-                                       :show-time false)))
+                                       :show-time false))
+          .child (mgl/MongolListTile.
+                  .leading (m/Icon. m/Icons.calendar_today_rounded
+                                    .color (if due-date primary m/Colors.grey))
+                  .title (mgl/MongolText. (if due-date
+                                            (.format (intl/DateFormat "yyyy-MM-dd") due-date)
+                                            "Огноо тохируулах"))))
 
-         (mgl/MongolListTile.
-          .leading (m/Icon. m/Icons.label_important_outline
-                            .color (case (or priority 0) 2 m/Colors.red 1 m/Colors.orange 0 m/Colors.blue m/Colors.grey))
-          .title (mgl/MongolText. "Priority")
+         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
+
+         ;; 2. 优先级块 (已修正)
+         (m/GestureDetector.
           .onTap (fn []
                    (bs/bottom-sheet
                     ctx
-                    ;; 动态生成带有回调的 items
                     (map (fn [item]
                            (if (= (:type item) :header)
                              item
                              (assoc item :on-tap #(db/update-task! task-id :priority (:value item)))))
                          priority-options)
-                    :height-factor 0.35)))
+                    :height-factor 0.35))
+          .child
+          (mgl/MongolListTile.
+           .leading (m/Icon. m/Icons.label_important_outline
+                             .color (case (int (or priority 0))
+                                      2 m/Colors.red
+                                      1 m/Colors.orange
+                                      0 m/Colors.blue
+                                      m/Colors.grey))
+           .title (mgl/MongolText. "Урьтамж")))
+
+         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
+
+         ;; 3. 分类块 (修正点：将 .onTap 移出，改用 GestureDetector 包裹)
+         (m/GestureDetector.
+          .onTap (fn []
+                   (category/show-category-picker
+                    ctx
+                    {:current-id cat-id
+                     :on-select (fn [new-id]
+                                  (db/update-task! task-id :category-id new-id))}))
+          .child
+          (mgl/MongolListTile.
+           .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
+                             .color (if cat-id primary m/Colors.grey))
+           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
-         ;; --- C. Functional Area ---
+         ;; --- D. 功能操作区域 ---
          (m/Padding.
-          .padding (m/EdgeInsets.only .bottom 40.0)
+          .padding (m/EdgeInsets.only .bottom 40.0 .right 40.0)
           .child
-          (mgl/MongolFilledButton
-           .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes}))
-           .child (m/Column. .mainAxisSize m/MainAxisSize.min
-                             .children [(m/Icon. m/Icons.edit_note)
-                                        (m/SizedBox. .height 8)
-                                        (mgl/MongolText. "Edit")])))
+          (m/Column.
+           .mainAxisSize m/MainAxisSize.min
+           .children
+           [;; 编辑/修改按钮
+            (mgl/MongolFilledButton.
+             .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes}))
+             .child (m/Column. .mainAxisSize m/MainAxisSize.min
+                               .children [(m/Icon. m/Icons.edit_note)
+                                          (m/SizedBox. .height 8)
+                                          (mgl/MongolText. "Засах")]))
 
-         ]))))))
+            (m/SizedBox. .height 16.0)
+
+            ;; 删除按钮
+            (mgl/MongolTextButton.
+             .style (m/ButtonStyle. .foregroundColor (m/MaterialStateProperty.all m/Colors.red))
+             .onPressed (fn []
+                          (db/delete-task! task-id)
+                          (m/Navigator.pop ctx))
+             .child (mgl/MongolText. "Устгах"))]))]))))))

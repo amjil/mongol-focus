@@ -1,0 +1,39 @@
+(ns minii-focus.widgets.search-button
+  (:require [cljd.flutter :as f]
+            [clojure.string :as str]
+            ["package:flutter/material.dart" :as m]
+            [minii-focus.state.store :as store]
+            [minii-focus.logic.search-actions :as search-actions]))
+
+(defn filter-aware-search-button []
+  (f/widget
+   :context ctx
+   :watch [{:keys [search-term selected-category-id]} store/app-ui-state]
+   :get {{{primary .-primary on-surface .-onSurface surface .-surface} .-colorScheme} m/Theme}
+   :let [is-filtered (or (not (str/blank? search-term))
+                         (some? selected-category-id))]
+   (m/Stack
+    .alignment m/Alignment.center
+    .children
+    [(m/IconButton
+      .icon (m/Icon (if is-filtered m/Icons.search_rounded m/Icons.search_outlined)
+                    .color (if is-filtered primary on-surface))
+      .tooltip (cond 
+                 (and (not (str/blank? search-term)) selected-category-id) "Шүүлтүүр ба хайлт идэвхтэй"
+                 is-filtered "Шүүлтүүр идэвхтэй"
+                 :else "Хайх")
+      .onPressed (fn [] (search-actions/open-search-dialog ctx) nil))
+     
+     ;; 当过滤生效时，显示一个指示圆点
+     (if is-filtered
+       (m/Positioned
+        .top 12.0
+        .right 12.0
+        .child (m/Container
+                .width 10.0
+                .height 10.0
+                .decoration (m/BoxDecoration
+                             .color primary
+                             .shape m/BoxShape.circle
+                             .border (m/Border.all .color surface .width 2.0))))
+       (m/SizedBox.shrink))])))

@@ -1,139 +1,141 @@
 (ns minii-focus.widgets.category
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
-            ["package:mongol/mongol.dart" :as mgl]
-            [minii-focus.logic.db :as db]
-            [minii-focus.state.store :refer [app-ui-state]]
-            [components.dialog :as dialog]
-            [components.tokens :as tokens]))
+            ["package:mongol/mongol.dart" :as mgl]))
 
-;; --- 基础卡片组件 ---
-(defn- confirm-delete-dialog [ctx name on-confirm]
-  (m/showDialog
-   .context ctx
-   .builder
-   (fn [ctx]
-     (dialog/vertical-custom-dialog
-      {:title "АНХААР!" ;; "警告！"
-       :height-factor 0.4
-       :width-factor 0.8
-       :body (m/Center.
-              .child (mgl/MongolText. (str "'" name "' ангиллыг устгах уу?")
-                                     .style (m/TextStyle. .fontSize 16.0)))
-       :actions [(m/TextButton.
-                  .onPressed #(m/Navigator.pop ctx)
-                  .child (mgl/MongolText. "БОЛИХ")) ;; "取消"
-                 (m/ElevatedButton.
-                  .style (m/ElevatedButton.styleFrom .backgroundColor m/Colors.red)
-                  .onPressed (fn [] 
-                               (on-confirm)
-                               (m/Navigator.pop ctx))
-                  .child (mgl/MongolText. "УСТГАХ" 
-                                         .style (m/TextStyle. .color m/Colors.red)))]})))) ;; "删除"
+;; --- 1. 常量配置 ---
+(def category-icons
+  [{:name "Folder" :code 0xe2a3} {:name "Work" :code 0xe11c}
+   {:name "Home" :code 0xe318} {:name "Study" :code 0xe54d}
+   {:name "Shopping" :code 0xe508} {:name "Fitness" :code 0xeb43}
+   {:name "Heart" :code 0xe25b} {:name "Star" :code 0xe5d4}
+   {:name "Idea" :code 0xe3ad} {:name "Travel" :code 0xe539}
+   {:name "Food" :code 0xe2e2} {:name "Money" :code 0xe041}])
 
-(defn category-card [{:keys [id name icon-code is-selected on-tap]}]
+;; --- 2. 内部组件：图标选择器内容 ---
+(defn icon-picker-content [{:keys [on-select]}]
+  (m/GridView.builder
+   .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount 
+                  .crossAxisCount 4
+                  .mainAxisSpacing 10.0
+                  .crossAxisSpacing 10.0)
+   .padding (m/EdgeInsets.all 16.0)
+   .itemCount (count category-icons)
+   .itemBuilder (fn [ctx idx]
+                  (let [icon (get category-icons idx)]
+                    (m/IconButton.
+                     .onPressed #(on-select (:code icon))
+                     .icon (m/Icon. (m/IconData. (:code icon) .fontFamily "MaterialIcons") 
+                                   .size 30.0))))))
+
+;; --- 3. 核心组件：分类卡片 (自适应蒙文宽度) ---
+(defn category-card [{:keys [id name icon-code is-selected on-tap on-long-press]}]
   (f/widget
    :context ctx
-   :get {{{primary .-primary on-surface .-onSurface} .-colorScheme} m/Theme}
+   :get {{{primary .-primary on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
    (m/Padding.
     .padding (m/EdgeInsets.only .right 12.0)
-    (m/InkWell.
+    .child
+    (m/GestureDetector.
      .onTap on-tap
-     ;; 长按触发基于组件库的删除对话框
-     .onLongPress (fn []
-                    (when (and id (not= name "All")) ;; 避开ID为空或特殊分类
-                      (confirm-delete-dialog ctx name #(db/delete-category! id))))
-     .borderRadius (m/BorderRadius.circular 20.0)
+     .onLongPress on-long-press
+     .child
      (m/Container.
       .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 12.0)
       .decoration (m/BoxDecoration.
-                   .color (.withOpacity primary (if is-selected 0.25 0.08))
+                   .color (if is-selected (.withOpacity primary 0.15) (.withOpacity surface-variant 0.5))
                    .borderRadius (m/BorderRadius.circular 20.0)
                    .border (when is-selected (m/Border.all .color primary .width 2.0)))
       .child (m/Column.
               .mainAxisSize m/MainAxisSize.min
-              .mainAxisAlignment m/MainAxisAlignment.center
               .children 
-              [(m/Icon. (if icon-code 
-                          (m/IconData. icon-code .fontFamily "MaterialIcons")
-                          m/Icons.folder_rounded) 
-                 .color (if is-selected primary (.withOpacity on-surface 0.6))
-                 .size 28.0)
-               (m/SizedBox. .height 10.0)
-               (m/Flexible. 
+              [(m/Icon. (m/IconData. (or icon-code 0xe2a3) .fontFamily "MaterialIcons") 
+                        .color (if is-selected primary (.withOpacity on-surface 0.6))
+                        .size 26.0)
+               (m/SizedBox. .height 8.0)
+               (m/IntrinsicWidth.
                 .child (mgl/MongolText. (or name "")
-                                       .maxLines 1
-                                       .overflow m/TextOverflow.ellipsis
-                                       .style (m/TextStyle. 
-                                               .color on-surface 
-                                               .fontSize 14.0
-                                               .fontWeight (if is-selected m/FontWeight.bold m/FontWeight.normal))))]))))))
+                                       .style (m/TextStyle. .color on-surface .fontSize 14.0
+                                                           .fontWeight (if is-selected m/FontWeight.bold m/FontWeight.normal))))]))))))
 
-;; --- 新增分类对话框 ---
-(defn- add-category-dialog [ctx]
-  (let [name-state (atom "")]
-    (f/widget
-     (dialog/vertical-custom-dialog
-      {:title "ШИНЭ АНГИЛАЛ"
-       :body (m/Center.
-              .child (mgl/MongolTextField.
-                      .autofocus true
-                      .decoration (m/InputDecoration.
-                                   .labelText "Ангиллын нэр"
-                                   .border (m/OutlineInputBorder.))
-                      .onChanged (fn [v] (reset! name-state v))))
-       :actions [(mgl/MongolTextButton.
-                  .onPressed (fn [] (m/Navigator.pop ctx))
-                  .child (mgl/MongolText. "ЦУЦЛАХ"))
-                 (mgl/MongolElevatedButton.
-                  .onPressed (fn []
-                               (when-not (empty? @name-state)
-                                 ;; 默认使用文件夹图标 (codePoint: 0xe2a3)
-                                 (db/add-category! @name-state 0xe2a3)
-                                 (m/Navigator.pop ctx)))
-                  .child (mgl/MongolText. "ХАДГАЛАХ"))]
-       :height-factor 0.4
-       :width-factor 1
-       :inset-padding m/EdgeInsets.zero}))))
-
-;; --- 新增分类按钮 ---
-(defn add-category-button []
+;; --- 4. 详情页/搜索页：分类选择对话框内部布局 ---
+(defn category-picker-content 
+  [{:keys [categories current-id on-select on-search-tap selected-icon-code on-icon-press]}]
   (f/widget
-   :context ctx
+   :get {{{primary .-primary} .-colorScheme} m/Theme}
+   (m/Column.
+    .children
+    [;; 搜索与图标选择 Row
+     (m/Padding.
+      .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+      .child 
+      (m/Row.
+       .children
+       [(m/Expanded.
+         .child 
+         (m/OutlinedButton.icon
+          .icon (m/Icon. m/Icons.search)
+          .label (mgl/MongolText. "Хайх эсвэл нэмэх...")
+          .onPressed on-search-tap))
+        
+        (m/SizedBox. .width 12.0)
+        
+        (m/IconButton.
+         .icon (m/Icon. (m/IconData. selected-icon-code .fontFamily "MaterialIcons") .color primary)
+         .onPressed on-icon-press)]))
+
+     (m/Divider. .height 24.0)
+
+     ;; 分类横向列表 (复用下面的 list-view 逻辑)
+     (m/Expanded.
+      .child
+      (m/ListView.builder
+       .scrollDirection m/Axis.horizontal
+       .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+       .itemCount (count categories)
+       .itemBuilder 
+       (fn [ctx idx]
+         (let [cat (nth categories idx)]
+           (category-card
+            {:id (get cat "id")
+             :name (get cat "name")
+             :icon-code (get cat "icon_code")
+             :is-selected (= (get cat "id") current-id)
+             :on-tap #(on-select (get cat "id"))})))))])))
+
+;; --- 5. 主页面：滚动组件布局 ---
+
+;; 新增按钮
+(defn add-category-button [{:keys [on-tap]}]
+  (f/widget
    :get {{{primary .-primary} .-colorScheme} m/Theme}
    (m/Padding.
     .padding (m/EdgeInsets.only .left 20.0 .right 8.0)
+    .child
     (m/IconButton.
-     .onPressed (fn [] 
-                  (m/showDialog 
-                   .context ctx 
-                   .builder (fn [ctx] (add-category-dialog ctx))))
+     .onPressed on-tap
      .icon (m/Icon. m/Icons.add_circle_outline .size 32.0 .color primary)))))
 
-;; --- 主滚动列表组件 ---
-(defn category-scroll-view []
-  (f/widget
-   :context ctx
-   :watch [categories (stream
-                        (map (fn [rows] (map (fn [row] (.-data row)) rows)))
-                        (map (fn [[_er _st]] []))
-                        :as-values (db/watch-categories))
-           {:keys [selected-category-id]} app-ui-state]
-   (m/Row.
-    .children
-    [(add-category-button)
-     (m/Expanded.
-      .child
-      (m/ListView.
-       .scrollDirection m/Axis.horizontal
-       .padding (m/EdgeInsets.only .right 20.0)
-       .children 
-       (->> (or categories [])
-            (map (fn [cat]
-                   (let [id (get cat "id")]
-                     (category-card
-                      {:name (get cat "name")
-                       :icon-code (get cat "icon_code") ;; 对应数据库中的 icon_code 字段
-                       :is-selected (= id selected-category-id)
-                       :on-tap #(swap! app-ui-state assoc :selected-category-id id)}))))
-            vec)))])))
+;; 主列表排列布局
+(defn category-scroll-layout [{:keys [categories selected-id on-add-tap on-item-tap on-item-long-press]}]
+  (m/Row.
+   .children
+   [(add-category-button {:on-tap on-add-tap})
+    (m/Expanded.
+     .child
+     (m/ListView.builder
+      .scrollDirection m/Axis.horizontal
+      .padding (m/EdgeInsets.only .right 20.0)
+      .itemCount (count categories)
+      .itemBuilder 
+      (fn [ctx idx]
+        (let [cat (nth categories idx)
+              id (get cat "id")
+              name (get cat "name")]
+          (category-card
+           {:id id
+            :name name
+            :icon-code (get cat "icon_code")
+            :is-selected (= id selected-id)
+            :on-tap #(on-item-tap id)
+            :on-long-press #(on-item-long-press id name)})))))]))

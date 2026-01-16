@@ -2,7 +2,8 @@
   (:require ["package:cljd_mongol_focus/database.dart" :as drift]
             ["package:drift/drift.dart" :as d]
             ["dart:core" :as dc]
-            ["dart:async" :as async]))
+            ["dart:async" :as async]
+            [clojure.string :as str]))
 
 ;; =============================================================================
 ;; 1. 数据库实例管理
@@ -29,10 +30,33 @@
     (.watch
      (.customSelect
       database
-      "SELECT * FROM tasks WHERE is_done = false ORDER BY display_order ASC, created_at DESC"))
-     
-      
+      "SELECT 
+       t.*, 
+       c.name as category_name, 
+       c.icon_code as category_icon
+       FROM tasks t
+        LEFT JOIN categories c ON t.category_id = c.id
+       WHERE is_done = false
+       ORDER BY display_order ASC, created_at DESC"))
     (async/Stream.empty)))
+
+(defn watch-tasks-filtered
+  "根据关键词和分类 ID 过滤任务"
+  [{:keys [search-term category-id]}]
+  (let [query (str "SELECT t.*, c.name as category_name, c.icon_code as category_icon "
+                   "FROM tasks t LEFT JOIN categories c ON t.category_id = c.id "
+                   "WHERE t.is_done = false "
+                   (when-not (str/blank? search-term)
+                     "AND (t.title LIKE ? OR t.notes LIKE ?) ")
+                   (when category-id
+                     "AND t.category_id = ? ")
+                   "ORDER BY t.display_order ASC")
+        vars (cond-> []
+               (not (str/blank? search-term)) (conj (str "%" search-term "%") (str "%" search-term "%"))
+               category-id (conj category-id))]
+    (if-let [^drift/AppDatabase database @db]
+      (.watch (.customSelect database query .variables (map #(d/Variable. %) vars)))
+      (async/Stream.empty))))
 
 
 (defn watch-tasks-by-category
@@ -95,7 +119,7 @@
       (.write query
               (drift/TasksCompanion.
                .isDone (d/Value is-done)
-               .completedAt (if is-done (d/Value now) (d/Value nil)))))
+               .completedAt (if is-done (d/Value ^dc/DateTime? now) (d/Value.absent)))))
     (throw (ex-info "数据库未初始化" {}))))
 
 (defn string-value [v]
@@ -107,17 +131,23 @@
   {:due-date
    (fn [v]
      (drift/TasksCompanion.
-      .dueDate (d/Value v)))
+      .dueDate (if (nil? v)
+                 (d/Value.absent)
+                 (d/Value ^dc/DateTime? v))))
 
    :priority
    (fn [v]
      (drift/TasksCompanion.
-      .priority (d/Value v)))
+      .priority (d/Value ^int v)))
+
+   :category-id
+   (fn [v]
+     (if (nil? v)
+       (d/Value.absent)
+       (d/Value ^int v)))
 
    :title-and-notes
    (fn [{:keys [title notes]}]
-     (dart:core/print (str "title:" title))
-     (dart:core/print (str "notes:" notes))
      (let [title (string-value title)
            notes (string-value notes)]
        (drift/TasksCompanion.
