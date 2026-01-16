@@ -5,7 +5,7 @@
    [components.tokens :as tokens]))
 
 
-(defn floating-action-toolbar [{:keys [on-paste on-submit is-active]}]
+(defn floating-action-toolbar [{:keys [on-paste on-submit on-cancel is-active]}]
   (f/widget
    :get {{{:flds [primary onPrimary surface]} .-colorScheme} m/Theme}
    (m/Positioned
@@ -24,18 +24,25 @@
    (m/Column ;; In Mongolian environment, toolbar can also be vertically arranged
     .mainAxisSize m/MainAxisSize.min
     .children
-    [(m/IconButton
-      .icon (m/Icon m/Icons.paste_rounded)
-      .onPressed on-paste)
-     (m/SizedBox .height (tokens/space :xs))
-     ;; Main action button: Things-style large round button
-     (m/AnimatedContainer
-      .duration (dart:core/Duration .milliseconds 200)
-      .curve m/Curves.easeInOut
-      .decoration (m/BoxDecoration
-                   .color (if is-active primary (-> primary (.withOpacity 0.3)))
-                   .shape m/BoxShape.circle)
-      .child (m/IconButton
-              .icon (m/Icon m/Icons.arrow_upward_rounded ;; Upward arrow represents submit to list
-                            .color (if is-active onPrimary (-> onPrimary (.withOpacity 0.5))))
-              .onPressed (when is-active on-submit)))])))
+    (concat
+     (if on-cancel
+       [(m/IconButton
+         .icon (m/Icon m/Icons.close_rounded)
+         .onPressed on-cancel)
+        (m/SizedBox .height (tokens/space :xs))]
+       [])
+     [(m/IconButton
+       .icon (m/Icon m/Icons.paste_rounded)
+       .onPressed on-paste)
+      (m/SizedBox .height (tokens/space :xs))
+      ;; Main action button: Things-style large round button
+      (m/AnimatedContainer
+       .duration (dart:core/Duration .milliseconds 200)
+       .curve m/Curves.easeInOut
+       .decoration (m/BoxDecoration
+                    .color (if is-active primary (-> primary (.withOpacity 0.3)))
+                    .shape m/BoxShape.circle)
+       .child (m/IconButton
+               .icon (m/Icon m/Icons.arrow_upward_rounded ;; Upward arrow represents submit to list
+                             .color (if is-active onPrimary (-> onPrimary (.withOpacity 0.5))))
+               .onPressed (when is-active on-submit)))]))))

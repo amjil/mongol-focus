@@ -28,7 +28,17 @@
    :let [task-id   (get task "id")
          title     (get task "title")
          notes     (get task "notes")
-         due-date  (get task "due_date")
+         due-date-raw (get task "due_date")
+         due-date  (cond
+                     (nil? due-date-raw) nil
+                     (instance? dc/DateTime due-date-raw) due-date-raw
+                     (number? due-date-raw) (let [ts (long due-date-raw)]
+                                              ;; SQLite stores DateTime as Unix timestamp in seconds
+                                              ;; If the number is large (> 10^10), assume it's already in milliseconds
+                                              (if (> ts 10000000000)
+                                                (dc/DateTime.fromMillisecondsSinceEpoch ts)
+                                                (dc/DateTime.fromMillisecondsSinceEpoch (* ts 1000))))
+                     :else nil)
          priority  (get task "priority")
          ;; Extract directly from database join query result
          cat-id    (get task "category_id")

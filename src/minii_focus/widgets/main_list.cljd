@@ -156,7 +156,8 @@
                                 false true)
                   :on-tap     (fn []
                                 ;; 1. Store current task object in global state
-                                (swap! app-ui-state assoc :selected-task task)
+                                ;; Convert Dart Map to Clojure map
+                                (swap! app-ui-state assoc :selected-task (into {} task))
                                 ;; 2. Navigate to detail page
                                 (m/Navigator.push
                                  ctx

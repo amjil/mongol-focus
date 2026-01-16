@@ -5,7 +5,6 @@
    [minii-focus.state.store :as store] ;; Import store to manipulate UI state
    [components.tokens :as tokens]
    [components.dialog :as dialog]
-   [components.text :as text]
    ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter/material.dart" :as m]))
 
@@ -36,8 +35,14 @@
                                               :title-and-notes 
                                               {:title new-title :notes new-notes})
                              ;; 2. Synchronously update selected task in Store to ensure detail page UI refreshes immediately
-                             (swap! store/app-ui-state update :selected-task 
-                                    merge {"title" new-title "notes" new-notes}))
+                             ;; current-task is already a Clojure map, so we can directly merge updates
+                             (swap! store/app-ui-state 
+                                    (fn [state]
+                                      (let [current-task (:selected-task state)
+                                            updated-task (if current-task
+                                                          (merge current-task {"title" new-title "notes" new-notes})
+                                                          nil)]
+                                        (assoc state :selected-task updated-task)))))
                            ;; Create mode
                            (db/add-task! {:title new-title :notes new-notes}))
                          

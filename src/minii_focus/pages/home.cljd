@@ -24,7 +24,9 @@
    :get {{{bg .-surface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
-    .appBar (m/AppBar .actions [(search-button/filter-aware-search-button)])
+    .appBar (m/AppBar .actions (if (not= selected-nav-id "settings")
+                                 [(search-button/filter-aware-search-button)]
+                                 []))
     .backgroundColor bg
 
     ;; Sidebar: Contains brand display and feature entries

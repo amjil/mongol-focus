@@ -10,7 +10,7 @@
    [minii-focus.widgets.action-toolbar :as action-toolbar]))
 
 (defn generic-input-dialog
-  [{:keys [title initial-text initial-notes on-submit]}]
+  [{:keys [title initial-text initial-notes on-submit on-cancel]}]
   ;; 1. Upgrade state to Map, saving both title and notes
   (let [data-atom (atom {:title initial-text :notes initial-notes})]
     (f/widget
@@ -84,7 +84,8 @@
                    :on-paste (fn [] ;; Paste logic
                                )
                    ;; Submit entire Map
-                   :on-submit #(on-submit @data-atom)}))]))
+                   :on-submit #(on-submit @data-atom)
+                   :on-cancel on-cancel}))]))
 
            ;; --- Lower Part: Keyboard Area ---
            (m/Container
