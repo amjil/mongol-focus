@@ -1,152 +1,197 @@
 # Mongol Focus
 
-A task management and focus application built with ClojureDart + Flutter, featuring traditional Mongolian vertical writing, built-in vertical design system, focus mode, and task database, along with a custom Mongolian virtual keyboard and fonts.
+A modern task management application built with Flutter and ClojureDart, designed specifically for Mongolian language support. Inspired by Things-style task management, Mongol Focus provides a clean and intuitive interface for organizing your daily tasks.
 
-## Overview
+## Features
 
-Mongol Focus is a productivity application designed specifically for traditional Mongolian vertical writing. It provides a comprehensive task management system with focus capabilities, following the top-to-bottom, right-to-left reading pattern of Mongolian script.
+### Task Management
+- **Create, Edit, and Delete Tasks**: Full CRUD operations for task management
+- **Task Details**: Support for task titles and detailed notes
+- **Task Completion**: Mark tasks as done with automatic completion timestamp
+- **Task Prioritization**: Set priority levels for tasks
+- **Due Dates**: Optional due date assignment for tasks
+- **Task Reordering**: Manual drag-and-drop sorting with display order persistence
 
-## Key Features
+### Categories & Organization
+- **Category Management**: Create and manage custom categories/lists
+- **Category Icons**: Assign icons to categories for visual organization
+- **Category Filtering**: Filter tasks by category
+- **Sidebar Navigation**: Quick access to categories via sidebar drawer
 
-- **Vertical Writing First**: All text is displayed vertically, with columns as the primary structure, following the Mongolian reading pattern from top to bottom and right to left.
-- **Page Navigation**: Nine main sections accessible via bottom navigation and drawer: Today, Inbox, Focus, Forecast, Projects, Tags, Review, Statistics, and Settings. The bottom bar retains the four most frequently used pages.
-- **Design System**: Comprehensive component library including `MongolColumnLayout`, `MongolTextBlock`, `MongolTaskItem`, `FocusDepthBar`, and more, covering layout, text, gestures, and animations.
-- **Focus Capabilities**: Focus container, focus depth bar, session creation/exit, with support for depth score recording and querying.
-- **Database**: Drift-based database with tables for Items, ItemTree, Tags, FocusSessions, Reviews, and Settings, with cross-platform connectivity fully implemented.
-- **Keyboard & Fonts**: Built-in Mongolian virtual keyboard (based on FST resources in `assets/next.zip`) and multiple vertical writing fonts.
+### Search & Filtering
+- **Full-Text Search**: Search tasks by title or notes content
+- **Category-Aware Search**: Combine search with category filtering
+- **Real-Time Filtering**: Instant search results as you type
+
+### Views & Navigation
+- **Today View**: View all active (uncompleted) tasks
+- **Logbook View**: Browse completed tasks sorted by completion date
+- **Settings Page**: Customize app preferences
+- **Bottom Navigation**: Easy switching between main views
+- **Smooth Animations**: Fade transitions and entry animations for better UX
+
+### Mongolian Language Support
+- **Mongolian Text Rendering**: Full support for vertical Mongolian script using the `mongol` package
+- **Multiple Font Families**: Support for 8 different Mongolian fonts:
+  - OyunQaganTig
+  - OyunAgulaTig
+  - OyunGarbiqimelTig
+  - OyunGarqagTig
+  - OyunGurbanUlusTig
+  - OyunHaraTig
+  - OyunHawangTig
+  - OyunSoninTig
+- **Virtual Keyboard**: Integrated Mongolian virtual keyboard for text input
+- **FST Input Method**: Finite State Transducer (FST) based input method for efficient Mongolian text entry
+- **Mongolian UI Elements**: All UI components support Mongolian text display
+
+### Data Persistence
+- **SQLite Database**: Local data storage using Drift (formerly Moor)
+- **Reactive Queries**: Stream-based reactive database queries for real-time UI updates
+- **Data Migration**: Built-in database migration support
+
+### User Interface
+- **Material Design 3**: Modern Material Design 3 UI components
+- **Dark Mode**: Full dark theme support
+- **Responsive Layout**: Adaptive layouts for different screen sizes
+- **Floating Action Button**: Quick task creation with scroll-aware FAB
+- **Slidable Actions**: Swipe actions on task cards for quick operations
+
+### Settings & Customization
+- **Dark Mode Toggle**: Enable/disable dark theme
+- **Notification Settings**: Configure notification preferences
+- **Language Settings**: Language preference management
+- **Sidebar Control**: Toggle sidebar visibility
+
+## Technology Stack
+
+- **Framework**: Flutter 3.10.4+
+- **Language**: ClojureDart (Clojure for Dart/Flutter)
+- **Database**: Drift (SQLite) with reactive streams
+- **Mongolian Support**: 
+  - `mongol` package for vertical text rendering
+  - `mongol_code` for Mongolian text encoding
+  - Custom virtual keyboard implementation
+  - FST-based input method
+- **State Management**: Atom-based state management with reactive streams
+- **UI Components**: Material Design 3, custom Mongolian components
 
 ## Project Structure
 
 ```
-mongol-focus/
-├── src/minii_focus/      # ClojureDart source code (components, pages, services, state, utilities)
-├── lib/
-│   ├── cljd-out/         # Generated Dart code from ClojureDart (do not edit manually)
-│   └── database/         # Drift database definitions and platform-specific connections
-└── assets/               # Fonts and FST dictionary resources
+lib/
+  ├── main.dart                    # Flutter entry point
+  ├── database.dart                # Drift database schema
+  └── connection/                  # Database connection logic
+
+src/minii_focus/
+  ├── main.cljd                    # Application entry point
+  ├── pages/
+  │   ├── home.cljd               # Main home page
+  │   ├── settings.cljd           # Settings page
+  │   └── task_detail.cljd        # Task detail view
+  ├── widgets/
+  │   ├── main_list.cljd          # Task list widget
+  │   ├── task_card.cljd          # Individual task card
+  │   ├── bottom_nav.cljd         # Bottom navigation
+  │   ├── fab.cljd                # Floating action button
+  │   ├── sidebar.cljd            # Category sidebar
+  │   └── ...                     # Other UI components
+  ├── logic/
+  │   ├── db.cljd                 # Database operations
+  │   ├── task.cljd               # Task business logic
+  │   ├── task_actions.cljd       # Task action handlers
+  │   ├── category_actions.cljd   # Category operations
+  │   └── search_actions.cljd     # Search functionality
+  └── state/
+      └── store.cljd              # Global state management
+
+assets/
+  ├── fonts/                      # Mongolian font files
+  └── fst/                        # FST input method resources
 ```
 
-## Requirements
+## Getting Started
 
-- Flutter 3.10+ (Dart 3.10+)
-- Clojure CLI (for ClojureDart compilation)
-- Flutter development environment for your target platform (Android/iOS/macOS/Windows/Linux)
+### Prerequisites
 
-## Quick Start
+- Flutter SDK 3.10.4 or higher
+- Clojure CLI tools
+- Dart SDK (included with Flutter)
 
-### 1. Install Dependencies
+### Installation
 
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd mongol-focus
+```
+
+2. Install Flutter dependencies:
 ```bash
 flutter pub get
 ```
 
-### 2. Build and Run
-
+3. Install ClojureDart dependencies:
 ```bash
-clj -M:cljd flutter run
+clj -M:cljd prep
 ```
 
-This command will:
-- Compile `.cljd` source files from `src/` to `lib/cljd-out/`
-- Run the Flutter application
-
-You can specify a device with `-d <device-id>`.
-
-### 3. Common Commands
-
-- **Generate code only**: `clj -M:cljd flutter build`
-- **Run with hot reload**: `clj -M:cljd flutter run`
-- **Run tests**: `flutter test`
-
-## Key Pages and Routing
-
-The application entry point is located in `src/minii_focus/main.cljd`. Navigation is managed through bottom navigation and a drawer, providing access to nine pages (Today/Inbox/Focus/Forecast/Projects/Tags/Review/Statistics/Settings), with a routing table for programmatic navigation.
-
-## Database and Services
-
-- **Drift Table Definitions**: See `lib/database/database.dart`
-- **Database Initialization**: `services/database.cljd`
-- **Task and Focus Logic**: `services/task.cljd` (task CRUD, Focus sessions, depth updates, etc.)
-
-## Design System
-
-The project includes a comprehensive design system for vertical Mongolian writing:
-
-- **Design Tokens**: Spacing, typography, and color systems
-- **Layout Components**: Column-first layouts, vertical page views
-- **Text Components**: Vertical text blocks, task items, note blocks
-- **Focus Components**: Focus containers and depth indicators
-- **Gesture Components**: Unified gesture handling for vertical writing
-- **Motion Components**: Animations optimized for vertical layouts
-
-## Progress and Roadmap 
-
-**Completed:**
-- Design system and component library
-- Database structure and connectivity
-- Basic pages and services
-- Mongolian virtual keyboard integration
-
-**In Progress:**
-- Task hierarchy and ordering management
-- Tag and review services
-- Task editing and gesture interactions (swipe left to enter Focus, long-press for structure adjustment)
-- Real-time data refresh
-- Complete routing experience
-
-## Dependencies
-
-### Core
-- Flutter SDK
-- ClojureDart
-- Drift (database)
-- Mongol (vertical writing support)
-
-### Key Packages
-- `drift`: ^2.27.0 - Database ORM
-- `mongol`: ^9.0.0 - Mongolian vertical writing support
-- `mongol_code`: ^1.0.4 - Mongolian code utilities
-- `path_provider`: ^2.1.4 - File system paths
-- `sqlite3_flutter_libs`: ^0.5.34 - SQLite support
-- `flutter_local_notifications`: ^19.5.0 - Local notifications
-- `vibration`: ^3.1.4 - Haptic feedback
-
-See `pubspec.yaml` for the complete list.
-
-## Assets
-
-The project includes:
-- **Mongolian Fonts**: Multiple Oyun family fonts (QaganTig, AgulaTig, GarbiqimelTig, etc.)
-- **FST Resources**: Dictionary files for the virtual keyboard (`assets/next.zip`, `assets/fst/`)
-
-## Development
-
-### ClojureDart Workflow
-
-1. Edit `.cljd` files in `src/minii_focus/`
-2. Compile with `clj -M:cljd flutter build`
-3. Generated Dart code appears in `lib/cljd-out/`
-4. Run with Flutter tools
-
-### Database Migrations
-
-Database schema is defined in `lib/database/database.dart`. Run migrations with:
-
+4. Generate database code:
 ```bash
 flutter pub run build_runner build
 ```
 
+5. Run the application:
+```bash
+flutter run
+```
+
+## Development
+
+### Building
+
+To build the ClojureDart code:
+```bash
+clj -M:cljd prep
+```
+
+To generate database code:
+```bash
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+### Database Schema
+
+The application uses Drift for database management with two main tables:
+
+- **Tasks**: Stores task information (title, notes, completion status, due dates, priority, category, etc.)
+- **Categories**: Stores category/list information (name, icon, position)
+
+## Dependencies
+
+### Flutter Packages
+- `drift`: Reactive SQLite database
+- `mongol`: Mongolian vertical text rendering
+- `mongol_code`: Mongolian text encoding
+- `flutter_slidable`: Swipeable list items
+- `flutter_styled_toast`: Toast notifications
+- `vibration`: Haptic feedback
+- `http`: HTTP client
+- `archive`: Archive file handling
+- `path_provider`: File system paths
+- `intl`: Internationalization
+
+### ClojureDart Dependencies
+- `tensegritics/clojuredart`: ClojureDart runtime
+- `amjil/mongol-virtual-keyboard`: Mongolian virtual keyboard
+- `amjil/mongol-date-picker`: Mongolian date picker
+- `amjil/mgl-components`: Mongolian UI components
+
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome! Please ensure your code follows the existing design system and vertical writing conventions.
-
-## Resources
-
-- [ClojureDart Documentation](https://github.com/tensegritics/ClojureDart)
-- [Flutter Documentation](https://flutter.dev/docs)
-- [Drift Documentation](https://drift.simonbinder.eu/)
-- [Mongol Package](https://pub.dev/packages/mongol)
+Contributions are welcome! Please feel free to submit a Pull Request.
