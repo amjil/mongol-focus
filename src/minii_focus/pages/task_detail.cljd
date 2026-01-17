@@ -7,6 +7,8 @@
             [minii-focus.logic.task-actions :as actions]
             [minii-focus.logic.category-actions :as category]
             [components.bottom-sheet :as bs]
+            [components.dialog :as dialog]
+            [components.tokens :as tokens]
             [mongol-date-picker.picker :as picker]
             ["package:intl/intl.dart" :as intl]
             ["dart:core" :as dc]))
@@ -18,6 +20,30 @@
    {:title "Өндөр"   :icon m/Icons.label_important_rounded :value 2}
    {:title "Дунд"    :icon m/Icons.label_rounded           :value 1}
    {:title "Бага"    :icon m/Icons.label_outline_rounded   :value 0}])
+
+;; --- 1.5. Notes Dialog Function ---
+
+(defn show-notes-dialog [ctx notes-text]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [dialog-ctx]
+     (dialog/vertical-custom-dialog
+      {:title "Тэмдэглэл"
+       :width-factor 0.85
+       :height-factor 0.7
+       :body
+       (m/Padding.
+        .padding (m/EdgeInsets.all (tokens/space :l))
+        .child
+        (m/SingleChildScrollView.
+         .scrollDirection m/Axis.vertical
+         .child
+         (mgl/MongolText. (or notes-text "")
+                         .style (m/TextStyle. .fontSize 16.0))))
+       :actions [(mgl/MongolTextButton.
+                  .onPressed #(m/Navigator.pop dialog-ctx)
+                  .child (mgl/MongolText. "Хаах"))]}))))
 
 ;; --- 2. Main Page Component ---
 
@@ -85,10 +111,15 @@
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
          ;; --- B. Notes Content Area ---
-         (m/Padding.
-          .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
-          .child (mgl/MongolText. (or notes "")
-                                  .style (m/TextStyle. .fontSize 16.0 .color primary)))
+         (m/GestureDetector.
+          .onTap (fn [] (show-notes-dialog ctx notes))
+          .child
+          (m/Padding.
+           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
+           .child (mgl/MongolText. (or notes "")
+                                   .style (m/TextStyle. .fontSize 16.0 .color primary)
+                                   .maxLines 3
+                                   .overflow m/TextOverflow.ellipsis)))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
