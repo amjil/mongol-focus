@@ -70,8 +70,10 @@
          ;; Extract directly from database join query result
          cat-id    (get task "category_id")
          cat-name  (get task "category_name")
-         cat-icon  (get task "category_icon")]
-   :get {{{bg .-surface primary .-primary} .-colorScheme} m/Theme}
+         cat-icon  (get task "category_icon")
+         subtask-count (get task "subtask_count")
+         subtask-done-count (get task "subtask_done_count")]
+   :get {{{bg .-surface primary .-primary onSurface .-onSurface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
     .backgroundColor bg
@@ -181,24 +183,15 @@
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
          ;; 4. Subtasks Block - Show count and button to navigate to subtasks list
-         (f/widget
-          :watch [count-result (stream
-                                (map (fn [rows]
-                                       (if (seq rows)
-                                         (get (.-data (first rows)) "count")
-                                         0)))
-                                (map (fn [[_er _st]] 0))
-                                :as-values (db/watch-subtask-count task-id))]
-          :get {{{onSurface .-onSurface} .-colorScheme} m/Theme}
-          (m/GestureDetector.
-           .onTap (fn []
+         (m/GestureDetector.
+          .onTap (fn []
                    (s/HapticFeedback.mediumImpact)
                    (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title})
                    nil)
-           .child
-           (mgl/MongolListTile.
-            .leading (m/Icon. m/Icons.list_alt_rounded
-                              .color primary)
-            .title (mgl/MongolText. (str "Дэд даалгавар (" (or count-result 0) ")"))
-            .trailing (m/Icon. m/Icons.chevron_right_rounded
-                              .color onSurface))))]))))))
+          .child
+          (mgl/MongolListTile.
+           .leading (m/Icon. m/Icons.list_alt_rounded
+                             .color primary)
+           .title (mgl/MongolText. (str "Дэд даалгавар (" (or subtask-count 0) ")"))
+           .trailing (m/Icon. m/Icons.chevron_right_rounded
+                              .color onSurface)))]))))))
