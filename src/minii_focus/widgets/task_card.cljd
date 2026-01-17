@@ -29,6 +29,7 @@
       .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s) .vertical (tokens/space :xs))
       .child
       (m/Container.
+       .constraints (m/BoxConstraints. .minHeight double/infinity)
        .padding (m/EdgeInsets.all (tokens/space :m))
        .decoration (m/BoxDecoration.
                     ;; 1. Background Feedback: Color fades after completion
@@ -40,7 +41,7 @@
                                  .offset (m/Offset. 2.0 2.0))])
        .child
        (m/Column
-        .mainAxisSize m/MainAxisSize.min
+        .mainAxisSize m/MainAxisSize.max
         .crossAxisAlignment m/CrossAxisAlignment.center
         .children
         [;; --- A. Checkbox Interaction ---
@@ -57,6 +58,8 @@
                         (db/update-task! id :is-done v))))
 
          ;; --- B. Text Click Area ---
+         (m/Expanded.
+          .child
          (m/GestureDetector.
           .onTap on-tap
           .child
@@ -90,4 +93,4 @@
                 .style (m/TextStyle.
                         .fontSize 12.0
                         .color (if is-done? (.withOpacity onSurfaceVariant 0.4) onSurfaceVariant))))
-              (m/SizedBox.shrink))]))])))})))
+              (m/SizedBox.shrink))])))])))})))
