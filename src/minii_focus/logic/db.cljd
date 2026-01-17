@@ -33,7 +33,9 @@
       "SELECT 
        t.*, 
        c.name as category_name, 
-       c.icon_code as category_icon
+       c.icon_code as category_icon,
+        (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id) as subtask_count,
+        (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id AND is_done = 1) as subtask_done_count
        FROM tasks t
         LEFT JOIN categories c ON t.category_id = c.id
        WHERE t.is_done = false AND t.parent_id IS NULL
@@ -186,7 +188,7 @@
    :category-id
    (fn [v]
      (if (nil? v)
-       (d/Value ^int? nil)
+       (d/Value nil)
        (d/Value ^int v)))
 
    :title-and-notes

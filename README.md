@@ -11,6 +11,9 @@ A modern task management application built with Flutter and ClojureDart, designe
 - **Task Prioritization**: Set priority levels for tasks
 - **Due Dates**: Optional due date assignment for tasks
 - **Task Reordering**: Manual drag-and-drop sorting with display order persistence
+- **Subtasks Support**: Create and manage subtasks for any parent task
+- **Subtask Navigation**: Dedicated page for viewing and managing subtasks of a task
+- **Subtask Count Display**: Show the number of subtasks for each task in the detail view
 
 ### Categories & Organization
 - **Category Management**: Create and manage custom categories/lists
@@ -89,7 +92,8 @@ src/minii_focus/
   ├── pages/
   │   ├── home.cljd               # Main home page
   │   ├── settings.cljd           # Settings page
-  │   └── task_detail.cljd        # Task detail view
+  │   ├── task_detail.cljd        # Task detail view
+  │   └── subtasks_list.cljd      # Subtasks list page
   ├── widgets/
   │   ├── main_list.cljd          # Task list widget
   │   ├── task_card.cljd          # Individual task card
@@ -165,8 +169,10 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 The application uses Drift for database management with two main tables:
 
-- **Tasks**: Stores task information (title, notes, completion status, due dates, priority, category, etc.)
+- **Tasks**: Stores task information (title, notes, completion status, due dates, priority, category, parent_id for subtasks, display_order for sorting, etc.)
 - **Categories**: Stores category/list information (name, icon, position)
+
+Tasks support a self-referential relationship through the `parent_id` field, allowing tasks to have subtasks. The main task list only shows top-level tasks (tasks without a parent).
 
 ## Dependencies
 

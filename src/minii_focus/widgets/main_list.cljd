@@ -18,14 +18,14 @@
     .tween (m/Tween. .begin 0.0 .end 1.0)
     .duration (dart:core/Duration. .milliseconds 800) ;; Animation duration longer than cards
     .curve m/Curves.easeOutQuad ;; Smoother curve
-    .builder (fn [ctx value child]
+    .builder (fn [ctx value prebuilt-child]
                (m/Opacity.
                 .opacity value
                 .child (m/Transform.translate
                         ;; Slide in from left with larger offset
                         .offset (m/Offset. (* -50.0 (- 1.0 value)) 0.0)
-                        .child child))))
-   .child child))
+                        .child prebuilt-child)))
+    .child child)))
 
 (defn- entry-animation
   "Provide fade-in and displacement effects for components, using Future to implement true lazy loading"

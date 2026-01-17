@@ -18,13 +18,13 @@
     .tween (m/Tween. .begin 0.0 .end 1.0)
     .duration (dart:core/Duration. .milliseconds 800)
     .curve m/Curves.easeOutQuad
-    .builder (fn [ctx value child]
+    .builder (fn [_ctx value prebuilt-child]
                (m/Opacity.
                 .opacity value
                 .child (m/Transform.translate
                         .offset (m/Offset. (* -50.0 (- 1.0 value)) 0.0)
-                        .child child))))
-   .child child))
+                        .child prebuilt-child)))
+    .child child)))
 
 (defn- entry-animation
   "Provide fade-in and displacement effects for components"
@@ -51,7 +51,6 @@
 
 (defn- empty-state-view [title]
   (f/widget
-   :context ctx
    :get {{{primary .-primary} .-colorScheme
           {titleLarge .-titleLarge} .-textTheme} m/Theme}
    (m/Center.
