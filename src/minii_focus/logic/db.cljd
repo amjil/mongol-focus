@@ -37,7 +37,8 @@
        FROM tasks t
         LEFT JOIN categories c ON t.category_id = c.id
        WHERE is_done = false
-       ORDER BY display_order ASC, created_at DESC"))
+       ORDER BY display_order ASC, created_at DESC"
+      .readsFrom #{(.-tasks database) (.-categories database)}))
     (async/Stream.empty)))
 
 (defn watch-tasks-filtered
@@ -78,7 +79,15 @@
     (.watch
      (.customSelect
       database
-      "SELECT * FROM tasks WHERE is_done = true ORDER BY completed_at DESC"))
+      "SELECT 
+       t.*, 
+       c.name as category_name, 
+       c.icon_code as category_icon
+       FROM tasks t
+        LEFT JOIN categories c ON t.category_id = c.id
+       WHERE is_done = true
+       ORDER BY display_order ASC, created_at DESC"
+      .readsFrom #{(.-tasks database) (.-categories database)}))
     (async/Stream.empty)))
 
 (defn watch-all-categories
@@ -118,7 +127,7 @@
                   (.where (fn [tbl] (.equals (.-id tbl) id))))]
       (.write query
               (drift/TasksCompanion.
-               .isDone (d/Value is-done)
+               .isDone (d/Value ^bool is-done)
                .completedAt (if is-done (d/Value ^dc/DateTime? now) (d/Value.absent)))))
     (throw (ex-info "Database not initialized" {}))))
 
@@ -157,7 +166,7 @@
    :is-done
    (fn [v]
      (drift/TasksCompanion.
-      .isDone (d/Value v)))})
+      .isDone (d/Value ^bool v)))})
 
 (defn update-task!
   [id field value]
