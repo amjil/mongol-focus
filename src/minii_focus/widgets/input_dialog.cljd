@@ -76,6 +76,13 @@
                         :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
                         :on-changed #(swap! data-atom assoc :notes %)}))])))])
               
+              ;; --- Top Right: Close Button ---
+              (m/Align
+               .alignment m/Alignment.topRight
+               .child (m/IconButton 
+                       .icon (m/Icon m/Icons.close)
+                       .onPressed on-cancel))
+              
               ;; --- Things-style Floating Toolbar ---
               (f/widget
                 :watch [data data-atom]
@@ -84,8 +91,7 @@
                    :on-paste (fn [] ;; Paste logic
                                )
                    ;; Submit entire Map
-                   :on-submit #(on-submit @data-atom)
-                   :on-cancel on-cancel}))]))
+                   :on-submit #(on-submit @data-atom) }))]))
 
            ;; --- Lower Part: Keyboard Area ---
            (m/Container

@@ -40,9 +40,11 @@
     (m/MaterialApp
      .theme (m/ThemeData
              .primarySwatch m/Colors.blue
+             .fontFamily "OyunQaganTig"
              .useMaterial3 true)
      .darkTheme (m/ThemeData
                  .primarySwatch m/Colors.blue
+                 .fontFamily "OyunQaganTig"
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
      .home (home/home-page)))))

@@ -56,34 +56,25 @@
    .builder 
    (fn [dialog-ctx] ;; Renamed to dialog-ctx to avoid confusion with outer ctx
      (dialog/vertical-custom-dialog
-      {:width-factor 0.8
+      {:title "Устгах уу?"
+       :width-factor 0.8
        :height-factor 0.35
        :body 
        (m/Padding.
         .padding (m/EdgeInsets.all (tokens/space :l))
         .child
-        (m/Row. 
-         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-         .children
-         [(mgl/MongolText. "Устгах уу?" 
-                          .style (m/TextStyle. .fontSize 18.0 .fontWeight m/FontWeight.bold))
-          
-          (m/Column.
-           .mainAxisAlignment m/MainAxisAlignment.end
-           .crossAxisAlignment m/CrossAxisAlignment.center
-           .children
-           [(mgl/MongolElevatedButton.
-             .onPressed (fn [] 
-                          (db/delete-task! id)
-                          (m/Navigator.pop dialog-ctx) ;; Close confirmation dialog
-                          (if editor-ctx
-                            (m/Navigator.pop editor-ctx) ;; Close editor
-                            (m/Navigator.pop ctx)))      ;; Navigate back to list from detail page
-             .style (m/ElevatedButton.styleFrom .backgroundColor m/Colors.red)
-             .child (mgl/MongolText. "Устгах" .style (m/TextStyle. .color m/Colors.white))) ;; Changed to white
-
-            (m/SizedBox. .height (tokens/space :s))
-            
-            (mgl/MongolTextButton.
-             .onPressed #(m/Navigator.pop dialog-ctx)
-             .child (mgl/MongolText. "Болих"))])]))}))))
+        (m/Center.
+         .child (mgl/MongolText. "Энэ даалгаврыг устгах уу?"
+                                .style (m/TextStyle. .fontSize 16.0))))
+       :actions [(mgl/MongolTextButton.
+                  .onPressed #(m/Navigator.pop dialog-ctx)
+                  .child (mgl/MongolText. "Болих"))
+                 (mgl/MongolElevatedButton.
+                  .style (m/ButtonStyle. .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
+                  .onPressed (fn [] 
+                               (db/delete-task! id)
+                               (m/Navigator.pop dialog-ctx) ;; Close confirmation dialog
+                               (if editor-ctx
+                                 (m/Navigator.pop editor-ctx) ;; Close editor
+                                 (m/Navigator.pop ctx)))      ;; Navigate back to list from detail page
+                  .child (mgl/MongolText. "Устгах" .style (m/TextStyle. .color m/Colors.white)))]}))))

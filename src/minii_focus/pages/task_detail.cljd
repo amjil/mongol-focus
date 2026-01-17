@@ -53,7 +53,14 @@
              .elevation 0
              .leading (m/IconButton. 
                        .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
-                       .onPressed (fn [] (m/Navigator.pop ctx))))
+                       .onPressed (fn [] (m/Navigator.pop ctx)))
+             .actions [(m/IconButton.
+                        .icon (m/Icon. m/Icons.delete_outline_rounded)
+                        .color m/Colors.red
+                        .onPressed (fn [] (actions/delete-task-confirm ctx nil task-id)))
+                       (m/IconButton.
+                        .icon (m/Icon. m/Icons.edit_note)
+                        .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes})))])
     .body
     (if (nil? task)
       (m/Center. .child (m/CircularProgressIndicator.))
@@ -98,7 +105,7 @@
                                     .color (if due-date primary m/Colors.grey))
                   .title (mgl/MongolText. (if due-date
                                             (.format (intl/DateFormat "yyyy-MM-dd") due-date)
-                                            "Огноо тохируулах"))))
+                                            "Set date"))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -137,31 +144,4 @@
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
-           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))
-
-         (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
-
-         ;; --- D. Action Operations Area ---
-         (m/Padding.
-          .padding (m/EdgeInsets.only .bottom 40.0 .right 40.0)
-          .child
-          (m/Column.
-           .mainAxisSize m/MainAxisSize.min
-           .children
-           [;; Edit/Modify Button
-            (mgl/MongolFilledButton.
-             .onPressed (fn [] (actions/open-task-editor ctx {:id task-id :title title :notes notes}))
-             .child (m/Column. .mainAxisSize m/MainAxisSize.min
-                               .children [(m/Icon. m/Icons.edit_note)
-                                          (m/SizedBox. .height 8)
-                                          (mgl/MongolText. "Засах")]))
-
-            (m/SizedBox. .height 16.0)
-
-            ;; Delete Button
-            (mgl/MongolTextButton.
-             .style (m/ButtonStyle. .foregroundColor (m/MaterialStateProperty.all m/Colors.red))
-             .onPressed (fn []
-                          (db/delete-task! task-id)
-                          (m/Navigator.pop ctx))
-             .child (mgl/MongolText. "Устгах"))]))]))))))
+           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))]))))))
