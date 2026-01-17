@@ -6,7 +6,6 @@
             ["dart:async" :as async]
             [minii-focus.logic.db :as db]
             [minii-focus.logic.task-actions :as actions]
-            [minii-focus.pages.task-detail :as task-detail-page]
             [minii-focus.state.store :refer [app-ui-state]]
             [minii-focus.widgets.task-card :as task-card]
             [components.tokens :as tokens]))
@@ -158,8 +157,5 @@
                                 ;; 1. Store current task object in global state
                                 ;; Convert Dart Map to Clojure map
                                 (swap! app-ui-state assoc :selected-task (into {} task))
-                                ;; 2. Navigate to detail page
-                                (m/Navigator.push
-                                 ctx
-                                 (m/MaterialPageRoute.
-                                  .builder (fn [_] (task-detail-page/task-detail-page)))))}))})))))))))
+                                ;; 2. Navigate to detail page using named route
+                                (m/Navigator.pushNamed ctx "/task-detail"))}))})))))))))

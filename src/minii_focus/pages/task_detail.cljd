@@ -1,6 +1,7 @@
 (ns minii-focus.pages.task-detail
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
+            ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.logic.db :as db]
             [minii-focus.state.store :as store]
@@ -175,4 +176,29 @@
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
-           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))]))))))
+           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))
+
+         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
+
+         ;; 4. Subtasks Block - Show count and button to navigate to subtasks list
+         (f/widget
+          :watch [count-result (stream
+                                (map (fn [rows]
+                                       (if (seq rows)
+                                         (get (.-data (first rows)) "count")
+                                         0)))
+                                (map (fn [[_er _st]] 0))
+                                :as-values (db/watch-subtask-count task-id))]
+          :get {{{onSurface .-onSurface} .-colorScheme} m/Theme}
+          (m/GestureDetector.
+           .onTap (fn []
+                   (s/HapticFeedback.mediumImpact)
+                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title})
+                   nil)
+           .child
+           (mgl/MongolListTile.
+            .leading (m/Icon. m/Icons.list_alt_rounded
+                              .color primary)
+            .title (mgl/MongolText. (str "Дэд даалгавар (" (or count-result 0) ")"))
+            .trailing (m/Icon. m/Icons.chevron_right_rounded
+                              .color onSurface))))]))))))

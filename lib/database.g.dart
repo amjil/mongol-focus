@@ -413,6 +413,20 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       'REFERENCES categories (id)',
     ),
   );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<int> parentId = GeneratedColumn<int>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tasks (id) ON DELETE CASCADE',
+    ),
+  );
   static const VerificationMeta _displayOrderMeta = const VerificationMeta(
     'displayOrder',
   );
@@ -436,6 +450,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     completedAt,
     priority,
     categoryId,
+    parentId,
     displayOrder,
   ];
   @override
@@ -506,6 +521,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
       );
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
     if (data.containsKey('display_order')) {
       context.handle(
         _displayOrderMeta,
@@ -560,6 +581,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}category_id'],
       ),
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parent_id'],
+      ),
       displayOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}display_order'],
@@ -583,6 +608,7 @@ class Task extends DataClass implements Insertable<Task> {
   final DateTime? completedAt;
   final int priority;
   final int? categoryId;
+  final int? parentId;
   final double displayOrder;
   const Task({
     required this.id,
@@ -594,6 +620,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.completedAt,
     required this.priority,
     this.categoryId,
+    this.parentId,
     required this.displayOrder,
   });
   @override
@@ -615,6 +642,9 @@ class Task extends DataClass implements Insertable<Task> {
     map['priority'] = Variable<int>(priority);
     if (!nullToAbsent || categoryId != null) {
       map['category_id'] = Variable<int>(categoryId);
+    }
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<int>(parentId);
     }
     map['display_order'] = Variable<double>(displayOrder);
     return map;
@@ -639,6 +669,9 @@ class Task extends DataClass implements Insertable<Task> {
       categoryId: categoryId == null && nullToAbsent
           ? const Value.absent()
           : Value(categoryId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       displayOrder: Value(displayOrder),
     );
   }
@@ -658,6 +691,7 @@ class Task extends DataClass implements Insertable<Task> {
       completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
       priority: serializer.fromJson<int>(json['priority']),
       categoryId: serializer.fromJson<int?>(json['categoryId']),
+      parentId: serializer.fromJson<int?>(json['parentId']),
       displayOrder: serializer.fromJson<double>(json['displayOrder']),
     );
   }
@@ -674,6 +708,7 @@ class Task extends DataClass implements Insertable<Task> {
       'completedAt': serializer.toJson<DateTime?>(completedAt),
       'priority': serializer.toJson<int>(priority),
       'categoryId': serializer.toJson<int?>(categoryId),
+      'parentId': serializer.toJson<int?>(parentId),
       'displayOrder': serializer.toJson<double>(displayOrder),
     };
   }
@@ -688,6 +723,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<DateTime?> completedAt = const Value.absent(),
     int? priority,
     Value<int?> categoryId = const Value.absent(),
+    Value<int?> parentId = const Value.absent(),
     double? displayOrder,
   }) => Task(
     id: id ?? this.id,
@@ -699,6 +735,7 @@ class Task extends DataClass implements Insertable<Task> {
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
     priority: priority ?? this.priority,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
+    parentId: parentId.present ? parentId.value : this.parentId,
     displayOrder: displayOrder ?? this.displayOrder,
   );
   Task copyWithCompanion(TasksCompanion data) {
@@ -716,6 +753,7 @@ class Task extends DataClass implements Insertable<Task> {
       categoryId: data.categoryId.present
           ? data.categoryId.value
           : this.categoryId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       displayOrder: data.displayOrder.present
           ? data.displayOrder.value
           : this.displayOrder,
@@ -734,6 +772,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('completedAt: $completedAt, ')
           ..write('priority: $priority, ')
           ..write('categoryId: $categoryId, ')
+          ..write('parentId: $parentId, ')
           ..write('displayOrder: $displayOrder')
           ..write(')'))
         .toString();
@@ -750,6 +789,7 @@ class Task extends DataClass implements Insertable<Task> {
     completedAt,
     priority,
     categoryId,
+    parentId,
     displayOrder,
   );
   @override
@@ -765,6 +805,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.completedAt == this.completedAt &&
           other.priority == this.priority &&
           other.categoryId == this.categoryId &&
+          other.parentId == this.parentId &&
           other.displayOrder == this.displayOrder);
 }
 
@@ -778,6 +819,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<DateTime?> completedAt;
   final Value<int> priority;
   final Value<int?> categoryId;
+  final Value<int?> parentId;
   final Value<double> displayOrder;
   const TasksCompanion({
     this.id = const Value.absent(),
@@ -789,6 +831,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.completedAt = const Value.absent(),
     this.priority = const Value.absent(),
     this.categoryId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.displayOrder = const Value.absent(),
   });
   TasksCompanion.insert({
@@ -801,6 +844,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.completedAt = const Value.absent(),
     this.priority = const Value.absent(),
     this.categoryId = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.displayOrder = const Value.absent(),
   }) : title = Value(title);
   static Insertable<Task> custom({
@@ -813,6 +857,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<DateTime>? completedAt,
     Expression<int>? priority,
     Expression<int>? categoryId,
+    Expression<int>? parentId,
     Expression<double>? displayOrder,
   }) {
     return RawValuesInsertable({
@@ -825,6 +870,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (completedAt != null) 'completed_at': completedAt,
       if (priority != null) 'priority': priority,
       if (categoryId != null) 'category_id': categoryId,
+      if (parentId != null) 'parent_id': parentId,
       if (displayOrder != null) 'display_order': displayOrder,
     });
   }
@@ -839,6 +885,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<DateTime?>? completedAt,
     Value<int>? priority,
     Value<int?>? categoryId,
+    Value<int?>? parentId,
     Value<double>? displayOrder,
   }) {
     return TasksCompanion(
@@ -851,6 +898,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       completedAt: completedAt ?? this.completedAt,
       priority: priority ?? this.priority,
       categoryId: categoryId ?? this.categoryId,
+      parentId: parentId ?? this.parentId,
       displayOrder: displayOrder ?? this.displayOrder,
     );
   }
@@ -885,6 +933,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (categoryId.present) {
       map['category_id'] = Variable<int>(categoryId.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<int>(parentId.value);
+    }
     if (displayOrder.present) {
       map['display_order'] = Variable<double>(displayOrder.value);
     }
@@ -903,6 +954,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('completedAt: $completedAt, ')
           ..write('priority: $priority, ')
           ..write('categoryId: $categoryId, ')
+          ..write('parentId: $parentId, ')
           ..write('displayOrder: $displayOrder')
           ..write(')'))
         .toString();
@@ -919,6 +971,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [categories, tasks];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tasks',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('tasks', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$CategoriesTableCreateCompanionBuilder =
@@ -1201,6 +1263,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<DateTime?> completedAt,
       Value<int> priority,
       Value<int?> categoryId,
+      Value<int?> parentId,
       Value<double> displayOrder,
     });
 typedef $$TasksTableUpdateCompanionBuilder =
@@ -1214,6 +1277,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<DateTime?> completedAt,
       Value<int> priority,
       Value<int?> categoryId,
+      Value<int?> parentId,
       Value<double> displayOrder,
     });
 
@@ -1232,6 +1296,24 @@ final class $$TasksTableReferences
       $_db.categories,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TasksTable _parentIdTable(_$AppDatabase db) => db.tasks.createAlias(
+    $_aliasNameGenerator(db.tasks.parentId, db.tasks.id),
+  );
+
+  $$TasksTableProcessedTableManager? get parentId {
+    final $_column = $_itemColumn<int>('parent_id');
+    if ($_column == null) return null;
+    final manager = $$TasksTableTableManager(
+      $_db,
+      $_db.tasks,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_parentIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -1306,6 +1388,29 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
           }) => $$CategoriesTableFilterComposer(
             $db: $db,
             $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TasksTableFilterComposer get parentId {
+    final $$TasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableFilterComposer(
+            $db: $db,
+            $table: $db.tasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -1392,6 +1497,29 @@ class $$TasksTableOrderingComposer
     );
     return composer;
   }
+
+  $$TasksTableOrderingComposer get parentId {
+    final $$TasksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableOrderingComposer(
+            $db: $db,
+            $table: $db.tasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TasksTableAnnotationComposer
@@ -1456,6 +1584,29 @@ class $$TasksTableAnnotationComposer
     );
     return composer;
   }
+
+  $$TasksTableAnnotationComposer get parentId {
+    final $$TasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.tasks,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$TasksTableTableManager
@@ -1471,7 +1622,7 @@ class $$TasksTableTableManager
           $$TasksTableUpdateCompanionBuilder,
           (Task, $$TasksTableReferences),
           Task,
-          PrefetchHooks Function({bool categoryId})
+          PrefetchHooks Function({bool categoryId, bool parentId})
         > {
   $$TasksTableTableManager(_$AppDatabase db, $TasksTable table)
     : super(
@@ -1495,6 +1646,7 @@ class $$TasksTableTableManager
                 Value<DateTime?> completedAt = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<int?> categoryId = const Value.absent(),
+                Value<int?> parentId = const Value.absent(),
                 Value<double> displayOrder = const Value.absent(),
               }) => TasksCompanion(
                 id: id,
@@ -1506,6 +1658,7 @@ class $$TasksTableTableManager
                 completedAt: completedAt,
                 priority: priority,
                 categoryId: categoryId,
+                parentId: parentId,
                 displayOrder: displayOrder,
               ),
           createCompanionCallback:
@@ -1519,6 +1672,7 @@ class $$TasksTableTableManager
                 Value<DateTime?> completedAt = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<int?> categoryId = const Value.absent(),
+                Value<int?> parentId = const Value.absent(),
                 Value<double> displayOrder = const Value.absent(),
               }) => TasksCompanion.insert(
                 id: id,
@@ -1530,6 +1684,7 @@ class $$TasksTableTableManager
                 completedAt: completedAt,
                 priority: priority,
                 categoryId: categoryId,
+                parentId: parentId,
                 displayOrder: displayOrder,
               ),
           withReferenceMapper: (p0) => p0
@@ -1538,7 +1693,7 @@ class $$TasksTableTableManager
                     (e.readTable(table), $$TasksTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({categoryId = false}) {
+          prefetchHooksCallback: ({categoryId = false, parentId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -1571,6 +1726,19 @@ class $$TasksTableTableManager
                               )
                               as T;
                     }
+                    if (parentId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.parentId,
+                                referencedTable: $$TasksTableReferences
+                                    ._parentIdTable(db),
+                                referencedColumn: $$TasksTableReferences
+                                    ._parentIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
 
                     return state;
                   },
@@ -1595,7 +1763,7 @@ typedef $$TasksTableProcessedTableManager =
       $$TasksTableUpdateCompanionBuilder,
       (Task, $$TasksTableReferences),
       Task,
-      PrefetchHooks Function({bool categoryId})
+      PrefetchHooks Function({bool categoryId, bool parentId})
     >;
 
 class $AppDatabaseManager {

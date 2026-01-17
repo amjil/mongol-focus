@@ -8,7 +8,9 @@
    [virtual-keyboard.zip-utils :as zip-utils]
    [virtual-keyboard.fst-reader :as fst-reader]
    [minii-focus.logic.db :as db]
-   [minii-focus.pages.home :as home]))
+   [minii-focus.pages.home :as home]
+   [minii-focus.pages.task-detail :as task-detail]
+   [minii-focus.pages.subtasks-list :as subtasks-list]))
 
 ;; Initialize application
 (defn init-app! []
@@ -47,4 +49,15 @@
                  .fontFamily "OyunQaganTig"
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
-     .home (home/home-page)))))
+     .home (home/home-page)
+     .onGenerateRoute (fn [settings]
+                       (let [name (.-name settings)
+                             args (.-arguments settings)]
+                         (m/MaterialPageRoute.
+                          .builder (fn [ctx]
+                                     (case name
+                                       "/task-detail" (task-detail/task-detail-page)
+                                       "/subtasks-list" (let [parent-id (get args "parentId")
+                                                              parent-title (get args "parentTitle")]
+                                                          (subtasks-list/subtasks-list-page parent-id parent-title))
+                                       (home/home-page))))))))))

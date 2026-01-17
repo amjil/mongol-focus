@@ -34,6 +34,9 @@ class Tasks extends Table {
   // If null, can default to "Inbox" (ᠳᠡᠭᠡᠵᠢ ᠪᠢᠴᠢᠭ)
   IntColumn get categoryId => integer().nullable().references(Categories, #id)();
   
+  // Parent task for subtasks (self-reference)
+  IntColumn get parentId => integer().nullable().references(Tasks, #id, onDelete: KeyAction.cascade)();
+  
   // Sort weight (for manual drag and drop sorting)
   RealColumn get displayOrder => real().withDefault(const Constant(0.0))();
 }
@@ -59,7 +62,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(impl.connect());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migrations {
@@ -68,14 +71,22 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // Handle logic for upgrading from old version to new version
+        // Step-by-step migration from version to version
         if (from < 1) {
-          // Upgrade from version 0 to version 1: create all tables
-          // If tables already exist, createAll will skip them
+          // Version 0 -> 1: Create all tables
           await m.createAll();
         }
-        // Can add more version upgrade logic here
-        // For example: if (from < 2) { ... } for upgrading from version 1 to version 2
+        
+        if (from < 2) {
+          // Version 1 -> 2: Add parent_id column for subtasks support
+          await m.addColumn(tasks, tasks.parentId);
+        }
+        
+        // Future migrations can be added here:
+        // if (from < 3) {
+        //   // Version 2 -> 3: Add new column or table
+        //   await m.addColumn(tasks, tasks.newColumn);
+        // }
       },
     );
   }

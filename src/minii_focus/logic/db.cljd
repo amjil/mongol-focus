@@ -24,7 +24,7 @@
 
 (defn watch-active-tasks
   "Watch the stream of active tasks.
-   Logic: Uncompleted tasks (is_done = false), sorted by display_order in ascending order."
+   Logic: Uncompleted tasks (is_done = false) without parent (parent_id is null), sorted by display_order in ascending order."
   []
   (if-let [^drift/AppDatabase database @db]
     (.watch
@@ -36,17 +36,17 @@
        c.icon_code as category_icon
        FROM tasks t
         LEFT JOIN categories c ON t.category_id = c.id
-       WHERE is_done = false
-       ORDER BY display_order ASC, created_at DESC"
+       WHERE t.is_done = false AND t.parent_id IS NULL
+       ORDER BY t.display_order ASC, t.created_at DESC"
       .readsFrom #{(.-tasks database) (.-categories database)}))
     (async/Stream.empty)))
 
 (defn watch-tasks-filtered
-  "Filter tasks by keyword and category ID"
+  "Filter tasks by keyword and category ID (excluding subtasks)"
   [{:keys [search-term category-id]}]
   (let [query (str "SELECT t.*, c.name as category_name, c.icon_code as category_icon "
                    "FROM tasks t LEFT JOIN categories c ON t.category_id = c.id "
-                   "WHERE t.is_done = false "
+                   "WHERE t.is_done = false AND t.parent_id IS NULL "
                    (when-not (str/blank? search-term)
                      "AND (t.title LIKE ? OR t.notes LIKE ?) ")
                    (when category-id
@@ -73,7 +73,7 @@
 
 (defn watch-logbook
   "Watch the logbook stream.
-   Logic: Completed tasks (is_done = true), sorted by completed_at in descending order."
+   Logic: Completed tasks (is_done = true) without parent, sorted by completed_at in descending order."
   []
   (if-let [^drift/AppDatabase database @db]
     (.watch
@@ -85,8 +85,8 @@
        c.icon_code as category_icon
        FROM tasks t
         LEFT JOIN categories c ON t.category_id = c.id
-       WHERE is_done = true
-       ORDER BY display_order ASC, created_at DESC"
+       WHERE t.is_done = true AND t.parent_id IS NULL
+       ORDER BY t.display_order ASC, t.created_at DESC"
       .readsFrom #{(.-tasks database) (.-categories database)}))
     (async/Stream.empty)))
 
@@ -97,20 +97,54 @@
     (.watch (.select database (.-categories database)))
     (async/Stream.empty)))
 
+(defn watch-subtasks
+  "Watch subtasks for a parent task."
+  [parent-id]
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT 
+       t.*, 
+       c.name as category_name, 
+       c.icon_code as category_icon
+       FROM tasks t
+        LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.parent_id = ?
+       ORDER BY t.display_order ASC, t.created_at ASC"
+      .variables [(d/Variable parent-id)]
+      .readsFrom #{(.-tasks database) (.-categories database)}))
+    (async/Stream.empty)))
+
+(defn watch-subtask-count
+  "Watch the count of subtasks for a parent task."
+  [parent-id]
+  (if-let [^drift/AppDatabase database @db]
+    (.watch
+     (.customSelect
+      database
+      "SELECT COUNT(*) as count FROM tasks WHERE parent_id = ?"
+      .variables [(d/Variable parent-id)]
+      .readsFrom #{(.-tasks database)}))
+    (async/Stream.empty)))
+
 ;; =============================================================================
 ;; 3. Write Operations (CRUD)
 ;; =============================================================================
 
 (defn add-task!
-  [{:keys [title notes category-id priority] :or {priority 0}}]
+  [{:keys [title notes category-id priority parent-id] :or {priority 0}}]
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/TasksCompanion.insert
                       :title title
                       :notes (if notes (d/Value ^String notes) (d/Value.absent))
-                      ;; Key point: Provide type reference for absent results, or directly cast the result
+                      ;; Use Value(null) with type annotation for nullable int fields
                       :categoryId (if category-id 
                                     (d/Value ^int category-id) 
                                     (d/Value nil))
+                      :parentId (if parent-id
+                                  (d/Value ^int parent-id)
+                                  (d/Value nil))
                       :priority (d/Value ^int priority)
                       :isDone (d/Value false)
                       :displayOrder (d/Value 0.0))]
@@ -152,7 +186,7 @@
    :category-id
    (fn [v]
      (if (nil? v)
-       (d/Value.absent)
+       (d/Value ^int? nil)
        (d/Value ^int v)))
 
    :title-and-notes

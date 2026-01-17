@@ -1,8 +1,9 @@
 (ns minii-focus.logic.task-actions
+  ;; Import store to manipulate UI state
   (:require
    [minii-focus.widgets.input-dialog :as input-dialog]
    [minii-focus.logic.db :as db]
-   [minii-focus.state.store :as store] ;; Import store to manipulate UI state
+   [minii-focus.state.store :as store]
    [components.tokens :as tokens]
    [components.dialog :as dialog]
    ["package:mongol/mongol.dart" :as mgl]
@@ -14,7 +15,7 @@
    In is-edit? mode, it will update the selected-task that the detail page is watching."
   ([ctx] (open-task-editor ctx nil))
   ([ctx task-map]
-   (let [{:keys [id title notes]} task-map
+   (let [{:keys [id title notes parent-id]} task-map
          is-edit? (some? id)]
      (m/showDialog
       .context ctx
@@ -22,7 +23,7 @@
       .builder 
       (fn [ctx]
         (input-dialog/generic-input-dialog
-         {:title (if is-edit? "Засах" "Шинэ даалгавар") ;; Edit / New Task
+         {:title (if is-edit? "Засах" (if parent-id "Шинэ дэд даалгавар" "Шинэ даалгавар")) ;; Edit / New Task / New Subtask
           :initial-text (or title "")
           :initial-notes (or notes "")
           :on-submit (fn [new-data]
@@ -43,11 +44,16 @@
                                                           (merge current-task {"title" new-title "notes" new-notes})
                                                           nil)]
                                         (assoc state :selected-task updated-task)))))
-                           ;; Create mode
-                           (db/add-task! {:title new-title :notes new-notes}))
+                           ;; Create mode (supports both regular tasks and subtasks)
+                           (db/add-task! {:title new-title :notes new-notes :parent-id parent-id}))
                          
                          (m/Navigator.pop ctx)))
           :on-cancel #(m/Navigator.pop ctx)}))))))
+
+(defn open-subtask-editor
+  "Open subtask editor dialog for a parent task."
+  [ctx parent-id]
+  (open-task-editor ctx {:parent-id parent-id}))
 
 (defn delete-task-confirm 
   [ctx editor-ctx id]
