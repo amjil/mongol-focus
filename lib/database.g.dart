@@ -353,6 +353,18 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _recurrenceModeMeta = const VerificationMeta(
+    'recurrenceMode',
+  );
+  @override
+  late final GeneratedColumn<int> recurrenceMode = GeneratedColumn<int>(
+    'recurrence_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _dueDateMeta = const VerificationMeta(
     'dueDate',
   );
@@ -456,6 +468,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     title,
     notes,
     isDone,
+    recurrenceMode,
     dueDate,
     reminderAt,
     createdAt,
@@ -498,6 +511,15 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       context.handle(
         _isDoneMeta,
         isDone.isAcceptableOrUnknown(data['is_done']!, _isDoneMeta),
+      );
+    }
+    if (data.containsKey('recurrence_mode')) {
+      context.handle(
+        _recurrenceModeMeta,
+        recurrenceMode.isAcceptableOrUnknown(
+          data['recurrence_mode']!,
+          _recurrenceModeMeta,
+        ),
       );
     }
     if (data.containsKey('due_date')) {
@@ -579,6 +601,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_done'],
       )!,
+      recurrenceMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}recurrence_mode'],
+      )!,
       dueDate: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_date'],
@@ -625,6 +651,7 @@ class Task extends DataClass implements Insertable<Task> {
   final String title;
   final String? notes;
   final bool isDone;
+  final int recurrenceMode;
   final DateTime? dueDate;
   final DateTime? reminderAt;
   final DateTime createdAt;
@@ -638,6 +665,7 @@ class Task extends DataClass implements Insertable<Task> {
     required this.title,
     this.notes,
     required this.isDone,
+    required this.recurrenceMode,
     this.dueDate,
     this.reminderAt,
     required this.createdAt,
@@ -656,6 +684,7 @@ class Task extends DataClass implements Insertable<Task> {
       map['notes'] = Variable<String>(notes);
     }
     map['is_done'] = Variable<bool>(isDone);
+    map['recurrence_mode'] = Variable<int>(recurrenceMode);
     if (!nullToAbsent || dueDate != null) {
       map['due_date'] = Variable<DateTime>(dueDate);
     }
@@ -685,6 +714,7 @@ class Task extends DataClass implements Insertable<Task> {
           ? const Value.absent()
           : Value(notes),
       isDone: Value(isDone),
+      recurrenceMode: Value(recurrenceMode),
       dueDate: dueDate == null && nullToAbsent
           ? const Value.absent()
           : Value(dueDate),
@@ -716,6 +746,7 @@ class Task extends DataClass implements Insertable<Task> {
       title: serializer.fromJson<String>(json['title']),
       notes: serializer.fromJson<String?>(json['notes']),
       isDone: serializer.fromJson<bool>(json['isDone']),
+      recurrenceMode: serializer.fromJson<int>(json['recurrenceMode']),
       dueDate: serializer.fromJson<DateTime?>(json['dueDate']),
       reminderAt: serializer.fromJson<DateTime?>(json['reminderAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -734,6 +765,7 @@ class Task extends DataClass implements Insertable<Task> {
       'title': serializer.toJson<String>(title),
       'notes': serializer.toJson<String?>(notes),
       'isDone': serializer.toJson<bool>(isDone),
+      'recurrenceMode': serializer.toJson<int>(recurrenceMode),
       'dueDate': serializer.toJson<DateTime?>(dueDate),
       'reminderAt': serializer.toJson<DateTime?>(reminderAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -750,6 +782,7 @@ class Task extends DataClass implements Insertable<Task> {
     String? title,
     Value<String?> notes = const Value.absent(),
     bool? isDone,
+    int? recurrenceMode,
     Value<DateTime?> dueDate = const Value.absent(),
     Value<DateTime?> reminderAt = const Value.absent(),
     DateTime? createdAt,
@@ -763,6 +796,7 @@ class Task extends DataClass implements Insertable<Task> {
     title: title ?? this.title,
     notes: notes.present ? notes.value : this.notes,
     isDone: isDone ?? this.isDone,
+    recurrenceMode: recurrenceMode ?? this.recurrenceMode,
     dueDate: dueDate.present ? dueDate.value : this.dueDate,
     reminderAt: reminderAt.present ? reminderAt.value : this.reminderAt,
     createdAt: createdAt ?? this.createdAt,
@@ -778,6 +812,9 @@ class Task extends DataClass implements Insertable<Task> {
       title: data.title.present ? data.title.value : this.title,
       notes: data.notes.present ? data.notes.value : this.notes,
       isDone: data.isDone.present ? data.isDone.value : this.isDone,
+      recurrenceMode: data.recurrenceMode.present
+          ? data.recurrenceMode.value
+          : this.recurrenceMode,
       dueDate: data.dueDate.present ? data.dueDate.value : this.dueDate,
       reminderAt: data.reminderAt.present
           ? data.reminderAt.value
@@ -804,6 +841,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('title: $title, ')
           ..write('notes: $notes, ')
           ..write('isDone: $isDone, ')
+          ..write('recurrenceMode: $recurrenceMode, ')
           ..write('dueDate: $dueDate, ')
           ..write('reminderAt: $reminderAt, ')
           ..write('createdAt: $createdAt, ')
@@ -822,6 +860,7 @@ class Task extends DataClass implements Insertable<Task> {
     title,
     notes,
     isDone,
+    recurrenceMode,
     dueDate,
     reminderAt,
     createdAt,
@@ -839,6 +878,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.title == this.title &&
           other.notes == this.notes &&
           other.isDone == this.isDone &&
+          other.recurrenceMode == this.recurrenceMode &&
           other.dueDate == this.dueDate &&
           other.reminderAt == this.reminderAt &&
           other.createdAt == this.createdAt &&
@@ -854,6 +894,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<String> title;
   final Value<String?> notes;
   final Value<bool> isDone;
+  final Value<int> recurrenceMode;
   final Value<DateTime?> dueDate;
   final Value<DateTime?> reminderAt;
   final Value<DateTime> createdAt;
@@ -867,6 +908,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.title = const Value.absent(),
     this.notes = const Value.absent(),
     this.isDone = const Value.absent(),
+    this.recurrenceMode = const Value.absent(),
     this.dueDate = const Value.absent(),
     this.reminderAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -881,6 +923,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     required String title,
     this.notes = const Value.absent(),
     this.isDone = const Value.absent(),
+    this.recurrenceMode = const Value.absent(),
     this.dueDate = const Value.absent(),
     this.reminderAt = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -895,6 +938,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? title,
     Expression<String>? notes,
     Expression<bool>? isDone,
+    Expression<int>? recurrenceMode,
     Expression<DateTime>? dueDate,
     Expression<DateTime>? reminderAt,
     Expression<DateTime>? createdAt,
@@ -909,6 +953,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (title != null) 'title': title,
       if (notes != null) 'notes': notes,
       if (isDone != null) 'is_done': isDone,
+      if (recurrenceMode != null) 'recurrence_mode': recurrenceMode,
       if (dueDate != null) 'due_date': dueDate,
       if (reminderAt != null) 'reminder_at': reminderAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -925,6 +970,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<String>? title,
     Value<String?>? notes,
     Value<bool>? isDone,
+    Value<int>? recurrenceMode,
     Value<DateTime?>? dueDate,
     Value<DateTime?>? reminderAt,
     Value<DateTime>? createdAt,
@@ -939,6 +985,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       title: title ?? this.title,
       notes: notes ?? this.notes,
       isDone: isDone ?? this.isDone,
+      recurrenceMode: recurrenceMode ?? this.recurrenceMode,
       dueDate: dueDate ?? this.dueDate,
       reminderAt: reminderAt ?? this.reminderAt,
       createdAt: createdAt ?? this.createdAt,
@@ -964,6 +1011,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     }
     if (isDone.present) {
       map['is_done'] = Variable<bool>(isDone.value);
+    }
+    if (recurrenceMode.present) {
+      map['recurrence_mode'] = Variable<int>(recurrenceMode.value);
     }
     if (dueDate.present) {
       map['due_date'] = Variable<DateTime>(dueDate.value);
@@ -999,6 +1049,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('title: $title, ')
           ..write('notes: $notes, ')
           ..write('isDone: $isDone, ')
+          ..write('recurrenceMode: $recurrenceMode, ')
           ..write('dueDate: $dueDate, ')
           ..write('reminderAt: $reminderAt, ')
           ..write('createdAt: $createdAt, ')
@@ -1309,6 +1360,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       required String title,
       Value<String?> notes,
       Value<bool> isDone,
+      Value<int> recurrenceMode,
       Value<DateTime?> dueDate,
       Value<DateTime?> reminderAt,
       Value<DateTime> createdAt,
@@ -1324,6 +1376,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<String> title,
       Value<String?> notes,
       Value<bool> isDone,
+      Value<int> recurrenceMode,
       Value<DateTime?> dueDate,
       Value<DateTime?> reminderAt,
       Value<DateTime> createdAt,
@@ -1399,6 +1452,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<bool> get isDone => $composableBuilder(
     column: $table.isDone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get recurrenceMode => $composableBuilder(
+    column: $table.recurrenceMode,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1508,6 +1566,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get recurrenceMode => $composableBuilder(
+    column: $table.recurrenceMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get dueDate => $composableBuilder(
     column: $table.dueDate,
     builder: (column) => ColumnOrderings(column),
@@ -1605,6 +1668,11 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<bool> get isDone =>
       $composableBuilder(column: $table.isDone, builder: (column) => column);
+
+  GeneratedColumn<int> get recurrenceMode => $composableBuilder(
+    column: $table.recurrenceMode,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get dueDate =>
       $composableBuilder(column: $table.dueDate, builder: (column) => column);
@@ -1709,6 +1777,7 @@ class $$TasksTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<bool> isDone = const Value.absent(),
+                Value<int> recurrenceMode = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
                 Value<DateTime?> reminderAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -1722,6 +1791,7 @@ class $$TasksTableTableManager
                 title: title,
                 notes: notes,
                 isDone: isDone,
+                recurrenceMode: recurrenceMode,
                 dueDate: dueDate,
                 reminderAt: reminderAt,
                 createdAt: createdAt,
@@ -1737,6 +1807,7 @@ class $$TasksTableTableManager
                 required String title,
                 Value<String?> notes = const Value.absent(),
                 Value<bool> isDone = const Value.absent(),
+                Value<int> recurrenceMode = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
                 Value<DateTime?> reminderAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -1750,6 +1821,7 @@ class $$TasksTableTableManager
                 title: title,
                 notes: notes,
                 isDone: isDone,
+                recurrenceMode: recurrenceMode,
                 dueDate: dueDate,
                 reminderAt: reminderAt,
                 createdAt: createdAt,

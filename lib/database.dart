@@ -22,6 +22,8 @@ class Tasks extends Table {
   // State management
   BoolColumn get isDone => boolean().withDefault(const Constant(false))();
   
+  IntColumn get recurrenceMode => integer().withDefault(const Constant(0))();
+  
   // Time dimension (for filtering like "Today", "Planned", etc.)
   DateTimeColumn get dueDate => dateTime().nullable()(); // Due date
   DateTimeColumn get reminderAt => dateTime().nullable()(); // Reminder time

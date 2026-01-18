@@ -22,6 +22,14 @@
    {:title "Өндөр"   :icon m/Icons.label_important_rounded :value 2}
    {:title "Дунд"    :icon m/Icons.label_rounded           :value 1}
    {:title "Бага"    :icon m/Icons.label_outline_rounded   :value 0}])
+   
+
+(def ^:private recurrence-options
+  [{:type :header :title "Үргэлжлүүлэх"} ; Recurrence mode
+   {:title "Үргэлжлүүлэхгүй" :value 0} ; No recurrence
+   {:title "Өдрийн давтамж"      :value 1} ; Daily
+   {:title "Долоо хоногт давтамж" :value 2} ; Weekly
+   {:title "Сарын давтамж"      :value 3}]) ; Monthly
 
 ;; --- 1.5. Notes Dialog Function ---
 
@@ -195,6 +203,25 @@
                                       0 m/Colors.blue
                                       m/Colors.grey))
            .title (mgl/MongolText. "Урьтамж")))
+
+         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
+
+         ;; 2.5. Recurrence Mode Block
+         (m/GestureDetector.
+          .onTap (fn []
+                   (bs/bottom-sheet
+                    ctx
+                    (map (fn [item]
+                           (if (= (:type item) :header)
+                             item
+                             (assoc item :on-tap #(db/update-task! task-id :recurrence-mode (:value item)))))
+                         recurrence-options)
+                    :height-factor 0.4))
+          .child
+          (mgl/MongolListTile.
+           .leading (m/Icon. m/Icons.autorenew_rounded
+                             .color (if (> (or (get task "recurrence_mode") 0) 0) primary m/Colors.grey))
+           .title (mgl/MongolText. "Үргэлжлүүлэх")))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 

@@ -138,21 +138,22 @@
 ;; =============================================================================
 
 (defn add-task!
-  [{:keys [title notes category-id priority parent-id] :or {priority 0}}]
+  [{:keys [title notes category-id priority parent-id recurrence-mode] :or {priority 0 recurrence-mode 0}}]
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/TasksCompanion.insert
-                      :title title
-                      :notes (if notes (d/Value ^String notes) (d/Value.absent))
-                      ;; Use Value(null) with type annotation for nullable int fields
-                      :categoryId (if category-id 
-                                    (d/Value ^int category-id) 
-                                    (d/Value nil))
-                      :parentId (if parent-id
-                                  (d/Value ^int parent-id)
-                                  (d/Value nil))
-                      :priority (d/Value ^int priority)
-                      :isDone (d/Value false)
-                      :displayOrder (d/Value 0.0))]
+                     :title title
+                     :notes (if notes (d/Value ^String notes) (d/Value.absent))
+                     ;; Use Value(null) with type annotation for nullable int fields
+                     :categoryId (if category-id
+                                   (d/Value ^int category-id)
+                                   (d/Value nil))
+                     :parentId (if parent-id
+                                 (d/Value ^int parent-id)
+                                 (d/Value nil))
+                     :priority (d/Value ^int priority)
+                     :isDone (d/Value false)
+                     :displayOrder (d/Value 0.0)
+                     :recurrenceMode (d/Value ^int recurrence-mode))]
       (.insert (.into database (.-tasks database)) companion))
     (throw (ex-info "Database not initialized" {}))))
 
@@ -208,11 +209,23 @@
       .reminderAt (if (nil? v)
                     (d/Value nil)
                     (d/Value ^dc/DateTime v))))
+                    
+   :recurrence-mode
+   (fn [v]
+     (drift/TasksCompanion.
+      .recurrenceMode (d/Value ^int v)))
 
    :is-done
    (fn [v]
      (drift/TasksCompanion.
       .isDone (d/Value ^bool v)))})
+      
+(defn get-task-by-id [id]
+  (if-let [^drift/AppDatabase database @db]
+    (.getSingleOrNull
+     (doto (.select database (.-tasks database))
+       (.where (fn [^drift/Tasks tbl] (.equals (.-id tbl) id)))))
+    (throw (ex-info "Database not initialized" {}))))
 
 (defn update-task!
   [id field value]
@@ -225,6 +238,42 @@
         (.write query companion))
       (throw (ex-info "Database not initialized" {})))
     (throw (ex-info "Unknown task field" {:field field}))))
+
+(defn- add-months [^dc/DateTime dt n]
+  (let [new-month (+ (.-month dt) n)
+        year-adjust (quot (dec new-month) 12)
+        final-month (let [m (rem new-month 12)] (if (zero? m) 12 m))
+        final-year (+ (.-year dt) year-adjust)
+        ;; Get the number of days in the target month (by subtracting 1 day from the first day of next month)
+        next-month-first (if (= final-month 12)
+                           (dc/DateTime. (inc final-year) 1 1)
+                           (dc/DateTime. final-year (inc final-month) 1))
+        last-day-of-month (-> next-month-first
+                             (.subtract (dc/Duration. .days 1))
+                             (.-day))
+        ;; Use the smaller value between the original day and the number of days in the target month
+        safe-day (min (.-day dt) last-day-of-month)]
+    (dc/DateTime. final-year final-month safe-day (.-hour dt) (.-minute dt))))
+    
+(defn handle-task-completion! [id is-done]
+  (let [task (await (get-task-by-id id))
+        mode (get task "recurrence_mode" 0)]
+    (when (and (true? is-done) (> mode 0))
+      ;; --- Handle recurrence task ---
+      (let [current-due (or (get task "due_date") (dc/DateTime.now))
+            next-due (cond
+                       (= mode 1) (.add current-due (dc/Duration. .days 1))   ; Daily
+                       (= mode 2) (.add current-due (dc/Duration. .days 7))   ; Weekly
+                       (= mode 3) (add-months current-due 1)                   ; Monthly
+                       :else nil)]
+        (when next-due
+          ;; Clone a new task to the database
+          (await (add-task! {:title (.-title task)
+                             :notes (get task "notes")
+                             :category-id (get task "category_id")
+                             :priority (get task "priority")
+                             :due-date next-due
+                             :recurrence-mode mode})))))))
 
 (defn delete-task!
   "Permanently delete a task."

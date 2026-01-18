@@ -52,6 +52,7 @@
            .onChanged (fn [v]
                         (s/HapticFeedback.mediumImpact)
                         (notification/cancel-task-reminder! id)
+                        (db/handle-task-completion! id v)
                         (db/update-task! id :is-done v))))
 
          ;; --- B. Text Click Area ---
