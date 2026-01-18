@@ -9,7 +9,9 @@
             [components.dialog :as dialog]
             [components.tokens :as tokens]
             [virtual-keyboard.keyboard :as keyboard]
-            [components.text-field :as text-field]))
+            [components.text-field :as text-field]
+            [mongol-date-picker.picker :as picker]
+            ["dart:core" :as dc]))
 
 (defn open-search-dialog [ctx]
   (let [search-term-atom (atom "")]
@@ -20,14 +22,16 @@
        (f/widget
         :managed [controller (m/TextEditingController .text "")]
         :watch [                term search-term-atom
-                ;; Watch category ID in global state for filtering search results
-                {cat-id :selected-category-id} store/app-ui-state
+                ;; Watch category ID and due date in global state for filtering search results
+                {cat-id :selected-category-id
+                 due-date :selected-due-date} store/app-ui-state
                 db-items (stream 
                            (map (fn [rows] (take 10 (map #(.-data %) rows))))
                            (map (fn [_] []))
                            :as-values (db/watch-tasks-filtered 
                                         {:search-term term 
-                                         :category-id cat-id}))]
+                                         :category-id cat-id
+                                         :due-date due-date}))]
         :get {{{on-surface .-onSurface primary .-primary surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
         
         (dialog/vertical-custom-dialog
@@ -94,6 +98,27 @@
                                      .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
                        (m/SizedBox.shrink))]))
 
+                  ;; B2. Date Filter Button
+                  (m/Padding.
+                   .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s))
+                   .child
+                   (m/Column.
+                    .children
+                    [(m/IconButton.
+                      .icon (m/Icon. (if due-date m/Icons.calendar_today m/Icons.calendar_today_outlined)
+                                     .color (if due-date primary nil))
+                      .onPressed (fn []
+                                   (picker/show-picker ctx 
+                                                       (fn [d] 
+                                                         (swap! store/app-ui-state assoc :selected-due-date d))
+                                                       :initial-date (or due-date (dc/DateTime.now))
+                                                       :show-time false)
+                                   nil))
+                     (if due-date
+                       (m/Container. .width 6.0 .height 6.0 
+                                     .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
+                       (m/SizedBox.shrink))]))
+
                   ;; C. Right: Result Preview Cards
                   (m/Expanded.
                    .child 
@@ -135,6 +160,15 @@
                      .onPressed (fn [] 
                                   (.clear controller) 
                                   (reset! search-term-atom "")
+                                  nil))
+                    
+                    ;; Clear filters button
+                    (m/IconButton.
+                     .icon (m/Icon. m/Icons.clear_all)
+                     .onPressed (fn []
+                                  (swap! store/app-ui-state assoc 
+                                         :selected-category-id nil
+                                         :selected-due-date nil)
                                   nil))
                     
                     (mgl/MongolElevatedButton.

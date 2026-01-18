@@ -8,10 +8,11 @@
 (defn filter-aware-search-button []
   (f/widget
    :context ctx
-   :watch [{:keys [search-term selected-category-id]} store/app-ui-state]
+   :watch [{:keys [search-term selected-category-id selected-due-date]} store/app-ui-state]
    :get {{{primary .-primary on-surface .-onSurface surface .-surface} .-colorScheme} m/Theme}
    :let [is-filtered (or (not (str/blank? search-term))
-                         (some? selected-category-id))]
+                         (some? selected-category-id)
+                         (some? selected-due-date))]
    (m/Stack
     .alignment m/Alignment.center
     .children
@@ -19,8 +20,13 @@
       .icon (m/Icon (if is-filtered m/Icons.search_rounded m/Icons.search_outlined)
                     .color (if is-filtered primary on-surface))
       .tooltip (cond 
-                 (and (not (str/blank? search-term)) selected-category-id) "Шүүлтүүр ба хайлт идэвхтэй"
-                 is-filtered "Шүүлтүүр идэвхтэй"
+                 (and (not (str/blank? search-term)) selected-category-id selected-due-date) "Хайлт, ангилал, огноо шүүлтүүр идэвхтэй"
+                 (and (not (str/blank? search-term)) selected-category-id) "Хайлт ба ангилал шүүлтүүр идэвхтэй"
+                 (and (not (str/blank? search-term)) selected-due-date) "Хайлт ба огноо шүүлтүүр идэвхтэй"
+                 (and selected-category-id selected-due-date) "Ангилал ба огноо шүүлтүүр идэвхтэй"
+                 (not (str/blank? search-term)) "Хайлт идэвхтэй"
+                 selected-category-id "Ангилал шүүлтүүр идэвхтэй"
+                 selected-due-date "Огноо шүүлтүүр идэвхтэй"
                  :else "Хайх")
       .onPressed (fn [] (search-actions/open-search-dialog ctx) nil))
      

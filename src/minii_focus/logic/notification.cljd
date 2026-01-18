@@ -3,7 +3,8 @@
             ["package:timezone/timezone.dart" :as tz]
             ["package:timezone/data/latest.dart" :as tz_data]
             ["dart:io" :as io]
-            ["dart:core" :as dc]))
+            ["dart:core" :as dc]
+            ["package:cljd_mongol_focus/notification_helper.dart" :as helper]))
 
 (defonce ^:private plugin (n/FlutterLocalNotificationsPlugin.))
 
@@ -38,13 +39,13 @@
   "Request permissions on Android 13+ and iOS"
   []
   (if (io/Platform.isAndroid)
-    (let [android-plugin (.resolvePlatformSpecificImplementation 
-                          plugin n/AndroidFlutterLocalNotificationsPlugin)]
+    ;; Use helper function to call generic method with type parameter
+    (let [android-plugin (helper/resolveAndroidImpl plugin)]
       (when android-plugin
         (await (.requestNotificationsPermission android-plugin))))
     (when (io/Platform.isIOS)
-      (let [ios-plugin (.resolvePlatformSpecificImplementation 
-                        plugin n/IOSFlutterLocalNotificationsPlugin)]
+      ;; Use helper function to call generic method with type parameter
+      (let [ios-plugin (helper/resolveIOSImpl plugin)]
         (when ios-plugin
           (await (.requestPermissions ios-plugin .alert true .badge true .sound true)))))))
 
