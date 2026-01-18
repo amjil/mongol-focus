@@ -3,6 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
+            [minii-focus.logic.notification :as notification]
             [components.tokens :as tokens]
             [components.slide :as slide]
             [minii-focus.logic.db :as db]))
@@ -50,6 +51,7 @@
            .activeColor primary
            .onChanged (fn [v]
                         (s/HapticFeedback.mediumImpact)
+                        (notification/cancel-task-reminder! id)
                         (db/update-task! id :is-done v))))
 
          ;; --- B. Text Click Area ---

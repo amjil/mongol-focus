@@ -7,6 +7,7 @@
             [minii-focus.state.store :as store]
             [minii-focus.logic.task-actions :as actions]
             [minii-focus.logic.category-actions :as category]
+            [minii-focus.logic.notification :as notification]
             [components.bottom-sheet :as bs]
             [components.dialog :as dialog]
             [components.tokens :as tokens]
@@ -66,6 +67,13 @@
                                                 (dc/DateTime.fromMillisecondsSinceEpoch ts)
                                                 (dc/DateTime.fromMillisecondsSinceEpoch (* ts 1000))))
                      :else nil)
+         ;; --- Reminder Time Block ---
+         reminder-at-raw (get task "reminder_at")
+         ;; Handle time format returned from database (same logic as due-date)
+         reminder-at (cond 
+                       (nil? reminder-at-raw) nil
+                       (instance? dc/DateTime reminder-at-raw) reminder-at-raw
+                       :else (dc/DateTime.fromMillisecondsSinceEpoch (* (long reminder-at-raw) 1000)))
          priority  (get task "priority")
          ;; Extract directly from database join query result
          cat-id    (get task "category_id")
@@ -140,6 +148,30 @@
                   .title (mgl/MongolText. (if due-date
                                             (.format (intl/DateFormat "yyyy-MM-dd") due-date)
                                             "Set date"))))
+
+         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
+
+         ;; --- Reminder Time Block ---
+         (m/GestureDetector.
+          .onTap (fn []
+                   ;; 1. Select date first, then time, or use your existing picker
+                   (picker/show-picker 
+                    ctx 
+                    (fn [d] 
+                      (when d
+                        ;; 2. Update database
+                        (db/update-task! task-id :reminder-at d)
+                        ;; 3. Schedule notification
+                        (notification/cancel-task-reminder! task-id)
+                        (notification/schedule-task-reminder! task-id title d)))
+                    :initial-date (or reminder-at (dc/DateTime.now))
+                    :show-time true)) ;; Enable time selection
+          .child (mgl/MongolListTile.
+                  .leading (m/Icon. m/Icons.notifications_active_rounded
+                                    .color (if reminder-at primary m/Colors.grey))
+                  .title (mgl/MongolText. (if reminder-at
+                                            (.format (intl/DateFormat "MM-dd HH:mm") reminder-at)
+                                            "Мэдэгдэл тохируулах")))) ; Set reminder
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 

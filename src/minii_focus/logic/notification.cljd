@@ -1,0 +1,76 @@
+(ns minii-focus.logic.notification
+  (:require ["package:flutter_local_notifications/flutter_local_notifications.dart" :as n]
+            ["package:timezone/timezone.dart" :as tz]
+            ["package:timezone/data/latest.dart" :as tz_data]
+            ["dart:io" :as io]
+            ["dart:core" :as dc]))
+
+(defonce ^:private plugin (n/FlutterLocalNotificationsPlugin.))
+
+(defn init! 
+  "Initialize notification service, called when main function starts"
+  []
+  (let [;; 1. Initialize timezone (required for scheduled notifications)
+        _ (tz_data/initializeTimeZones)
+        
+        ;; 2. Android initialization settings
+        ;; @mipmap/ic_launcher is the app icon, make sure your Android project has this icon
+        android-settings (n/AndroidInitializationSettings. "@mipmap/ic_launcher")
+        
+        ;; 3. iOS / Darwin initialization settings
+        ios-settings (n/DarwinInitializationSettings.
+                      .requestAlertPermission true
+                      .requestBadgePermission true
+                      .requestSoundPermission true)
+        
+        init-settings (n/InitializationSettings. 
+                       .android android-settings 
+                       .iOS ios-settings)]
+    
+    ;; 4. Execute plugin initialization
+    (await (.initialize plugin init-settings 
+                        .onDidReceiveNotificationResponse 
+                        (fn [response]
+                          ;; Handle logic after user clicks notification here
+                          (dart:core/print (str "Notification clicked: " (.-payload response))))))))
+
+(defn request-permissions!
+  "Request permissions on Android 13+ and iOS"
+  []
+  (if (io/Platform.isAndroid)
+    (let [android-plugin (.resolvePlatformSpecificImplementation 
+                          plugin n/AndroidFlutterLocalNotificationsPlugin)]
+      (when android-plugin
+        (await (.requestNotificationsPermission android-plugin))))
+    (when (io/Platform.isIOS)
+      (let [ios-plugin (.resolvePlatformSpecificImplementation 
+                        plugin n/IOSFlutterLocalNotificationsPlugin)]
+        (when ios-plugin
+          (await (.requestPermissions ios-plugin .alert true .badge true .sound true)))))))
+
+(defn schedule-task-reminder!
+  "Schedule a reminder for a specific task"
+  [id title ^dc/DateTime scheduled-date]
+  (let [android-details (n/AndroidNotificationDetails. 
+                         "task_reminders" "Task Reminders" 
+                         .channelDescription "For sending scheduled reminders for tasks"
+                         .importance n/Importance.max 
+                         .priority n/Priority.high)
+        notification-details (n/NotificationDetails. .android android-details)
+        ;; Convert Dart's DateTime to TZDateTime
+        tz-date (tz/TZDateTime.from scheduled-date tz/local)]
+    
+    (await 
+     (.zonedSchedule
+      plugin
+      id       ;; Use task ID as notification ID for easy cancellation later
+      title    ;; Notification title
+      "Таны даалгаврын цаг боллоо!" ;; Notification content (Mongolian: Your task time has arrived)
+      tz-date
+      notification-details
+      .androidScheduleMode n/AndroidScheduleMode.exactAllowWhileIdle))))
+
+(defn cancel-task-reminder!
+  "Cancel a task reminder"
+  [id]
+  (await (.cancel plugin id)))

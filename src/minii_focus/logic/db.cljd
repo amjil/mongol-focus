@@ -199,6 +199,13 @@
         .title title
         .notes notes)))
 
+   :reminder-at
+   (fn [v]
+     (drift/TasksCompanion.
+      .reminderAt (if (nil? v)
+                    (d/Value nil)
+                    (d/Value ^dc/DateTime v))))
+
    :is-done
    (fn [v]
      (drift/TasksCompanion.

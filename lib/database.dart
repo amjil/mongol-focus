@@ -24,6 +24,7 @@ class Tasks extends Table {
   
   // Time dimension (for filtering like "Today", "Planned", etc.)
   DateTimeColumn get dueDate => dateTime().nullable()(); // Due date
+  DateTimeColumn get reminderAt => dateTime().nullable()(); // Reminder time
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get completedAt => dateTime().nullable()(); // Completion time, used for Logbook sorting
   
