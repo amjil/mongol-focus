@@ -91,7 +91,9 @@
                    :on-paste (fn [] ;; Paste logic
                                )
                    ;; Submit entire Map
-                   :on-submit #(on-submit @data-atom) }))]))
+                   :on-submit #(on-submit @data-atom) }))
+              
+              (keyboard/candidates nil)]))
 
            ;; --- Lower Part: Keyboard Area ---
            (m/Container
