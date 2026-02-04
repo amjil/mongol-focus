@@ -107,8 +107,8 @@
                                "logbook" (db/watch-logbook)
                                (db/watch-active-tasks)))]
    :let [display-title (case selected-nav-id
-                         "today"   "Өнөөдөр"
-                         "logbook" "Түүх"
+                         "today"   "ᠥᠨᠥᠳᠥᠷ"
+                         "logbook" "ᠥᠩᠭᠡᠷᠡᠭᠰᠡᠨ "
                          "Ажил")]
 
    (m/AnimatedSwitcher.

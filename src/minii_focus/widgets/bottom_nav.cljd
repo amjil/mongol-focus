@@ -35,17 +35,17 @@
     [(m/NavigationDestination.
       .icon (m/Icon. m/Icons.wb_sunny_outlined)
       .selectedIcon (m/Icon. m/Icons.wb_sunny .color active-icon)
-      .label "Өнөөдөр"
+      .label ""
       )
       
      (m/NavigationDestination.
       .icon (m/Icon. m/Icons.auto_stories_outlined)
       .selectedIcon (m/Icon. m/Icons.auto_stories .color active-icon)
-      .label "Түүх"
+      .label ""
       )
      
      (m/NavigationDestination.
       .icon (m/Icon. m/Icons.settings_outlined)
       .selectedIcon (m/Icon. m/Icons.settings .color active-icon)
-      .label "Тохиргоо"
+      .label ""
       )]))) ;; Settings

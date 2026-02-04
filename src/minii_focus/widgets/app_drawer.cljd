@@ -14,7 +14,6 @@
     .borderRadius (m/BorderRadius.circular 16.0)
     .child
     (m/Container.
-     .width 100.0
      .padding (m/EdgeInsets.all 16.0)
      .decoration (m/BoxDecoration. 
                   .color (.withOpacity bg-color 0.1)
@@ -25,7 +24,7 @@
       .children
       [(m/Icon. icon .color bg-color .size 28.0)
        (m/SizedBox. .height 8.0)
-       (m/Text. label .style (m/TextStyle. .color fg-color .fontWeight m/FontWeight.w500))])))))
+       (mgl/MongolText. label .style (m/TextStyle. .color fg-color .fontWeight m/FontWeight.w500))])))))
 
 (defn main-drawer []
   (f/widget
@@ -44,10 +43,6 @@
                .child (mgl/MongolText. "МИНII FOCUS" 
                                       .style (m/TextStyle. .color on-primary .fontSize 24.0))))
       
-      (m/Padding. 
-       .padding (m/EdgeInsets.all 20.0)
-       .child (mgl/MongolText "Цэс" .style (m/TextStyle. .fontWeight m/FontWeight.bold .fontSize 18.0)))
-
       ;; --- B. Menu List: Horizontal Scroll Design ---
       (m/Expanded.
        .child
@@ -56,19 +51,20 @@
         .padding (m/EdgeInsets.symmetric .horizontal 20.0)
         .child
         (m/Row.
+         .mainAxisSize m/MainAxisSize.max
          .children
-         [(drawer-item 
-           {:icon m/Icons.settings_outlined 
-            :label "Тохиргоо" 
-            :bg-color primary 
+         [(drawer-item
+           {:icon m/Icons.settings_outlined
+            :label "Тохиргоо"
+            :bg-color primary
             :fg-color on-surface
-            :on-tap (fn [ctx] 
+            :on-tap (fn [ctx]
                       (.pop (m/Navigator.of ctx)) ;; Close drawer
                       (m/Navigator.push ctx (m/MaterialPageRoute. .builder (fn [ctx] (settings/settings-page)))))})
-          (drawer-item 
-           {:icon m/Icons.info_outline 
-            :label "Бидний тухай" 
-            :bg-color primary 
+          (drawer-item
+           {:icon m/Icons.info_outline
+            :label "Бидний тухай"
+            :bg-color primary
             :fg-color on-surface
             :on-tap (fn [] (println "About pressed"))})])))
 
