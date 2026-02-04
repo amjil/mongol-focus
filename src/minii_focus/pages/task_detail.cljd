@@ -147,9 +147,18 @@
          ;; 1. Date Block (Fixed)
          (m/GestureDetector.
           .onTap (fn []
-                   (picker/show-picker ctx (fn [d] (db/update-task! task-id :due-date d))
-                                       :initial-date (or due-date (dc/DateTime.now))
-                                       :show-time false))
+                   (picker/show-picker ctx
+                                      (fn [d]
+                                        (when d
+                                          (db/update-task! task-id :due-date d)
+                                          ;; Sync selected-task in store so detail page shows new date immediately
+                                          (swap! store/app-ui-state
+                                            (fn [state]
+                                              (let [current (:selected-task state)
+                                                    updated (if current (assoc current "due_date" d) nil)]
+                                                (assoc state :selected-task updated))))))
+                                      :initial-date (or due-date (dc/DateTime.now))
+                                      :show-time false))
           .child (mgl/MongolListTile.
                   .leading (m/Icon. m/Icons.calendar_today_rounded
                                     .color (if due-date primary m/Colors.grey))
@@ -171,7 +180,13 @@
                         (db/update-task! task-id :reminder-at d)
                         ;; 3. Schedule notification
                         (notification/cancel-task-reminder! task-id)
-                        (notification/schedule-task-reminder! task-id title d)))
+                        (notification/schedule-task-reminder! task-id title d)
+                        ;; 4. Sync store so detail page shows new reminder time immediately
+                        (swap! store/app-ui-state
+                          (fn [state]
+                            (let [current (:selected-task state)
+                                  updated (if current (assoc current "reminder_at" d) nil)]
+                              (assoc state :selected-task updated))))))
                     :initial-date (or reminder-at (dc/DateTime.now))
                     :show-time true)) ;; Enable time selection
           .child (mgl/MongolListTile.
