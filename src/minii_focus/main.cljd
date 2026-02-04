@@ -1,6 +1,7 @@
 (ns minii-focus.main
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:flutter_dotenv/flutter_dotenv.dart" :as dotenv]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.input-control :as control]
@@ -31,7 +32,8 @@
 (defn main []
   ;; Ensure Flutter binding is initialized
   (m.WidgetsFlutterBinding/ensureInitialized)
-  
+  ;; load the environment variables from the .env file
+  (await (.load dotenv/dotenv .fileName "assets/.env"))
   ;; Initialize app (including database) before running
   (await (init-app!))
   

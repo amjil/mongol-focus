@@ -7,48 +7,47 @@
 
 (defn settings-page []
   (f/widget
-    ;; Watch global state, state variable will contain the current value of atom
-    :watch [state store/app-ui-state]
-    :get {{{:flds [surface]} .-colorScheme} m/Theme}
-    (m/Scaffold
-      .backgroundColor surface
-      .body
-      (m/SingleChildScrollView
-        .scrollDirection m.Axis/horizontal
-        .child
-        (m/Row
-          .crossAxisAlignment m.CrossAxisAlignment/start
-          .children
-          [;; --- Group 1: General Settings ---
-           (sett/settings-section
-             "Ерөнхий" ; General
-             [{:title "Харанхуй горим"
-               :leading m.Icons/dark_mode
-               :value (get-in state [:settings :dark-mode?])
-               :on-changed #(store/update-setting! :dark-mode? %)}
-              
-              {:title "Мэдэгдэл"
-               :leading m.Icons/notifications_active
-               :value (get-in state [:settings :notifications?])
-               :on-changed #(store/update-setting! :notifications? %)}])
+   ;; Watch global state, state variable will contain the current value of atom
+   :watch [state store/app-ui-state]
+   :get {{{:flds [surface]} .-colorScheme} m/Theme}
+   (m/Scaffold
+    .backgroundColor surface)
+   .body
+   (m/SingleChildScrollView
+    .scrollDirection m.Axis/horizontal)
+   (m/Row
+    .crossAxisAlignment m.CrossAxisAlignment/start
+    .children
+    [;; --- Group 1: General Settings ---
+     (sett/settings-section
+      "Ерөнхий" ; General
+      [{:title "Харанхуй горим"
+        :leading m.Icons/dark_mode
+        :value (get-in state [:settings :dark-mode?])
+        :on-changed #(store/update-setting! :dark-mode? %)}
 
-           ;; --- Group 2: Interface Preferences ---
-           (sett/settings-section
-             "Харагдац" ; Appearance
-             [{:title "Sidebar нээх"
-               :leading m.Icons/menu_open
-               ;; Reuse your existing sidebar state
-               :value (:is-sidebar-open state)
-               :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
-              
-              {:title "Хэл"
-               :subtitle (get-in state [:settings :language])
-               :leading m.Icons/language
-               :on-tap #(store/update-setting! :language "English")}])
+       {:title "Мэдэгдэл"
+        :leading m.Icons/notifications_active
+        :value (get-in state [:settings :notifications?])
+        :on-changed #(store/update-setting! :notifications? %)}])
 
-           ;; --- Group 3: App Information ---
-           (sett/settings-section
-             "Апп"
-             [{:title "Хувилбар"
-               :subtitle "1.0.0"
-               :leading m.Icons/info_outline}])])))))
+     ;; --- Group 2: Interface Preferences ---
+     (sett/settings-section
+      "Харагдац" ; Appearance
+      [{:title "Sidebar нээх"
+        :leading m.Icons/menu_open
+        ;; Reuse your existing sidebar state
+        :value (:is-sidebar-open state)
+        :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
+
+       {:title "Хэл"
+        :subtitle (get-in state [:settings :language])
+        :leading m.Icons/language
+        :on-tap #(store/update-setting! :language "English")}])
+
+     ;; --- Group 3: App Information ---
+     (sett/settings-section
+      "Апп"
+      [{:title "Хувилбар"
+        :subtitle "1.0.0"
+        :leading m.Icons/info_outline}])])))

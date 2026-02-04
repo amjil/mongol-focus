@@ -47,6 +47,7 @@ dependencies:
   intl: ^0.20.2
   flutter_local_notifications: ^19.5.0
   timezone: ^0.10.1
+  flutter_dotenv: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +78,7 @@ flutter:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
   assets:
+    - assets/.env
     - assets/fonts/OyunQaganTig.ttf
     - assets/fonts/OyunAgulaTig.ttf
     - assets/fonts/OyunGarbiqimelTig.ttf
