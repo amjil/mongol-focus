@@ -12,7 +12,8 @@
    [minii-focus.logic.notification :as notification]
    [minii-focus.pages.home :as home]
    [minii-focus.pages.task-detail :as task-detail]
-   [minii-focus.pages.subtasks-list :as subtasks-list]))
+   [minii-focus.pages.subtasks-list :as subtasks-list]
+   [minii-focus.pages.category-management :as category-management]))
 
 ;; Initialize application
 (defn init-app! []
@@ -61,10 +62,11 @@
                        (let [name (.-name settings)
                              args (.-arguments settings)]
                          (m/MaterialPageRoute.
-                          .builder (fn [ctx]
+                          .builder (fn [_ctx]
                                      (case name
                                        "/task-detail" (task-detail/task-detail-page)
                                        "/subtasks-list" (let [parent-id (get args "parentId")
                                                               parent-title (get args "parentTitle")]
                                                           (subtasks-list/subtasks-list-page parent-id parent-title))
+                                       "/category-management" (category-management/category-management-page)
                                        (home/home-page))))))))))

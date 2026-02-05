@@ -189,11 +189,12 @@
      (drift/TasksCompanion.
       .priority (d/Value ^int v)))
 
-   :category-id
-   (fn [v]
-     (if (nil? v)
-       (d/Value nil)
-       (d/Value ^int v)))
+  :category-id
+  (fn [v]
+    (drift/TasksCompanion.
+     .categoryId (if (nil? v)
+                   (d/Value nil)
+                   (d/Value ^int v))))
 
    :title-and-notes
    (fn [{:keys [title notes]}]
@@ -298,13 +299,36 @@
 ;; =============================================================================
 
 (defn add-category!
-  "Create a new list category."
-  [name icon-code]
+  "Create a new list category. Position defaults to 0 when not provided."
+  [name icon-code & [position]]
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/CategoriesCompanion.insert
                      .name name
-                     .iconCode (if icon-code (d/Value icon-code) (d/Value.absent)))]
+                     .iconCode (if (some? icon-code) (d/Value ^int icon-code) (d/Value.absent))
+                     .position (if (some? position) (d/Value ^int position) (d/Value.absent)))]
       (.insert (.into database (.-categories database)) companion))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn update-category!
+  "Update category name and/or icon. Pass only the fields to update."
+  [id {:keys [name icon-code]}]
+  (if-let [^drift/AppDatabase database @db]
+    (let [companion (cond-> (drift/CategoriesCompanion.)
+                      (some? name) (.copyWith .name (d/Value ^String name))
+                      (some? icon-code) (.copyWith .iconCode (d/Value ^int icon-code)))
+          query (doto (.update database (.-categories database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))]
+      (when (or (some? name) (some? icon-code))
+        (.write query companion)))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn update-category-order!
+  "Update category position for reordering."
+  [id new-position]
+  (if-let [^drift/AppDatabase database @db]
+    (let [query (doto (.update database (.-categories database))
+                  (.where (fn [tbl] (.equals (.-id tbl) id))))]
+      (.write query (drift/CategoriesCompanion. .position (d/Value ^int new-position))))
     (throw (ex-info "Database not initialized" {}))))
 
 
@@ -318,11 +342,11 @@
 
 (defn watch-categories
   "Watch all category lists using SQL.
-   Logic: Sorted by id (or you can change it to display_order)."
+   Logic: Sorted by position ASC, then id ASC."
   []
   (if-let [^drift/AppDatabase database @db]
     (.watch
      (.customSelect
       database
-      "SELECT * FROM categories ORDER BY id ASC"))
+      "SELECT * FROM categories ORDER BY position ASC, id ASC"))
     (async/Stream.empty)))

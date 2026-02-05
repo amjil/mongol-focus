@@ -1,0 +1,72 @@
+(ns minii-focus.pages.category-management
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [minii-focus.logic.db :as db]
+            [minii-focus.logic.category-actions :as cat-actions]
+            [components.tokens :as tokens]))
+
+(defn category-management-page []
+  (f/widget
+   :context ctx
+   :watch [categories (stream
+                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
+                       (map (fn [_] []))
+                       :as-values (db/watch-categories))]
+   :get {{{primary .-primary on-surface .-onSurface surface .-surface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
+
+   (m/Scaffold.
+    .backgroundColor surface
+    .appBar (m/AppBar.
+             .leading (m/IconButton.
+                       .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
+                       .onPressed #(m/Navigator.pop ctx))
+             .actions [(m/IconButton.
+                        .icon (m/Icon. m/Icons.add_circle_outline .size 28.0)
+                        .onPressed #(cat-actions/open-add-category-dialog ctx categories (atom 0xe2a3)))]))
+   .body
+   (m/SafeArea)
+   (if (empty? categories)
+     (m/Center.
+      .child (m/Column.
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(m/Icon. m/Icons.folder_open .size 64.0 .color (.withOpacity primary 0.4))
+               (m/SizedBox. .height (tokens/space :m))
+               (mgl/MongolText. "Ангилал байхгүй байна"
+                                .style (m/TextStyle. .color (.withOpacity on-surface 0.6) .fontSize 16.0))
+               (m/SizedBox. .height (tokens/space :s))
+               (mgl/MongolText. "Дээрх + товчоор нэмнэ үү"
+                                .style (m/TextStyle. .color (.withOpacity on-surface 0.4) .fontSize 14.0))]))
+     (m/ListView.builder
+      .scrollDirection m/Axis.horizontal
+      .padding (m/EdgeInsets.all (tokens/space :m))
+      .itemCount (count categories)
+      .itemBuilder
+      (fn [_ idx]
+        (let [cat (nth categories idx)
+              id (get cat "id")
+              name (get cat "name")
+              icon-code (get cat "icon_code")]
+          (m/Padding.
+           .padding (m/EdgeInsets.only .right (tokens/space :m))
+           .child
+           (m/InkWell.
+            .onTap #(cat-actions/open-edit-category-dialog ctx {:id id :name name :icon-code icon-code} categories)
+            .onLongPress #(cat-actions/confirm-delete-category! ctx id name)
+            .child
+            (m/Container.
+             .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :l) .vertical (tokens/space :m))
+             .decoration (m/BoxDecoration.
+                          .color (.withOpacity surface-variant 0.5)
+                          .borderRadius (m/BorderRadius.circular 16.0)
+                          .border (m/Border.all .color (.withOpacity on-surface 0.08)))
+             .child (m/Column.
+                     .mainAxisSize m/MainAxisSize.min
+                     .children
+                     [(m/Icon. (m/IconData. (or icon-code 0xe2a3) .fontFamily "MaterialIcons")
+                               .color primary .size 32.0)
+                      (m/SizedBox. .height (tokens/space :s))
+                      (m/IntrinsicWidth.
+                       .child (mgl/MongolText. (or name "")
+                                               .style (m/TextStyle. .color on-surface .fontSize 15.0)))]))))))))))

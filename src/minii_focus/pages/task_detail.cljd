@@ -60,7 +60,11 @@
 (defn task-detail-page []
   (f/widget
    :context ctx
-   :watch [{task :selected-task} store/app-ui-state]
+   :watch [categories (stream
+                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
+                       (map (fn [_] []))
+                       :as-values (db/watch-categories))
+           {task :selected-task} store/app-ui-state]
    :let [task-id   (get task "id")
          title     (get task "title")
          notes     (get task "notes")
@@ -83,10 +87,11 @@
                        (instance? dc/DateTime reminder-at-raw) reminder-at-raw
                        :else (dc/DateTime.fromMillisecondsSinceEpoch (* (long reminder-at-raw) 1000)))
          priority  (get task "priority")
-         ;; Extract directly from database join query result
+         ;; Extract and resolve category info
          cat-id    (get task "category_id")
-         cat-name  (get task "category_name")
-         cat-icon  (get task "category_icon")
+         cat       (some #(when (= (get % "id") cat-id) %) categories)
+         cat-name  (or (get cat "name") (get task "category_name"))
+         cat-icon  (or (get cat "icon_code") (get task "category_icon"))
          subtask-count (get task "subtask_count")
          subtask-done-count (get task "subtask_done_count")]
    :get {{{bg .-surface primary .-primary onSurface .-onSurface} .-colorScheme} m/Theme}
@@ -247,7 +252,12 @@
                     ctx
                     {:current-id cat-id
                      :on-select (fn [new-id]
-                                  (db/update-task! task-id :category-id new-id))}))
+                                 (db/update-task! task-id :category-id new-id)
+                                 (swap! store/app-ui-state
+                                   (fn [state]
+                                     (let [current (:selected-task state)
+                                           updated (if current (assoc current "category_id" new-id) nil)]
+                                       (assoc state :selected-task updated)))))}))
           .child
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")

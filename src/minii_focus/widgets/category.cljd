@@ -1,6 +1,7 @@
 (ns minii-focus.widgets.category
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
+            ["package:flutter/rendering.dart" :as r]
             ["package:mongol/mongol.dart" :as mgl]))
 
 ;; --- 1. Constant Configuration ---
@@ -21,7 +22,7 @@
                   .crossAxisSpacing 10.0)
    .padding (m/EdgeInsets.all 16.0)
    .itemCount (count category-icons)
-   .itemBuilder (fn [ctx idx]
+   .itemBuilder (fn [_ctx idx]
                   (let [icon (get category-icons idx)]
                     (m/IconButton.
                      .onPressed #(on-select (:code icon))
@@ -29,19 +30,19 @@
                                    .size 30.0))))))
 
 ;; --- 3. Core Component: Category Card (Adaptive Mongolian Width) ---
-(defn category-card [{:keys [id name icon-code is-selected on-tap on-long-press]}]
+(defn category-card [{:keys [name icon-code is-selected on-tap on-long-press]}]
   (f/widget
-   :context ctx
    :get {{{primary .-primary on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
    (m/Padding.
     .padding (m/EdgeInsets.only .right 12.0)
     .child
     (m/GestureDetector.
+     .behavior (.-opaque r/HitTestBehavior)
      .onTap on-tap
      .onLongPress on-long-press
      .child
      (m/Container.
-      .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 12.0)
+      .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 12.0)
       .decoration (m/BoxDecoration.
                    .color (if is-selected (.withOpacity primary 0.15) (.withOpacity surface-variant 0.5))
                    .borderRadius (m/BorderRadius.circular 20.0)
@@ -59,49 +60,32 @@
                                                            .fontWeight (if is-selected m/FontWeight.bold m/FontWeight.normal))))]))))))
 
 ;; --- 4. Detail Page/Search Page: Category Selection Dialog Internal Layout ---
-(defn category-picker-content 
-  [{:keys [categories current-id on-select on-search-tap selected-icon-code on-icon-press]}]
+(defn category-picker-content
+  [{:keys [categories current-id on-select on-search-tap]}]
   (f/widget
    :get {{{primary .-primary} .-colorScheme} m/Theme}
-   (m/Column.
-    .children
-    [;; Search and Icon Selection Row
-     (m/Padding.
-      .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-      .child 
-      (m/Row.
-       .children
-       [(m/Expanded.
-         .child 
-         (m/OutlinedButton.icon
-          .icon (m/Icon. m/Icons.search)
-          .label (mgl/MongolText. "Хайх эсвэл нэмэх...")
-          .onPressed on-search-tap))
-        
-        (m/SizedBox. .width 12.0)
-        
-        (m/IconButton.
-         .icon (m/Icon. (m/IconData. selected-icon-code .fontFamily "MaterialIcons") .color primary)
-         .onPressed on-icon-press)]))
+   (m/ListView.builder
+    .scrollDirection m/Axis.horizontal
+    .padding (m/EdgeInsets.symmetric .horizontal 16.0)
+    .itemCount (inc (count categories))
+    .itemBuilder
+    (fn [_ctx idx]
+      (if (zero? idx)
+        (m/Padding.
+         .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
+         .child
+         (mgl/MongolOutlinedButton.icon
+          .icon (m/Icon. m/Icons.add .size 20.0)
+          .label (mgl/MongolText. "Шинэ ангилал нэмэх"
+                                  .style (m/TextStyle. .color primary .fontSize 14.0))
+          .onPressed #(when on-search-tap (on-search-tap))))
 
-     (m/Divider. .height 24.0)
-
-     ;; Category Horizontal List (Reuse list-view logic below)
-     (m/Expanded.
-      .child
-      (m/ListView.builder
-       .scrollDirection m/Axis.horizontal
-       .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-       .itemCount (count categories)
-       .itemBuilder 
-       (fn [ctx idx]
-         (let [cat (nth categories idx)]
-           (category-card
-            {:id (get cat "id")
-             :name (get cat "name")
-             :icon-code (get cat "icon_code")
-             :is-selected (= (get cat "id") current-id)
-             :on-tap #(on-select (get cat "id"))})))))])))
+        (let [cat (nth categories (dec idx))]
+          (category-card
+           {:name (get cat "name")
+            :icon-code (get cat "icon_code")
+            :is-selected (= (get cat "id") current-id)
+            :on-tap #(on-select (get cat "id"))})))))))
 
 ;; --- 5. Main Page: Scroll Component Layout ---
 
@@ -127,14 +111,13 @@
       .scrollDirection m/Axis.horizontal
       .padding (m/EdgeInsets.only .right 20.0)
       .itemCount (count categories)
-      .itemBuilder 
-      (fn [ctx idx]
+      .itemBuilder
+      (fn [_ctx idx]
         (let [cat (nth categories idx)
               id (get cat "id")
               name (get cat "name")]
           (category-card
-           {:id id
-            :name name
+           {:name name
             :icon-code (get cat "icon_code")
             :is-selected (= id selected-id)
             :on-tap #(on-item-tap id)

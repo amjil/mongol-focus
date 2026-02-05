@@ -7,6 +7,7 @@
 
 (defn settings-page []
   (f/widget
+   :context ctx
    ;; Watch global state, state variable will contain the current value of atom
    :watch [state store/app-ui-state]
    :get {{{:flds [surface]} .-colorScheme} m/Theme}
@@ -31,7 +32,14 @@
         :value (get-in state [:settings :notifications?])
         :on-changed #(store/update-setting! :notifications? %)}])
 
-     ;; --- Group 2: Interface Preferences ---
+     ;; --- Group 2: Category Management ---
+     (sett/settings-section
+      "Ангилал"
+      [{:title "Ангилал тохируулах"
+        :leading m.Icons/folder_special
+        :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management"))}])
+
+     ;; --- Group 3: Interface Preferences ---
      (sett/settings-section
       "Харагдац" ; Appearance
       [{:title "Sidebar нээх"
@@ -45,7 +53,7 @@
         :leading m.Icons/language
         :on-tap #(store/update-setting! :language "English")}])
 
-     ;; --- Group 3: App Information ---
+     ;; --- Group 4: App Information ---
      (sett/settings-section
       "Апп"
       [{:title "Хувилбар"
