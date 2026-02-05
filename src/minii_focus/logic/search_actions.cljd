@@ -11,6 +11,7 @@
             [virtual-keyboard.keyboard :as keyboard]
             [components.text-field :as text-field]
             [mongol-date-picker.picker :as picker]
+            ["package:intl/intl.dart" :as intl]
             ["dart:core" :as dc]))
 
 (defn open-search-dialog [ctx]
@@ -108,15 +109,22 @@
                       .icon (m/Icon. (if due-date m/Icons.calendar_today m/Icons.calendar_today_outlined)
                                      .color (if due-date primary nil))
                       .onPressed (fn []
-                                   (picker/show-picker ctx 
-                                                       (fn [d] 
+                                   (picker/show-picker ctx
+                                                       (fn [d]
                                                          (swap! store/app-ui-state assoc :selected-due-date d))
                                                        :initial-date (or due-date (dc/DateTime.now))
                                                        :show-time false)
                                    nil))
                      (if due-date
-                       (m/Container. .width 6.0 .height 6.0 
+                       (m/Container. .width 6.0 .height 6.0
                                      .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
+                       (m/SizedBox.shrink))
+                     (if due-date
+                       (m/Padding.
+                        .padding (m/EdgeInsets.only .top 4.0)
+                        .child (mgl/MongolText.
+                                (.format (intl/DateFormat "yyyy-MM-dd") due-date)
+                                .style (m/TextStyle. .fontSize 10.0 .color on-surface)))
                        (m/SizedBox.shrink))]))
 
                   ;; C. Right: Result Preview Cards
@@ -155,14 +163,7 @@
                   (m/Column.
                    .mainAxisAlignment m/MainAxisAlignment.end
                    .children
-                   [(m/IconButton.
-                     .icon (m/Icon. m/Icons.backspace_outlined)
-                     .onPressed (fn [] 
-                                  (.clear controller) 
-                                  (reset! search-term-atom "")
-                                  nil))
-                    
-                    ;; Clear filters button
+                   [;; Clear filters button
                     (m/IconButton.
                      .icon (m/Icon. m/Icons.clear_all)
                      .onPressed (fn []

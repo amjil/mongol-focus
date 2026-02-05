@@ -10,6 +10,7 @@
    [virtual-keyboard.fst-reader :as fst-reader]
    [minii-focus.logic.db :as db]
    [minii-focus.logic.notification :as notification]
+   [minii-focus.logic.stats :as stats]
    [minii-focus.pages.home :as home]
    [minii-focus.pages.task-detail :as task-detail]
    [minii-focus.pages.subtasks-list :as subtasks-list]
@@ -28,7 +29,8 @@
 
   (await (notification/request-permissions!))
 
-  (await (db/initialize-database!)))
+  (await (db/initialize-database!))
+  (await (stats/report-daily!)))
 
 (defn main []
   ;; Ensure Flutter binding is initialized
