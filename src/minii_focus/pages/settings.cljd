@@ -1,61 +1,169 @@
 (ns minii-focus.pages.settings
   (:require
+   ["dart:core" :as dc]
    ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.state.store :as store] ;; Import your store
    [components.setting :as sett]))
+
+(defn- settings-header [color-scheme]
+  [(m/Container
+    .width 110
+    .height 110
+    .decoration (m/BoxDecoration
+                 .color (.-primary color-scheme)
+                 .shape m.BoxShape/circle)
+    .child (m/Icon
+            m.Icons/settings
+            .size 56
+            .color (.-onPrimary color-scheme)))
+
+   (m/Container .width 12)
+
+   (m/Row
+    .crossAxisAlignment m.CrossAxisAlignment/start
+    .children [(mgl/MongolText "Тохиргоо"
+                               .style (m/TextStyle
+                                       .fontSize 26
+                                       .fontWeight m.FontWeight/bold
+                                       .color (.-onSurface color-scheme)))
+               (m/Container .width 8)
+               (mgl/MongolText "Тохиргооны сонголт"
+                               .style (m/TextStyle
+                                       .fontSize 14
+                                       .color (.-onSurfaceVariant color-scheme)))])
+
+   (m/Container .width 24)])
+
+(defn- cycle-language [current]
+  (if (= current "Монгол")
+    "English"
+    "Монгол"))
+
+(defn- next-font-size [current]
+  (case current
+    "Жижиг" "Дунд"
+    "Дунд" "Том"
+    "Том" "Жижиг"
+    "Дунд"))
+
+(defn- log-action [label]
+  (dc/print (str "Settings action: " label)))
 
 (defn settings-page []
   (f/widget
    :context ctx
    ;; Watch global state, state variable will contain the current value of atom
    :watch [state store/app-ui-state]
-   :get {{{:flds [surface]} .-colorScheme} m/Theme}
-   (m/Scaffold
-    .backgroundColor surface)
-   .body
-   (m/SingleChildScrollView
-    .scrollDirection m.Axis/horizontal)
-   (m/Row
-    .crossAxisAlignment m.CrossAxisAlignment/start
-    .children
-    [;; --- Group 1: General Settings ---
-     (sett/settings-section
-      "Ерөнхий" ; General
-      [{:title "Харанхуй горим"
-        :leading m.Icons/dark_mode
-        :value (get-in state [:settings :dark-mode?])
-        :on-changed #(store/update-setting! :dark-mode? %)}
+   :get {{{:flds [surface] :as color-scheme} .-colorScheme} m/Theme}
+   :let [language (get-in state [:settings :language])
+         font-size (get-in state [:settings :font-size])]
+   (m/Scaffold.
+    .backgroundColor surface
+    .body
+    (m/SingleChildScrollView
+     .scrollDirection m.Axis/horizontal
+     .padding (m.EdgeInsets/all 16)
+     .child
+     (m/Row
+      .crossAxisAlignment m.CrossAxisAlignment/start
+      .children
+      (concat
+       (settings-header color-scheme)
+       [;; --- Group 1: General Settings ---
+        (sett/settings-section
+         "Ерөнхий" ; General
+         [{:title "Харанхуй горим"
+           :leading m.Icons/dark_mode
+           :value (get-in state [:settings :dark-mode?])
+           :on-changed #(store/update-setting! :dark-mode? %)}
 
-       {:title "Мэдэгдэл"
-        :leading m.Icons/notifications_active
-        :value (get-in state [:settings :notifications?])
-        :on-changed #(store/update-setting! :notifications? %)}])
+          {:title "Мэдэгдэл"
+           :leading m.Icons/notifications_active
+           :value (get-in state [:settings :notifications?])
+           :on-changed #(store/update-setting! :notifications? %)}
 
-     ;; --- Group 2: Category Management ---
-     (sett/settings-section
-      "Ангилал"
-      [{:title "Ангилал тохируулах"
-        :leading m.Icons/folder_special
-        :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management"))}])
+          {:title "Дуугаралт"
+           :leading m.Icons/volume_up
+           :value (get-in state [:settings :sound?])
+           :on-changed #(store/update-setting! :sound? %)}
 
-     ;; --- Group 3: Interface Preferences ---
-     (sett/settings-section
-      "Харагдац" ; Appearance
-      [{:title "Sidebar нээх"
-        :leading m.Icons/menu_open
-        ;; Reuse your existing sidebar state
-        :value (:is-sidebar-open state)
-        :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
+          {:title "Чичиргээ"
+           :leading m.Icons/vibration
+           :value (get-in state [:settings :vibration?])
+           :on-changed #(store/update-setting! :vibration? %)}
 
-       {:title "Хэл"
-        :subtitle (get-in state [:settings :language])
-        :leading m.Icons/language
-        :on-tap #(store/update-setting! :language "English")}])
+          {:title "Өдрийн сануулга"
+           :leading m.Icons/notifications
+           :value (get-in state [:settings :daily-reminder?])
+           :on-changed #(store/update-setting! :daily-reminder? %)}])
 
-     ;; --- Group 4: App Information ---
-     (sett/settings-section
-      "Апп"
-      [{:title "Хувилбар"
-        :subtitle "1.0.0"
-        :leading m.Icons/info_outline}])])))
+        ;; --- Group 2: Category Management ---
+        (sett/settings-section
+         "Ангилал"
+         [{:title "Ангилал тохируулах"
+           :leading m.Icons/folder_special
+           :show-arrow? true
+           :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management"))}])
+
+        ;; --- Group 3: Interface Preferences ---
+        (sett/settings-section
+         "Харагдац" ; Appearance
+         [{:title "Sidebar нээх"
+           :leading m.Icons/menu_open
+           ;; Reuse your existing sidebar state
+           :value (:is-sidebar-open state)
+           :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
+
+          {:title "Хэл"
+           :subtitle language
+           :leading m.Icons/language
+           :show-arrow? true
+           :on-tap #(store/update-setting! :language (cycle-language language))}
+
+          {:title "Фонтын хэмжээ"
+           :subtitle (str "Одоогийн: " font-size)
+           :leading m.Icons/text_fields
+           :show-arrow? true
+           :on-tap #(store/update-setting! :font-size (next-font-size font-size))}])
+
+        ;; --- Group 4: Data Management ---
+        (sett/settings-section
+         "Өгөгдөл"
+         [{:title "Нөөцлөх & сэргээх"
+           :subtitle "Файлаар экспорт/импорт хийх"
+           :leading m.Icons/backup
+           :show-arrow? true
+           :on-tap #(log-action "backup-restore")}
+
+          {:title "Кэш цэвэрлэх"
+           :subtitle "Түр файлуудыг устгах"
+           :leading m.Icons/delete_sweep
+           :show-arrow? true
+           :on-tap #(log-action "clear-cache")}
+
+          {:title "Санах ой"
+           :subtitle "Хэрэглээний хэмжээг харах"
+           :leading m.Icons/storage
+           :show-arrow? true
+           :on-tap #(log-action "storage")}])
+
+        ;; --- Group 5: App Information ---
+        (sett/settings-section
+         "Апп"
+         [{:title "Хувилбар"
+           :subtitle "1.0.0"
+           :leading m.Icons/info_outline}
+
+          {:title "Тусламж ба санал"
+           :subtitle "Санал хүсэлт илгээх"
+           :leading m.Icons/help_outline
+           :show-arrow? true
+           :on-tap #(log-action "help-feedback")}
+
+          {:title "Үнэлгээ өгөх"
+           :subtitle "App Store дээр үнэлгээ өгөх"
+           :leading m.Icons/rate_review
+           :show-arrow? true
+           :on-tap #(log-action "rate-app")}])]))))))

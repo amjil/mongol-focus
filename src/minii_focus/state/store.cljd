@@ -7,6 +7,10 @@
          ;; Add settings-related state
          :settings {:dark-mode? false
                     :notifications? true
+                    :sound? true
+                    :vibration? true
+                    :daily-reminder? false
+                    :font-size "Дунд"
                     :language "Монгол"}}))
 
 ;; Define a convenient utility function for updating settings
