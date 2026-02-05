@@ -28,21 +28,27 @@
      (m/Padding.
       .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s) .vertical (tokens/space :xs))
       .child
-      (m/Container.
-       .padding (m/EdgeInsets.all (tokens/space :m))
-       .decoration (m/BoxDecoration.
-                    .color (if (true? is-done?) (.withOpacity outlineVariant 0.2) surface)
-                    .borderRadius (m/BorderRadius.circular 16.0)
-                    .boxShadow [(m/BoxShadow.
-                                 .color (.withOpacity m/Colors.black (if is-done? 0.01 0.05))
-                                 .blurRadius 10.0
-                                 .offset (m/Offset. 2.0 2.0))])
+      (m/GestureDetector.
+       .onTap on-tap
        .child
-       (m/Column
-        .mainAxisSize m/MainAxisSize.max
-        .crossAxisAlignment m/CrossAxisAlignment.center
-        .children
-        [;; --- A. Checkbox Interaction ---
+       (m/Container.
+        .padding (m/EdgeInsets.all (tokens/space :m))
+        .decoration (m/BoxDecoration.
+                     .color (if (true? is-done?) (.withOpacity outlineVariant 0.2) surface)
+                     .borderRadius (m/BorderRadius.circular 16.0)
+                     .border (m/Border.all
+                              .color (.withOpacity outlineVariant 0.4)
+                              .width 1.0)
+                     .boxShadow [(m/BoxShadow.
+                                  .color (.withOpacity m/Colors.black (if is-done? 0.01 0.05))
+                                  .blurRadius 10.0
+                                  .offset (m/Offset. 2.0 2.0))])
+        .child
+        (m/Column
+         .mainAxisSize m/MainAxisSize.max
+         .crossAxisAlignment m/CrossAxisAlignment.center
+         .children
+         [;; --- A. Checkbox Interaction ---
          (m/Padding.
           .padding (m/EdgeInsets.only .bottom (tokens/space :s))
           .child
@@ -55,11 +61,10 @@
                         (db/handle-task-completion! id v)
                         (db/update-task! id :is-done v))))
 
-         ;; --- B. Text Click Area ---
+         ;; --- B. Content (IgnorePointer so tap goes to outer GestureDetector) ---
          (m/Expanded.
           .child
-          (m/GestureDetector.
-           .onTap on-tap
+          (m/IgnorePointer
            .child
            (m/Row.
             .mainAxisSize m/MainAxisSize.min
@@ -110,4 +115,4 @@
                                            .fontSize 12.0
                                            .color m/Colors.grey
                                            .fontWeight m/FontWeight.bold))]))
-               (m/SizedBox.shrink))])))])))})))
+               (m/SizedBox.shrink))])))]))))})))
