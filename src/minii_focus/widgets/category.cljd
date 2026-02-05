@@ -2,7 +2,8 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:flutter/rendering.dart" :as r]
-            ["package:mongol/mongol.dart" :as mgl]))
+            ["package:mongol/mongol.dart" :as mgl]
+            [minii-focus.state.store :as store]))
 
 ;; --- 1. Constant Configuration ---
 (def category-icons
@@ -52,6 +53,13 @@
 ;; --- 3. Core Component: Category Card (Adaptive Mongolian Width) ---
 (defn category-card [{:keys [name icon-code is-selected on-tap on-long-press]}]
   (f/widget
+   :watch [state store/app-ui-state]
+   :let [font-family (get-in state [:settings :font-family])
+         font-size (get-in state [:settings :font-size])
+         text-scale (case font-size
+                      "Жижиг" 0.9
+                      "Том" 1.1
+                      1.0)]
    :get {{{primary .-primary on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
    (m/Padding.
     .padding (m/EdgeInsets.only .right 12.0)
@@ -76,7 +84,8 @@
                (m/SizedBox. .height 8.0)
                (m/IntrinsicWidth.
                 .child (mgl/MongolText. (or name "")
-                                       .style (m/TextStyle. .color on-surface .fontSize 14.0
+                                       .style (m/TextStyle. .color on-surface .fontSize (* 14.0 text-scale)
+                                                           .fontFamily font-family
                                                            .fontWeight (if is-selected m/FontWeight.bold m/FontWeight.normal))))]))))))
 
 ;; --- 4. Detail Page/Search Page: Category Selection Dialog Internal Layout ---

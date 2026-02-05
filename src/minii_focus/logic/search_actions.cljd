@@ -22,7 +22,8 @@
      (fn [ctx]
        (f/widget
         :managed [controller (m/TextEditingController .text "")]
-        :watch [                term search-term-atom
+        :watch [term search-term-atom
+                state store/app-ui-state
                 ;; Watch category ID and due date in global state for filtering search results
                 {cat-id :selected-category-id
                  due-date :selected-due-date} store/app-ui-state
@@ -34,6 +35,12 @@
                                          :category-id cat-id
                                          :due-date due-date}))]
         :get {{{on-surface .-onSurface primary .-primary surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
+        :let [font-family (get-in state [:settings :font-family])
+              font-size (get-in state [:settings :font-size])
+              text-scale (case font-size
+                           "Жижиг" 0.9
+                           "Том" 1.1
+                           1.0)]
         
         (dialog/vertical-custom-dialog
          {:title "ХАЙХ" 
@@ -154,9 +161,10 @@
                                                         .borderRadius (m/BorderRadius.circular 12.0)
                                                         .border (m/Border.all .color (.withOpacity on-surface 0.05)))
                                            .child (mgl/MongolText. (get task "title")
-                                                                  .style (m/TextStyle. .fontSize 15.0 
+                                                                  .style (m/TextStyle. .fontSize (* 15.0 text-scale) 
                                                                                       .height 1.2 
-                                                                                      .color on-surface)))))))))
+                                                                                      .color on-surface
+                                                                                      .fontFamily font-family)))))))))
                      (m/Center. .child (mgl/MongolText. "Илэрцгүй" .style (m/TextStyle. .color (.withOpacity on-surface 0.3))))))
 
                   ;; D. Rightmost: Action Buttons Column

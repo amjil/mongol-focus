@@ -5,6 +5,7 @@
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.state.store :as store] ;; Import your store
+   [components.bottom-sheet :as bs]
    [components.setting :as sett]))
 
 (defn- settings-header [color-scheme]
@@ -36,20 +37,54 @@
 
    (m/Container .width 24)])
 
-(defn- cycle-language [current]
-  (if (= current "Монгол")
-    "English"
-    "Монгол"))
-
-(defn- next-font-size [current]
-  (case current
-    "Жижиг" "Дунд"
-    "Дунд" "Том"
-    "Том" "Жижиг"
-    "Дунд"))
+(defn- open-font-size-dialog [ctx]
+  (bs/bottom-sheet
+   ctx
+   [{:type :header :title "Фонтын хэмжээ"}
+    {:title "Жижиг"
+     :on-tap #(store/update-setting! :font-size "Жижиг")}
+    {:title "Дунд"
+     :on-tap #(store/update-setting! :font-size "Дунд")}
+    {:title "Том"
+     :on-tap #(store/update-setting! :font-size "Том")}]
+   :height-factor 0.35))
 
 (defn- log-action [label]
   (dc/print (str "Settings action: " label)))
+
+(defn- open-font-family-dialog [ctx]
+  (bs/bottom-sheet
+   ctx
+   [{:type :header :title "Фонтын төрөл"}
+    {:title "OyunQaganTig"
+     :on-tap #(store/update-setting! :font-family "OyunQaganTig")}
+    {:title "OyunAgulaTig"
+     :on-tap #(store/update-setting! :font-family "OyunAgulaTig")}
+    {:title "OyunGarbiqimelTig"
+     :on-tap #(store/update-setting! :font-family "OyunGarbiqimelTig")}
+    {:title "OyunGarqagTig"
+     :on-tap #(store/update-setting! :font-family "OyunGarqagTig")}
+    {:title "OyunGurbanUlusTig"
+     :on-tap #(store/update-setting! :font-family "OyunGurbanUlusTig")}
+    {:title "OyunHaraTig"
+     :on-tap #(store/update-setting! :font-family "OyunHaraTig")}
+    {:title "OyunHawangTig"
+     :on-tap #(store/update-setting! :font-family "OyunHawangTig")}
+    {:title "OyunSoninTig"
+     :on-tap #(store/update-setting! :font-family "OyunSoninTig")}]
+   :height-factor 0.5))
+
+(defn- open-app-info-sheet [ctx]
+  (bs/bottom-sheet
+   ctx
+   [{:type :header :title "Апп"}
+    {:title "Хувилбар: 1.0.0"
+     :on-tap #(log-action "version")}
+    {:title "Тусламж ба санал"
+     :on-tap #(log-action "help-feedback")}
+    {:title "Үнэлгээ өгөх"
+     :on-tap #(log-action "rate-app")}]
+   :height-factor 0.35))
 
 (defn settings-page []
   (f/widget
@@ -57,8 +92,8 @@
    ;; Watch global state, state variable will contain the current value of atom
    :watch [state store/app-ui-state]
    :get {{{:flds [surface] :as color-scheme} .-colorScheme} m/Theme}
-   :let [language (get-in state [:settings :language])
-         font-size (get-in state [:settings :font-size])]
+  :let [font-size (get-in state [:settings :font-size])
+        font-family (get-in state [:settings :font-family])]
    (m/Scaffold.
     .backgroundColor surface
     .body
@@ -79,25 +114,10 @@
            :value (get-in state [:settings :dark-mode?])
            :on-changed #(store/update-setting! :dark-mode? %)}
 
-          {:title "Мэдэгдэл"
-           :leading m.Icons/notifications_active
-           :value (get-in state [:settings :notifications?])
-           :on-changed #(store/update-setting! :notifications? %)}
-
           {:title "Дуугаралт"
            :leading m.Icons/volume_up
            :value (get-in state [:settings :sound?])
-           :on-changed #(store/update-setting! :sound? %)}
-
-          {:title "Чичиргээ"
-           :leading m.Icons/vibration
-           :value (get-in state [:settings :vibration?])
-           :on-changed #(store/update-setting! :vibration? %)}
-
-          {:title "Өдрийн сануулга"
-           :leading m.Icons/notifications
-           :value (get-in state [:settings :daily-reminder?])
-           :on-changed #(store/update-setting! :daily-reminder? %)}])
+           :on-changed #(store/update-setting! :sound? %)}])
 
         ;; --- Group 2: Category Management ---
         (sett/settings-section
@@ -110,60 +130,23 @@
         ;; --- Group 3: Interface Preferences ---
         (sett/settings-section
          "Харагдац" ; Appearance
-         [{:title "Sidebar нээх"
-           :leading m.Icons/menu_open
-           ;; Reuse your existing sidebar state
-           :value (:is-sidebar-open state)
-           :on-changed #(swap! store/app-ui-state assoc :is-sidebar-open %)}
-
-          {:title "Хэл"
-           :subtitle language
-           :leading m.Icons/language
-           :show-arrow? true
-           :on-tap #(store/update-setting! :language (cycle-language language))}
-
-          {:title "Фонтын хэмжээ"
+         [{:title "Фонтын хэмжээ"
            :subtitle (str "Одоогийн: " font-size)
            :leading m.Icons/text_fields
            :show-arrow? true
-           :on-tap #(store/update-setting! :font-size (next-font-size font-size))}])
+           :on-tap #(open-font-size-dialog ctx)}
 
-        ;; --- Group 4: Data Management ---
-        (sett/settings-section
-         "Өгөгдөл"
-         [{:title "Нөөцлөх & сэргээх"
-           :subtitle "Файлаар экспорт/импорт хийх"
-           :leading m.Icons/backup
+          {:title "Фонтын төрөл"
+           :subtitle (str "Одоогийн: " font-family)
+           :leading m.Icons/font_download
            :show-arrow? true
-           :on-tap #(log-action "backup-restore")}
-
-          {:title "Кэш цэвэрлэх"
-           :subtitle "Түр файлуудыг устгах"
-           :leading m.Icons/delete_sweep
-           :show-arrow? true
-           :on-tap #(log-action "clear-cache")}
-
-          {:title "Санах ой"
-           :subtitle "Хэрэглээний хэмжээг харах"
-           :leading m.Icons/storage
-           :show-arrow? true
-           :on-tap #(log-action "storage")}])
+           :on-tap #(open-font-family-dialog ctx)}])
 
         ;; --- Group 5: App Information ---
         (sett/settings-section
          "Апп"
-         [{:title "Хувилбар"
-           :subtitle "1.0.0"
-           :leading m.Icons/info_outline}
-
-          {:title "Тусламж ба санал"
-           :subtitle "Санал хүсэлт илгээх"
-           :leading m.Icons/help_outline
+         [{:title "Аппын тухай"
+           :subtitle "Хувилбар, тусламж, үнэлгээ"
+           :leading m.Icons/info_outline
            :show-arrow? true
-           :on-tap #(log-action "help-feedback")}
-
-          {:title "Үнэлгээ өгөх"
-           :subtitle "App Store дээр үнэлгээ өгөх"
-           :leading m.Icons/rate_review
-           :show-arrow? true
-           :on-tap #(log-action "rate-app")}])]))))))
+           :on-tap #(open-app-info-sheet ctx)}])]))))))

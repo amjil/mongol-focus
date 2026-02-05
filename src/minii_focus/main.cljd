@@ -14,7 +14,8 @@
    [minii-focus.pages.home :as home]
    [minii-focus.pages.task-detail :as task-detail]
    [minii-focus.pages.subtasks-list :as subtasks-list]
-   [minii-focus.pages.category-management :as category-management]))
+   [minii-focus.pages.category-management :as category-management]
+   [minii-focus.state.store :as store]))
 
 ;; Initialize application
 (defn init-app! []
@@ -30,6 +31,7 @@
   (await (notification/request-permissions!))
 
   (await (db/initialize-database!))
+  (await (store/load-settings!))
   (await (stats/report-daily!)))
 
 (defn main []
@@ -42,23 +44,37 @@
   
   (f/run
    (f/widget
-    :let [info (merge keyboard-options/keyboard-option
+    :watch [state store/app-ui-state]
+    :let [font-size (get-in state [:settings :font-size])
+          font-family (get-in state [:settings :font-family])
+          dark-mode? (get-in state [:settings :dark-mode?])
+          text-scale (case font-size
+                       "Жижиг" 0.9
+                       "Том" 1.1
+                       1.0)
+          info (merge keyboard-options/keyboard-option
                       {:keyboard/key-cap-border-radius 6
-                       :keyboard/font-size 18
+                       :keyboard/font-size (* 18.0 text-scale)
                        :keyboard/key-container-color m/Colors.grey.shade500
-                       :keyboard/mongol-font-family "OyunQaganTig"})]
+                       :keyboard/mongol-font-family font-family})]
     :bind {:info info}
 
     (m/MaterialApp
+     .themeMode (if dark-mode? m/ThemeMode.dark m/ThemeMode.light)
      .theme (m/ThemeData
              .primarySwatch m/Colors.blue
-             .fontFamily "OyunQaganTig"
+             .fontFamily font-family
              .useMaterial3 true)
      .darkTheme (m/ThemeData
                  .primarySwatch m/Colors.blue
-                 .fontFamily "OyunQaganTig"
+                 .fontFamily font-family
                  .useMaterial3 true
                  .brightness m/Brightness.dark)
+     .builder (fn [ctx child]
+                (let [media (m/MediaQuery.of ctx)]
+                  (m/MediaQuery
+                   .data (.copyWith media .textScaleFactor text-scale)
+                   .child child)))
      .home (home/home-page)
      .onGenerateRoute (fn [settings]
                        (let [name (.-name settings)

@@ -33,7 +33,7 @@
 
 ;; --- 1.5. Notes Dialog Function ---
 
-(defn show-notes-dialog [ctx notes-text]
+(defn show-notes-dialog [ctx notes-text font-family text-scale]
   (m/showDialog
    .context ctx
    .builder
@@ -50,7 +50,7 @@
          .scrollDirection m/Axis.vertical
          .child
          (mgl/MongolText. (or notes-text "")
-                         .style (m/TextStyle. .fontSize 16.0))))
+                         .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
        :actions [(mgl/MongolTextButton.
                   .onPressed #(m/Navigator.pop dialog-ctx)
                   .child (mgl/MongolText. "Хаах"))]}))))
@@ -64,8 +64,15 @@
                        (map (fn [rows] (map (fn [row] (.-data row)) rows)))
                        (map (fn [_] []))
                        :as-values (db/watch-categories))
-           {task :selected-task} store/app-ui-state]
-   :let [task-id   (get task "id")
+          state store/app-ui-state]
+   :let [task      (:selected-task state)
+         font-family (get-in state [:settings :font-family])
+         font-size (get-in state [:settings :font-size])
+         text-scale (case font-size
+                      "Жижиг" 0.9
+                      "Том" 1.1
+                      1.0)
+         task-id   (get task "id")
          title     (get task "title")
          notes     (get task "notes")
          due-date-raw (get task "due_date")
@@ -128,20 +135,21 @@
                   .child (m/Material.
                           .color m/Colors.transparent
                           .child (mgl/MongolText. (or title "")
-                                                  .style (m/TextStyle. .fontSize 48.0
+                                                  .style (m/TextStyle. .fontSize (* 48.0 text-scale)
                                                                        .fontWeight m/FontWeight.w900
-                                                                       .color primary)))))
+                                                                       .color primary
+                                                                       .fontFamily font-family)))))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
          ;; --- B. Notes Content Area ---
          (m/GestureDetector.
-          .onTap (fn [] (show-notes-dialog ctx notes))
+          .onTap (fn [] (show-notes-dialog ctx notes font-family text-scale))
           .child
           (m/Padding.
            .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
            .child (mgl/MongolText. (or notes "")
-                                   .style (m/TextStyle. .fontSize 16.0 .color primary)
+                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .color primary .fontFamily font-family)
                                    .maxLines 3
                                    .overflow m/TextOverflow.ellipsis)))
 
@@ -262,7 +270,8 @@
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
-           .title (mgl/MongolText. (or cat-name "Ангилалгүй"))))
+           .title (mgl/MongolText. (or cat-name "Ангилалгүй")
+                                  .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -278,4 +287,5 @@
                              .color primary)
            .title (mgl/MongolText. (str "Дэд даалгавар (" (or subtask-count 0) ")"))
            .trailing (m/Icon. m/Icons.chevron_right_rounded
-                              .color onSurface)))]))))))
+                              .color onSurface)))]
+       ))))))

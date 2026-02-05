@@ -1,18 +1,64 @@
-(ns minii-focus.state.store)
+(ns minii-focus.state.store
+  (:require
+   ["package:shared_preferences/shared_preferences.dart" :as sp]))
+
+(def ^:private settings-pref-keys
+  {:dark-mode? "settings_dark_mode"
+   :notifications? "settings_notifications"
+   :sound? "settings_sound"
+   :vibration? "settings_vibration"
+   :daily-reminder? "settings_daily_reminder"
+   :font-family "settings_font_family"
+   :font-size "settings_font_size"
+   :language "settings_language"})
+
+(def ^:private default-settings
+  {:dark-mode? false
+   :notifications? true
+   :sound? true
+   :vibration? true
+   :daily-reminder? false
+   :font-family "OyunQaganTig"
+   :font-size "Дунд"
+   :language "Монгол"})
+
+(defn- read-setting [prefs key default]
+  (let [prefs-key (get settings-pref-keys key)]
+    (case key
+      (:dark-mode? :notifications? :sound? :vibration? :daily-reminder?)
+      (let [value (.getBool prefs prefs-key)]
+        (if (nil? value) default value))
+      (:font-family :font-size :language)
+      (or (.getString prefs prefs-key) default)
+      default)))
+
+(defn- persist-setting! [prefs key value]
+  (let [prefs-key (get settings-pref-keys key)]
+    (case key
+      (:dark-mode? :notifications? :sound? :vibration? :daily-reminder?)
+      (await (.setBool prefs prefs-key value))
+      (:font-family :font-size :language)
+      (await (.setString prefs prefs-key value))
+      nil)))
 
 (defonce app-ui-state
   (atom {:selected-nav-id "today"
          :is-sidebar-open false
          :selected-task nil
          ;; Add settings-related state
-         :settings {:dark-mode? false
-                    :notifications? true
-                    :sound? true
-                    :vibration? true
-                    :daily-reminder? false
-                    :font-size "Дунд"
-                    :language "Монгол"}}))
+         :settings default-settings}))
+
+(defn load-settings! []
+  (let [prefs (await (.getInstance sp/SharedPreferences))
+        settings (reduce-kv
+                  (fn [acc key default]
+                    (assoc acc key (read-setting prefs key default)))
+                  {}
+                  default-settings)]
+    (swap! app-ui-state assoc :settings settings)))
 
 ;; Define a convenient utility function for updating settings
 (defn update-setting! [key value]
-  (swap! app-ui-state assoc-in [:settings key] value))
+  (swap! app-ui-state assoc-in [:settings key] value)
+  (let [prefs (await (.getInstance sp/SharedPreferences))]
+    (await (persist-setting! prefs key value))))

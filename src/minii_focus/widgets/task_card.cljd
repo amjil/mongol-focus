@@ -4,6 +4,7 @@
             ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.logic.notification :as notification]
+            [minii-focus.state.store :as store]
             [components.tokens :as tokens]
             [components.slide :as slide]
             [minii-focus.logic.db :as db]))
@@ -11,6 +12,13 @@
 (defn task-item
   [{:keys [id title notes is-done? on-tap subtask-count subtask-done-count]}]
   (f/widget
+   :watch [state store/app-ui-state]
+   :let [font-family (get-in state [:settings :font-family])
+         font-size (get-in state [:settings :font-size])
+         text-scale (case font-size
+                      "Жижиг" 0.9
+                      "Том" 1.1
+                      1.0)]
    :get {{{surface .-surface
            onSurface .-onSurface
            onSurfaceVariant .-onSurfaceVariant
@@ -80,9 +88,10 @@
                (mgl/MongolText.
                 title
                 .style (m/TextStyle.
-                        .fontSize 18.0
+                        .fontSize (* 18.0 text-scale)
                         .fontWeight m/FontWeight.bold
                         .color (if is-done? m/Colors.grey onSurface)
+                        .fontFamily font-family
                         .decoration (if is-done? m/TextDecoration.lineThrough m/TextDecoration.none)))))
 
              ;; Notes
@@ -94,8 +103,9 @@
                  notes
                  .maxLines 1
                  .style (m/TextStyle.
-                         .fontSize 12.0
-                         .color (if is-done? (.withOpacity onSurfaceVariant 0.4) onSurfaceVariant))))
+                         .fontSize (* 12.0 text-scale)
+                         .color (if is-done? (.withOpacity onSurfaceVariant 0.4) onSurfaceVariant)
+                         .fontFamily font-family)))
                (m/SizedBox.shrink))
 
              ;; --- C. Subtask Progress Indicator ---
