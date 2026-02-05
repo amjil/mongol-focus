@@ -61,6 +61,10 @@
                       {:controller title-ctrl
                        :autofocus true
                        :max-lines 1 ;; Titles are usually single line
+                       :style (.copyWith bodyMedium
+                                         .fontSize 20.0
+                                         .fontWeight m/FontWeight.w600
+                                         .color onSurface)
                        :on-changed #(swap! data-atom assoc :title %)})
 
                      ;; Visual Divider
@@ -74,7 +78,9 @@
                        :hint "Add notes here..." ;; Hint text
                        :focus-node focus-node
                        :max-lines nil ;; Support unlimited lines
-                       :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
+                       :style (.copyWith bodyMedium
+                                         .fontSize 18.0
+                                         .color (.withOpacity onSurface 0.6))
                        :on-changed #(swap! data-atom assoc :notes %)})])))])
               
               ;; --- Top Right: Close Button ---
