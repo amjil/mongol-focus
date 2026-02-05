@@ -16,7 +16,8 @@
     (f/widget
       ;; 2. Manage two Controllers
       :managed [title-ctrl (m/TextEditingController .text initial-text)
-                notes-ctrl (m/TextEditingController .text initial-notes)]
+                notes-ctrl (m/TextEditingController .text initial-notes)
+                focus-node (m/FocusNode)]
       :get {{{:flds [surfaceVariant onSurface outlineVariant]} .-colorScheme
              {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
       (dialog/vertical-custom-dialog
@@ -51,30 +52,30 @@
                   .child 
                   (m/Padding
                    .padding (m/EdgeInsets.all (tokens/space :l))
-                   .child (m/Row ;; Use Row to vertically arrange two input fields
+                   .child 
+                   (m/Row ;; Use Row to vertically arrange two input fields
                     .crossAxisAlignment m/CrossAxisAlignment.start
                     .children
                     [;; --- Title Input Field ---
-                     (text-field/text-field 
+                     (text-field/text-field
                       {:controller title-ctrl
                        :autofocus true
                        :max-lines 1 ;; Titles are usually single line
                        :on-changed #(swap! data-atom assoc :title %)})
-                     
+
                      ;; Visual Divider
-                     (m/Padding 
+                     (m/Padding
                       .padding (m/EdgeInsets.symmetric .vertical (tokens/space :m))
                       .child (m/VerticalDivider .color outlineVariant .thickness 0.5))
-                     
+
                      ;; --- Notes Input Field ---
-                     (m/Expanded ;; Notes take remaining space
-                      .child
-                      (text-field/text-field 
-                       {:controller notes-ctrl
-                        :hint-text "Add notes here..." ;; Hint text
-                        :max-lines nil ;; Support unlimited lines
-                        :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
-                        :on-changed #(swap! data-atom assoc :notes %)}))])))])
+                     (text-field/text-field
+                      {:controller notes-ctrl
+                       :hint "Add notes here..." ;; Hint text
+                       :focus-node focus-node
+                       :max-lines nil ;; Support unlimited lines
+                       :style (.copyWith bodyMedium .color (.withOpacity onSurface 0.6))
+                       :on-changed #(swap! data-atom assoc :notes %)})])))])
               
               ;; --- Top Right: Close Button ---
               (m/Align
