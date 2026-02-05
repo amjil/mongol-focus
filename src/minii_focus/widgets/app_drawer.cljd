@@ -14,13 +14,15 @@
     .borderRadius (m/BorderRadius.circular 16.0)
     .child
     (m/Container.
+     .alignment m/Alignment.center
      .padding (m/EdgeInsets.all 16.0)
      .decoration (m/BoxDecoration.
                   .color (.withOpacity bg-color 0.1)
                   .borderRadius (m/BorderRadius.circular 16.0))
      .child
      (m/Column.
-      .mainAxisSize m/MainAxisSize.min
+      .mainAxisSize m/MainAxisSize.max
+      .mainAxisAlignment m/MainAxisAlignment.center
       .children
       [(m/Icon. icon .color bg-color .size 28.0)
        (m/SizedBox. .height 8.0)
@@ -28,6 +30,7 @@
 
 (defn main-drawer []
   (f/widget
+   :context ctx
    :get {{{primary .-primary
            on-primary .-onPrimary
            on-surface .-onSurface} .-colorScheme} m/Theme}
@@ -54,15 +57,16 @@
          .child
         (m/Row.
          .mainAxisSize m/MainAxisSize.max
+         .crossAxisAlignment m/CrossAxisAlignment.stretch
          .children
          [(drawer-item
            {:icon m/Icons.settings_outlined
             :label "Тохиргоо"
             :bg-color primary
             :fg-color on-surface
-            :on-tap (fn [ctx]
-                      (swap! app-ui-state assoc :selected-nav-id "settings")
-                      (.pop (m/Navigator.of ctx)))})
+           :on-tap (fn []
+                     (swap! app-ui-state assoc :selected-nav-id "settings")
+                     (.pop (m/Navigator.of ctx)))})
           (drawer-item
            {:icon m/Icons.info_outline
             :label "Бидний тухай"
