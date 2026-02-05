@@ -46,7 +46,10 @@
      (dialog/vertical-custom-dialog
       {:title "ДҮРС СОНГОХ"
        :height-factor 0.5
-       :body (cat-ui/icon-picker-content {:on-select on-select})
+       :body (cat-ui/icon-picker-content
+              {:on-select (fn [code]
+                            (on-select code)
+                            (m/Navigator.pop c))})
        :actions [(mgl/MongolTextButton.
                   .onPressed #(m/Navigator.pop c)
                   .child (mgl/MongolText. "БОЛИХ"))]}))))
@@ -112,6 +115,10 @@
                      :hint "Нэр бичих..."
                      :max-lines 1
                      :autofocus true
+                     :style (.copyWith titleLarge
+                                       .fontSize 20.0
+                                       .fontWeight m/FontWeight.normal
+                                       .color on-surface)
                      :on-changed (fn [t]
                                    (reset! temp-text-atom t)
                                    ;; Also keep the function to search existing categories
@@ -165,75 +172,99 @@
      .context ctx
      .builder
      (fn [ctx]
-       (f/widget
-        :managed [controller (m/TextEditingController .text (or name ""))]
-        :watch [selected-icon selected-icon-atom
-                results results-state]
-        :get {{{on-surface .-onSurface} .-colorScheme} m/Theme}
-        (dialog/vertical-custom-dialog
-         {:height-factor 0.8
-          :width-factor 1
-          :child
-          (m/Column.
-           .mainAxisSize m/MainAxisSize.max
-           .children
-           [(m/Expanded
+      (f/widget
+       :managed [controller (m/TextEditingController .text (or name ""))]
+       :watch [selected-icon selected-icon-atom
+               results results-state]
+       :get {{{on-surface .-onSurface surface-variant .-surfaceVariant primary .-primary} .-colorScheme
+              {:flds [titleLarge]} .-textTheme} m/Theme}
+       (dialog/vertical-custom-dialog
+        {:height-factor 0.8
+         :width-factor 1
+         :inset-padding m/EdgeInsets.zero
+         :child
+         (m/Column.
+          .mainAxisSize m/MainAxisSize.max
+          .children
+          [(m/Expanded
+            .child
+            (m/Padding.
+             .padding (m/EdgeInsets.all (tokens/space :m))
              .child
-             (m/Padding.
-              .padding (m/EdgeInsets.all (tokens/space :m))
-              .child
-              (m/Stack.
-               .children
-               [(m/Row.
-                 .mainAxisSize m/MainAxisSize.min
-                 .children
-                 [(m/IconButton.
-                   .icon (m/Icon. (m/IconData. selected-icon .fontFamily "MaterialIcons") .size 32.0)
-                   .onPressed #(open-icon-picker ctx (fn [code] (reset! selected-icon-atom code))))
-                  (m/SizedBox. .width 8.0)
-                  (m/Expanded.
-                   .child
-                   (m/Container.
-                    .padding (m/EdgeInsets.all (tokens/space :s))
-                    .decoration (m/BoxDecoration.
-                                 .border (m/Border.all .color (.withOpacity on-surface 0.1))
-                                 .borderRadius (m/BorderRadius.circular 12))
-                    .child (text-field/text-field
-                            {:controller controller
-                             :hint "Нэр бичих..."
-                             :autofocus true
-                             :on-changed (fn [t]
-                                           (reset! temp-text-atom t)
-                                           (reset! results-state
-                                                   (if (str/blank? t) []
-                                                       (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
-                                                               other-cats))))})))
-                  (if (seq results)
-                    (m/Padding.
-                     .padding (m/EdgeInsets.only .top 8.0)
-                     .child (mgl/MongolText. "Ийм нэртэй ангилал байна"
-                                             .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0)))
-                    (m/SizedBox.shrink))
+             (m/Stack.
+              .children
+              [(m/Row.
+                .crossAxisAlignment m/CrossAxisAlignment.stretch
+                .mainAxisAlignment m/MainAxisAlignment.spaceAround
+                .children
+                [(m/Container
+                  .alignment m/Alignment.topCenter
+                  .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+                  .decoration (m/BoxDecoration
+                               .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
+                  .child
                   (m/Column
+                   .mainAxisSize m/MainAxisSize.min
                    .children
-                   [(mgl/MongolTextButton.
-                     .onPressed #(m/Navigator.pop ctx)
-                     .child (mgl/MongolText. "БОЛИХ"))
-                    (mgl/MongolElevatedButton.
-                     .onPressed (fn []
-                                  (when-not (str/blank? @temp-text-atom)
-                                    (db/update-category! id {:name @temp-text-atom :icon-code @selected-icon-atom})
-                                    (m/Navigator.pop ctx)))
-                     .child (mgl/MongolText. "ХАДГАЛАХ"))])])
-                (keyboard/candidates nil)])))
-            (keyboard/keyboard
-             {:controller controller
-              :on-changed (fn [t]
-                            (reset! temp-text-atom t)
-                            (reset! results-state
-                                    (if (str/blank? t) []
-                                        (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
-                                                other-cats))))})])}))))))
+                   [(m/IconButton.
+                     .icon (m/Icon. (m/IconData. selected-icon .fontFamily "MaterialIcons")
+                                    .size 32.0
+                                    .color primary)
+                     .onPressed #(open-icon-picker ctx (fn [code] (reset! selected-icon-atom code))))
+                    (m/SizedBox. .height (tokens/space :s))
+                    (text/text-block
+                     {:text "АНГИЛАЛ ЗАСАХ"
+                      :style (.copyWith titleLarge
+                                        .fontWeight m/FontWeight.bold
+                                        .color on-surface)})]))
+                 (m/Container
+                  .alignment m/Alignment.topCenter
+                  .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+                  .decoration (m/BoxDecoration
+                               .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
+                  .child
+                  (text-field/text-field
+                   {:controller controller
+                    :hint "Нэр бичих..."
+                    :max-lines 1
+                    :autofocus true
+                    :style (.copyWith titleLarge
+                                      .fontSize 20.0
+                                      .fontWeight m/FontWeight.normal
+                                      .color on-surface)
+                    :on-changed (fn [t]
+                                  (reset! temp-text-atom t)
+                                  (reset! results-state
+                                          (if (str/blank? t) []
+                                              (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
+                                                      other-cats))))}))
+                 (if (seq results)
+                   (m/Padding.
+                    .padding (m/EdgeInsets.only .top 8.0)
+                    .child (mgl/MongolText. "Ийм нэртэй ангилал байна"
+                                            .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0)))
+                   (m/SizedBox.shrink))
+                 (m/Column
+                  .mainAxisSize m/MainAxisSize.min
+                  .children
+                  [(mgl/MongolTextButton.
+                    .onPressed #(m/Navigator.pop ctx)
+                    .child (mgl/MongolText. "БОЛИХ"))
+                   (mgl/MongolElevatedButton.
+                    .onPressed (fn []
+                                 (when-not (str/blank? @temp-text-atom)
+                                   (db/update-category! id {:name @temp-text-atom :icon-code @selected-icon-atom})
+                                   (m/Navigator.pop ctx)))
+                    .child (mgl/MongolText. "ХАДГАЛАХ"))])])
+               (keyboard/candidates nil)])))
+           (keyboard/keyboard
+            {:controller controller
+             :on-changed (fn [t]
+                           (reset! temp-text-atom t)
+                           (reset! results-state
+                                   (if (str/blank? t) []
+                                       (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
+                                               other-cats))))})])}))))))
 
 ;; --- 4. Core: Category Selection Dialog (for Detail Page/Search Page) ---
 

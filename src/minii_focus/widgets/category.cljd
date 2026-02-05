@@ -11,23 +11,43 @@
    {:name "Shopping" :code 0xe508} {:name "Fitness" :code 0xeb43}
    {:name "Heart" :code 0xe25b} {:name "Star" :code 0xe5d4}
    {:name "Idea" :code 0xe3ad} {:name "Travel" :code 0xe539}
-   {:name "Food" :code 0xe2e2} {:name "Money" :code 0xe041}])
+   {:name "Food" :code 0xe2e2} {:name "Money" :code 0xe041}
+   {:name "Coffee" :code 0xe4c5} {:name "Music" :code 0xe405}
+   {:name "Movie" :code 0xe02c} {:name "Book" :code 0xe865}
+   {:name "Game" :code 0xe021} {:name "Sports" :code 0xeb45}
+   {:name "Pets" :code 0xe91d} {:name "Car" :code 0xe531}
+   {:name "Bike" :code 0xeb29} {:name "Flight" :code 0xe539}
+   {:name "Gift" :code 0xe8f6} {:name "Camera" :code 0xe3af}
+   {:name "Alarm" :code 0xe855} {:name "School" :code 0xe80c}
+   {:name "Chat" :code 0xe0b7} {:name "Call" :code 0xe0b0}])
 
 ;; --- 2. Internal Component: Icon Picker Content ---
 (defn icon-picker-content [{:keys [on-select]}]
-  (m/GridView.builder
-   .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount 
-                  .crossAxisCount 4
-                  .mainAxisSpacing 10.0
-                  .crossAxisSpacing 10.0)
-   .padding (m/EdgeInsets.all 16.0)
-   .itemCount (count category-icons)
-   .itemBuilder (fn [_ctx idx]
-                  (let [icon (get category-icons idx)]
-                    (m/IconButton.
-                     .onPressed #(on-select (:code icon))
-                     .icon (m/Icon. (m/IconData. (:code icon) .fontFamily "MaterialIcons") 
-                                   .size 30.0))))))
+  (f/widget
+   :get {{{primary .-primary} .-colorScheme} m/Theme}
+   (m/GridView.builder
+    .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount
+                   .crossAxisCount 2
+                   .mainAxisSpacing 20.0
+                   .crossAxisSpacing 20.0)
+    .padding (m/EdgeInsets.all 24.0)
+    .itemCount (count category-icons)
+    .itemBuilder
+    (fn [_ctx idx]
+      (let [icon (get category-icons idx)]
+        (m/Center.
+         .child
+         (m/InkResponse.
+          .onTap #(on-select (:code icon))
+          .radius 32.0
+          .child (m/SizedBox.
+                  .width 64.0
+                  .height 64.0
+                  .child (m/Center.
+                          .child
+                          (m/Icon. (m/IconData. (:code icon) .fontFamily "MaterialIcons")
+                                   .size 30.0
+                                   .color primary))))))))))
 
 ;; --- 3. Core Component: Category Card (Adaptive Mongolian Width) ---
 (defn category-card [{:keys [name icon-code is-selected on-tap on-long-press]}]

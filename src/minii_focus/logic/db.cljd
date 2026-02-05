@@ -348,5 +348,6 @@
     (.watch
      (.customSelect
       database
-      "SELECT * FROM categories ORDER BY position ASC, id ASC"))
+      "SELECT * FROM categories ORDER BY position ASC, id ASC"
+      .readsFrom #{(.-categories database)}))
     (async/Stream.empty)))
