@@ -33,10 +33,10 @@
               .children
               [(m/Icon. m/Icons.folder_open .size 64.0 .color (.withOpacity primary 0.4))
                (m/SizedBox. .height (tokens/space :m))
-               (mgl/MongolText. "Ангилал байхгүй байна"
+               (mgl/MongolText. "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ"
                                 .style (m/TextStyle. .color (.withOpacity on-surface 0.6) .fontSize 16.0))
                (m/SizedBox. .height (tokens/space :s))
-               (mgl/MongolText. "Дээрх + товчоор нэмнэ үү"
+               (mgl/MongolText. "ᠳᠡᠭᠡᠷᠡᠬᠢ + ᠲᠣᠪᠴᠢ᠎ᠪᠠᠷ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
                                 .style (m/TextStyle. .color (.withOpacity on-surface 0.4) .fontSize 14.0))]))
      (m/ListView.builder
       .scrollDirection m/Axis.horizontal

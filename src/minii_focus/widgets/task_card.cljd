@@ -16,8 +16,8 @@
    :let [font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
          text-scale (case font-size
-                      "Жижиг" 0.9
-                      "Том" 1.1
+                      "ᠵᠢᠵᠢᠭ" 0.9
+                      "ᠲᠣᠮᠣ" 1.1
                       1.0)]
    :get {{{surface .-surface
            onSurface .-onSurface

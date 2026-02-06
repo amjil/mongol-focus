@@ -24,13 +24,13 @@
 
    (m/Row
     .crossAxisAlignment m.CrossAxisAlignment/start
-    .children [(mgl/MongolText "Тохиргоо"
+    .children [(mgl/MongolText "ᠲᠣᠬᠢᠷᠠᠭ᠎ᠠ"
                                .style (m/TextStyle
                                        .fontSize 26
                                        .fontWeight m.FontWeight/bold
                                        .color (.-onSurface color-scheme)))
                (m/Container .width 8)
-               (mgl/MongolText "Тохиргооны сонголт"
+               (mgl/MongolText "ᠲᠣᠬᠢᠷᠠᠭᠠᠨ᠎ᠤ ᠰᠣᠩᠭᠣᠯᠲᠠ"
                                .style (m/TextStyle
                                        .fontSize 14
                                        .color (.-onSurfaceVariant color-scheme)))])
@@ -40,13 +40,13 @@
 (defn- open-font-size-dialog [ctx]
   (bs/bottom-sheet
    ctx
-   [{:type :header :title "Фонтын хэмжээ"}
-    {:title "Жижиг"
-     :on-tap #(store/update-setting! :font-size "Жижиг")}
-    {:title "Дунд"
-     :on-tap #(store/update-setting! :font-size "Дунд")}
-    {:title "Том"
-     :on-tap #(store/update-setting! :font-size "Том")}]
+   [{:type :header :title "ᠹᠤᠨᠲ᠎ᠤᠨ ᠬᠡᠮᠵᠢᠶ᠎ᠡ "}
+    {:title "ᠵᠢᠵᠢᠭ"
+     :on-tap #(store/update-setting! :font-size "ᠵᠢᠵᠢᠭ")}
+    {:title "ᠳᠤᠮᠳᠠ"
+     :on-tap #(store/update-setting! :font-size "ᠳᠤᠮᠳᠠ")}
+    {:title "ᠲᠣᠮᠣ"
+     :on-tap #(store/update-setting! :font-size "ᠲᠣᠮᠣ")}]
    :height-factor 0.35))
 
 (defn- log-action [label]
@@ -55,7 +55,7 @@
 (defn- open-font-family-dialog [ctx]
   (bs/bottom-sheet
    ctx
-   [{:type :header :title "Фонтын төрөл"}
+   [{:type :header :title "ᠹᠣᠨᠲ᠎ᠤᠨ ᠲᠥᠷᠥᠯ"}
     {:title "OyunQaganTig"
      :on-tap #(store/update-setting! :font-family "OyunQaganTig")}
     {:title "OyunAgulaTig"
@@ -77,12 +77,12 @@
 (defn- open-app-info-sheet [ctx]
   (bs/bottom-sheet
    ctx
-   [{:type :header :title "Апп"}
-    {:title "Хувилбар: 1.0.0"
+   [{:type :header :title ""}
+    {:title "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ: 1.0.0"
      :on-tap #(log-action "version")}
-    {:title "Тусламж ба санал"
+    {:title "ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ"
      :on-tap #(log-action "help-feedback")}
-    {:title "Үнэлгээ өгөх"
+    {:title "ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
      :on-tap #(log-action "rate-app")}]
    :height-factor 0.35))
 
@@ -106,47 +106,39 @@
       .children
       (concat
        (settings-header color-scheme)
-       [;; --- Group 1: General Settings ---
+       [
+        ;; --- Group 1: Category Management ---
         (sett/settings-section
-         "Ерөнхий" ; General
-         [{:title "Харанхуй горим"
-           :leading m.Icons/dark_mode
-           :value (get-in state [:settings :dark-mode?])
-           :on-changed #(store/update-setting! :dark-mode? %)}
-
-          {:title "Дуугаралт"
-           :leading m.Icons/volume_up
-           :value (get-in state [:settings :sound?])
-           :on-changed #(store/update-setting! :sound? %)}])
-
-        ;; --- Group 2: Category Management ---
-        (sett/settings-section
-         "Ангилал"
-         [{:title "Ангилал тохируулах"
+         "ᠠᠩᠭᠢᠯᠠᠯ"
+         [{:title "ᠠᠩᠭᠢᠯᠠᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ"
            :leading m.Icons/folder_special
            :show-arrow? true
            :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management"))}])
 
-        ;; --- Group 3: Interface Preferences ---
+        ;; --- Group 2: Interface Preferences ---
         (sett/settings-section
-         "Харагдац" ; Appearance
-         [{:title "Фонтын хэмжээ"
-           :subtitle (str "Одоогийн: " font-size)
+         "ᠬᠠᠷᠠᠭᠳᠠᠴᠠ" ; Appearance
+         [{:title "ᠬᠠᠷᠠᠩᠭᠤᠢ ᠭᠣᠷᠢᠮ"
+           :leading m.Icons/dark_mode
+           :value (get-in state [:settings :dark-mode?])
+           :on-changed #(store/update-setting! :dark-mode? %)}
+          {:title "ᠹᠤᠨᠲ᠎ᠤᠨ ᠬᠡᠮᠵᠢᠶ᠎ᠡ "
+           :subtitle (str "ᠣᠳᠣ᠎ᠶᠢᠨ: " font-size)
            :leading m.Icons/text_fields
            :show-arrow? true
            :on-tap #(open-font-size-dialog ctx)}
 
-          {:title "Фонтын төрөл"
-           :subtitle (str "Одоогийн: " font-family)
+          {:title "ᠹᠣᠨᠲ᠎ᠤᠨ ᠲᠥᠷᠥᠯ"
+           :subtitle (str "ᠣᠳᠣ᠎ᠶᠢᠨ: " font-family)
            :leading m.Icons/font_download
            :show-arrow? true
            :on-tap #(open-font-family-dialog ctx)}])
 
-        ;; --- Group 5: App Information ---
+        ;; --- Group 3: App Information ---
         (sett/settings-section
-         "Апп"
-         [{:title "Аппын тухай"
-           :subtitle "Хувилбар, тусламж, үнэлгээ"
+         "ᠠᠪᠪ"
+         [{:title "ᠠᠪᠪ᠎ᠡ᠎ᠦ ᠲᠤᠬᠠᠢ"
+           :subtitle "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ, ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ, ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
            :leading m.Icons/info_outline
            :show-arrow? true
            :on-tap #(open-app-info-sheet ctx)}])]))))))

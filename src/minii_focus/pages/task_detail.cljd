@@ -18,18 +18,18 @@
 ;; --- 1. Priority Configuration Data (Mongolian Localization) ---
 
 (def ^:private priority-options
-  [{:type :header :title "Урьтамж сонгох"}
-   {:title "Өндөр"   :icon m/Icons.label_important_rounded :value 2}
-   {:title "Дунд"    :icon m/Icons.label_rounded           :value 1}
-   {:title "Бага"    :icon m/Icons.label_outline_rounded   :value 0}])
+  [{:type :header :title "ᠤᠷᠢᠲᠠᠮᠵᠢ ᠰᠣᠩᠭᠣᠬᠤ"}
+   {:title "ᠥᠨᠳᠥᠷ"   :icon m/Icons.label_important_rounded :value 2}
+   {:title "ᠳᠤᠮᠳᠠ"    :icon m/Icons.label_rounded           :value 1}
+   {:title "ᠪᠠᠭ᠎ᠠ"    :icon m/Icons.label_outline_rounded   :value 0}])
    
 
 (def ^:private recurrence-options
-  [{:type :header :title "Үргэлжлүүлэх"} ; Recurrence mode
-   {:title "Үргэлжлүүлэхгүй" :value 0} ; No recurrence
-   {:title "Өдрийн давтамж"      :value 1} ; Daily
-   {:title "Долоо хоногт давтамж" :value 2} ; Weekly
-   {:title "Сарын давтамж"      :value 3}]) ; Monthly
+  [{:type :header :title "ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠶᠢᠨ ᠭᠣᠷᠢᠮ"} ; Recurrence mode
+   {:title "ᠳᠠᠪᠲᠠᠬᠤ ᠦᠭᠡᠢ" :value 0} ; No recurrence
+   {:title "ᠡᠳᠦᠷ᠎ᠦᠨ ᠳᠠᠪᠲᠠᠮᠵᠢ"      :value 1} ; Daily
+   {:title "ᠳᠣᠯᠣᠭᠠᠨ ᠬᠣᠨᠣᠭ᠎ᠤᠨ ᠳᠠᠪᠲᠠᠮᠵᠢ" :value 2} ; Weekly
+   {:title "ᠰᠠᠷ᠎ᠠ᠎ᠶᠢᠨ ᠳᠠᠪᠲᠠᠮᠵᠢ"      :value 3}]) ; Monthly
 
 ;; --- 1.5. Notes Dialog Function ---
 
@@ -39,7 +39,7 @@
    .builder
    (fn [dialog-ctx]
      (dialog/vertical-custom-dialog
-      {:title "Тэмдэглэл"
+      {:title "ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ"
        :width-factor 0.85
        :height-factor 0.7
        :body
@@ -53,7 +53,7 @@
                          .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
        :actions [(mgl/MongolTextButton.
                   .onPressed #(m/Navigator.pop dialog-ctx)
-                  .child (mgl/MongolText. "Хаах"))]}))))
+                  .child (mgl/MongolText. "ᠬᠠᠠᠭᠠᠬᠤ"))]}))))
 
 ;; --- 2. Main Page Component ---
 
@@ -69,8 +69,8 @@
          font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
          text-scale (case font-size
-                      "Жижиг" 0.9
-                      "Том" 1.1
+                      "ᠵᠢᠵᠢᠭ" 0.9
+                      "ᠲᠣᠮᠣ" 1.1
                       1.0)
          task-id   (get task "id")
          title     (get task "title")
@@ -177,7 +177,7 @@
                                     .color (if due-date primary m/Colors.grey))
                   .title (mgl/MongolText. (if due-date
                                             (.format (intl/DateFormat "yyyy-MM-dd") due-date)
-                                            "Set date"))))
+                                            "ᠬᠤᠭᠤᠴᠠᠭ᠎ᠠ ᠲᠣᠭᠲᠠᠭᠠᠬᠤ"))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -207,7 +207,7 @@
                                     .color (if reminder-at primary m/Colors.grey))
                   .title (mgl/MongolText. (if reminder-at
                                             (.format (intl/DateFormat "MM-dd HH:mm") reminder-at)
-                                            "Мэдэгдэл тохируулах")))) ; Set reminder
+                                            "ᠮᠡᠳᠡᠭᠳᠡᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ")))) ; Set reminder
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -230,7 +230,7 @@
                                       1 m/Colors.orange
                                       0 m/Colors.blue
                                       m/Colors.grey))
-           .title (mgl/MongolText. "Урьтамж")))
+           .title (mgl/MongolText. "ᠤᠷᠢᠲᠠᠮᠵᠢ ᠰᠣᠩᠭᠣᠬᠤ")))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -249,7 +249,7 @@
           (mgl/MongolListTile.
            .leading (m/Icon. m/Icons.autorenew_rounded
                              .color (if (> (or (get task "recurrence_mode") 0) 0) primary m/Colors.grey))
-           .title (mgl/MongolText. "Үргэлжлүүлэх")))
+           .title (mgl/MongolText. "ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠶᠢᠨ ᠭᠣᠷᠢᠮ")))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -270,7 +270,7 @@
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
-           .title (mgl/MongolText. (or cat-name "Ангилалгүй")
+           .title (mgl/MongolText. (or cat-name "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
@@ -285,7 +285,7 @@
           (mgl/MongolListTile.
            .leading (m/Icon. m/Icons.list_alt_rounded
                              .color primary)
-           .title (mgl/MongolText. (str "Дэд даалгавар (" (or subtask-count 0) ")"))
+           .title (mgl/MongolText. (str "ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ (" (or subtask-count 0) ")"))
            .trailing (m/Icon. m/Icons.chevron_right_rounded
                               .color onSurface)))]
        ))))))

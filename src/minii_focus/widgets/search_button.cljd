@@ -27,7 +27,7 @@
                  (not (str/blank? search-term)) "Хайлт идэвхтэй"
                  selected-category-id "Ангилал шүүлтүүр идэвхтэй"
                  selected-due-date "Огноо шүүлтүүр идэвхтэй"
-                 :else "Хайх")
+                 :else "ᠬᠠᠢᠬᠤ")
       .onPressed (fn [] (search-actions/open-search-dialog ctx) nil))
      
      ;; When filter is active, show an indicator dot

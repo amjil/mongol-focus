@@ -38,12 +38,12 @@
         :let [font-family (get-in state [:settings :font-family])
               font-size (get-in state [:settings :font-size])
               text-scale (case font-size
-                           "Жижиг" 0.9
-                           "Том" 1.1
+                           "ᠵᠢᠵᠢᠭ" 0.9
+                           "ᠲᠣᠮᠣ" 1.1
                            1.0)]
         
         (dialog/vertical-custom-dialog
-         {:title "ХАЙХ" 
+         {:title "ᠬᠠᠢᠬᠤ" 
           :width-factor 1.0
           :height-factor 0.95 
           :inset-padding m/EdgeInsets.zero
@@ -80,7 +80,7 @@
                                  .borderRadius (m/BorderRadius.circular 12))
                     .child (text-field/text-field
                             {:controller controller
-                             :hint "Бичих..."
+                             :hint "ᠪᠢᠴᠢᠬᠦ ᠁"
                              :autofocus true
                              :max-lines nil
                              :on-changed (fn [t] (reset! search-term-atom t))})))
@@ -165,7 +165,7 @@
                                                                                       .height 1.2 
                                                                                       .color on-surface
                                                                                       .fontFamily font-family)))))))))
-                     (m/Center. .child (mgl/MongolText. "Илэрцгүй" .style (m/TextStyle. .color (.withOpacity on-surface 0.3))))))
+                     (m/Center. .child (mgl/MongolText. "ᠬᠣᠭᠣᠰᠣᠨ" .style (m/TextStyle. .color (.withOpacity on-surface 0.3))))))
 
                   ;; D. Rightmost: Action Buttons Column
                   (m/Column.
@@ -185,11 +185,11 @@
                                   (swap! store/app-ui-state assoc :search-term @search-term-atom)
                                   (m/Navigator.pop ctx)
                                   nil)
-                     .child (mgl/MongolText. "ХААХ"))
+                     .child (mgl/MongolText. "ᠬᠠᠠᠭᠠᠬᠤ"))
                     
                     (mgl/MongolTextButton.
                      .onPressed (fn [] (m/Navigator.pop ctx) nil)
-                     .child (mgl/MongolText. "БОЛИХ"))])])
+                     .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))])])
 
                 ;; --- Middle Layer: Keyboard Candidates Overlay ---
                 (keyboard/candidates nil)])))

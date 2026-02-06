@@ -75,7 +75,7 @@
                      ;; --- Notes Input Field ---
                      (text-field/text-field
                       {:controller notes-ctrl
-                       :hint "Add notes here..." ;; Hint text
+                       :hint "ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠁" ;; Hint text
                        :focus-node focus-node
                        :max-lines nil ;; Support unlimited lines
                        :style (.copyWith bodyMedium

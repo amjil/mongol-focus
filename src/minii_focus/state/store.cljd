@@ -19,7 +19,7 @@
    :vibration? true
    :daily-reminder? false
    :font-family "OyunQaganTig"
-   :font-size "Дунд"
+   :font-size "ᠳᠤᠮᠳᠠ"
    :language "Монгол"})
 
 (defn- read-setting [prefs key default]

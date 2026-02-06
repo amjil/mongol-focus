@@ -61,7 +61,7 @@
          .children
          [(drawer-item
            {:icon m/Icons.settings_outlined
-            :label "Тохиргоо"
+            :label "ᠲᠣᠬᠢᠷᠠᠭ᠎ᠠ"
             :bg-color primary
             :fg-color on-surface
            :on-tap (fn []
@@ -69,7 +69,7 @@
                      (.pop (m/Navigator.of ctx)))})
           (drawer-item
            {:icon m/Icons.info_outline
-            :label "Бидний тухай"
+            :label "ᠪᠢᠳᠡᠨ᠎ᠦ ᠲᠤᠬᠠᠢ"
             :bg-color primary
             :fg-color on-surface
             :on-tap (fn [] (println "About pressed"))})]))))

@@ -49,8 +49,8 @@
           font-family (get-in state [:settings :font-family])
           dark-mode? (get-in state [:settings :dark-mode?])
           text-scale (case font-size
-                       "Жижиг" 0.9
-                       "Том" 1.1
+                       "ᠵᠢᠵᠢᠭ" 0.9
+                       "ᠲᠣᠮᠣ" 1.1
                        1.0)
           info (merge keyboard-options/keyboard-option
                       {:keyboard/key-cap-border-radius 6

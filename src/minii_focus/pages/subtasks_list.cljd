@@ -69,12 +69,16 @@
                  .color (.withOpacity primary 0.4)
                  .size 48.0)
         (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :l)))
-        (mgl/MongolText. (str title "-т дэд даалгавар алга")
-                         .style titleLarge
-                         .textAlign mgl/MongolTextAlign.center)
-        (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
-        (mgl/MongolText. "Шинэ дэд даалгавар нэмэх бол доорх товчийг дарна уу"
-                         .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])]))))
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .children
+         [(mgl/MongolText. (str title " - ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
+                           .maxLines 5
+                           .style titleLarge
+                           .textAlign mgl/MongolTextAlign.center)
+          (m/Padding. .padding (m/EdgeInsets.only .left (tokens/space :m)))
+          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
+                           .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 
 (defn subtasks-list-page [parent-task-id parent-title]
   (f/widget

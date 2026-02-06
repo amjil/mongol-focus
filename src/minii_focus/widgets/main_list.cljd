@@ -107,9 +107,9 @@
                                "logbook" (db/watch-logbook)
                                (db/watch-active-tasks)))]
    :let [display-title (case selected-nav-id
-                         "today"   "ᠥᠨᠥᠳᠥᠷ"
-                         "logbook" "ᠥᠩᠭᠡᠷᠡᠭᠰᠡᠨ "
-                         "Ажил")]
+                         "today"   "ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"
+                         "logbook" "ᠡᠷᠭᠢᠴᠡᠭᠦᠯᠦᠯ"
+                         "ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")]
 
    (m/AnimatedSwitcher.
     .duration (dart:core/Duration. .milliseconds 400)
