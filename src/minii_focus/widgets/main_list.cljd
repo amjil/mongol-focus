@@ -82,16 +82,19 @@
 
         (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :l)))
 
-        ;; Vertical Title
-        (mgl/MongolText. (str title "-т ажил алга")
-                         .style titleLarge
-                         .textAlign mgl/MongolTextAlign.center)
+        (m/Row
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .children
+         [;; Vertical Title
+          (mgl/MongolText. (str title " - ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
+                           .style titleLarge
+                           .textAlign mgl/MongolTextAlign.center)
 
-        (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
+          (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
 
-        ;; Guidance Text (Light Color)
-        (mgl/MongolText. "Шинэ ажил нэмэх бол доорх товчийг дарна уу" ;; "Click the button below to add a new task"
-                         .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])]))))
+          ;; Guidance Text (Light Color)
+          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ" ;; "Click the button below to add a new task"
+                           .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 ;; --- 2. Task Stream Main View (Horizontal Scroll) ---
 
 (defn task-stream-view []

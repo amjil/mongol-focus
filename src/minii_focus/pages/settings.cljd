@@ -5,6 +5,7 @@
    ["package:mongol/mongol.dart" :as mgl]
    [cljd.flutter :as f]
    [minii-focus.state.store :as store] ;; Import your store
+   [minii-focus.logic.update :as update]
    [components.bottom-sheet :as bs]
    [components.setting :as sett]))
 
@@ -75,16 +76,17 @@
    :height-factor 0.5))
 
 (defn- open-app-info-sheet [ctx]
-  (bs/bottom-sheet
-   ctx
-   [{:type :header :title ""}
-    {:title "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ: 1.0.0"
-     :on-tap #(log-action "version")}
-    {:title "ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ"
-     :on-tap #(log-action "help-feedback")}
-    {:title "ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
-     :on-tap #(log-action "rate-app")}]
-   :height-factor 0.35))
+  (let [version (await (update/get-current-version!))]
+    (bs/bottom-sheet
+     ctx
+     [{:type :header :title ""}
+      {:title (str "版本: " (or version "unknown"))
+       :on-tap #(log-action "version")}
+      {:title "ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ"
+       :on-tap #(log-action "help-feedback")}
+      {:title "ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
+       :on-tap #(log-action "rate-app")}]
+     :height-factor 0.35)))
 
 (defn settings-page []
   (f/widget
@@ -141,4 +143,9 @@
            :subtitle "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ, ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ, ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
            :leading m.Icons/info_outline
            :show-arrow? true
-           :on-tap #(open-app-info-sheet ctx)}])]))))))
+           :on-tap #(open-app-info-sheet ctx)}
+          {:title "ᠰᠢᠨᠡᠴᠢᠯᠡᠯᠲᠡ᠎ᠶᠢ ᠰᠢᠯᠭᠠᠬᠤ"
+           :subtitle "ᠰᠢᠨ᠎ᠡ ᠬᠤᠪᠢᠯᠪᠤᠷᠢ᠎ᠶᠢ ᠰᠢᠯᠭᠠᠬᠤ"
+           :leading m.Icons/system_update
+           :show-arrow? true
+           :on-tap #(update/check-for-update! ctx {:manual? true})}])]))))))

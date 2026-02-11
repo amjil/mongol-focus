@@ -1,6 +1,7 @@
 (ns minii-focus.pages.home
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
+            ["package:cljd_mongol_focus/post_frame_trigger.dart" :as pft]
             [minii-focus.state.store :refer [app-ui-state]]
             [minii-focus.widgets.main-list :as list]
             [minii-focus.widgets.bottom-nav :as nav]
@@ -9,6 +10,7 @@
             [minii-focus.widgets.search-button :as search-button]
             [minii-focus.pages.settings :as settings]
             [minii-focus.logic.task-actions :as actions]
+            [minii-focus.logic.update :as update]
             ["dart:core" :as dc]))
 
 (defn home-page []
@@ -23,48 +25,51 @@
    ;; 3. Deeply destructure theme colors to ensure Scaffold background matches global theme
    :get {{{bg .-surface} .-colorScheme} m/Theme}
 
-   (m/Scaffold.
-    .appBar (m/AppBar .actions (if (not= selected-nav-id "settings")
-                                 [(search-button/filter-aware-search-button)]
-                                 []))
-    .backgroundColor bg
+   (pft/PostFrameTrigger
+    .onLayout #(update/ensure-startup-check! ctx)
+    .child
+    (m/Scaffold.
+     .appBar (m/AppBar .actions (if (not= selected-nav-id "settings")
+                                  [(search-button/filter-aware-search-button)]
+                                  []))
+     .backgroundColor bg
 
-    ;; Sidebar: Contains brand display and feature entries
-    .drawer (drawer/main-drawer)
+     ;; Sidebar: Contains brand display and feature entries
+     .drawer (drawer/main-drawer)
 
-    ;; Dynamic Body switching logic
-    .body
-    (m/SafeArea.
-     .child
-     (m/AnimatedSwitcher.
-      .duration (dc/Duration. .milliseconds 300)
-      ;; Smooth fade in/out when switching pages
-      .transitionBuilder (fn [child animation]
-                           (m/FadeTransition. .opacity animation .child child))
+     ;; Dynamic Body switching logic
+     .body
+     (m/SafeArea.
       .child
-      (case selected-nav-id
-        "today"    (m/Container.
-                    .key (m/ValueKey. "page-today")
-                    .child (list/task-stream-view))
+      (m/AnimatedSwitcher.
+       .duration (dc/Duration. .milliseconds 300)
+       ;; Smooth fade in/out when switching pages
+       .transitionBuilder (fn [child animation]
+                            (m/FadeTransition. .opacity animation .child child))
+       .child
+       (case selected-nav-id
+         "today"    (m/Container.
+                     .key (m/ValueKey. "page-today")
+                     .child (list/task-stream-view))
 
-        "logbook"  (m/Center.
-                    .key (m/ValueKey. "page-logbook")
-                    .child (list/task-stream-view)) ;; History page placeholder
+         "logbook"  (m/Center.
+                     .key (m/ValueKey. "page-logbook")
+                     .child (list/task-stream-view)) ;; History page placeholder
 
-        "settings" (m/Container.
-                    .key (m/ValueKey. "page-settings")
-                    .child (settings/settings-page))
+         "settings" (m/Container.
+                     .key (m/ValueKey. "page-settings")
+                     .child (settings/settings-page))
 
-        ;; Default fallback to today
-        (list/task-stream-view))))
+         ;; Default fallback to today
+         (list/task-stream-view))))
 
-    ;; Bottom Navigation Bar
-    .bottomNavigationBar (nav/main-navigation-bar)
+     ;; Bottom Navigation Bar
+     .bottomNavigationBar (nav/main-navigation-bar)
 
-    ;; Smart FAB: Only displayed on "today" page, supports scroll hiding
-    .floatingActionButton
-    (if (= selected-nav-id "today")
-      (fab/task-fab
-       {:scroll-controller scroll-controller
-        :on-pressed (fn [] (actions/open-task-editor ctx))})
-      (m/SizedBox.shrink)))))
+     ;; Smart FAB: Only displayed on "today" page, supports scroll hiding
+     .floatingActionButton
+     (if (= selected-nav-id "today")
+       (fab/task-fab
+        {:scroll-controller scroll-controller
+         :on-pressed (fn [] (actions/open-task-editor ctx))})
+       (m/SizedBox.shrink))))))
