@@ -85,54 +85,57 @@
                              :max-lines nil
                              :on-changed (fn [t] (reset! search-term-atom t))})))
 
-                  ;; B. Middle: Category Filter Button
+                  ;; B. Middle: Category + Date Filters (vertical)
                   (m/Padding.
                    .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s))
                    .child
                    (m/Column.
+                    .mainAxisAlignment m/MainAxisAlignment.start
                     .children
-                    [(m/IconButton.
-                      .icon (m/Icon. (if cat-id m/Icons.filter_list m/Icons.filter_list_off)
-                                     .color (if cat-id primary nil))
-                      ;; Modified: Call new logic layer interface
-                      .onPressed (fn []
-                                   (cat-actions/show-category-picker
-                                    ctx
-                                    {:current-id cat-id
-                                     :on-select (fn [id] (swap! store/app-ui-state assoc :selected-category-id id))})
-                                   nil))
-                     (if cat-id
-                       (m/Container. .width 6.0 .height 6.0 
-                                     .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
-                       (m/SizedBox.shrink))]))
+                    [;; Category filter
+                     (m/Column.
+                      .children
+                      [(m/IconButton.
+                        .icon (m/Icon. (if cat-id m/Icons.filter_list m/Icons.filter_list_off)
+                                       .color (if cat-id primary nil))
+                        ;; Modified: Call new logic layer interface
+                        .onPressed (fn []
+                                     (cat-actions/show-category-picker
+                                      ctx
+                                      {:current-id cat-id
+                                       :on-select (fn [id] (swap! store/app-ui-state assoc :selected-category-id id))})
+                                     nil))
+                       (if cat-id
+                         (m/Container. .width 6.0 .height 6.0
+                                       .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
+                         (m/SizedBox.shrink))])
 
-                  ;; B2. Date Filter Button
-                  (m/Padding.
-                   .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s))
-                   .child
-                   (m/Column.
-                    .children
-                    [(m/IconButton.
-                      .icon (m/Icon. (if due-date m/Icons.calendar_today m/Icons.calendar_today_outlined)
-                                     .color (if due-date primary nil))
-                      .onPressed (fn []
-                                   (picker/show-picker ctx
-                                                       (fn [d]
-                                                         (swap! store/app-ui-state assoc :selected-due-date d))
-                                                       :initial-date (or due-date (dc/DateTime.now))
-                                                       :show-time false)
-                                   nil))
-                     (if due-date
-                       (m/Container. .width 6.0 .height 6.0
-                                     .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
-                       (m/SizedBox.shrink))
-                     (if due-date
-                       (m/Padding.
-                        .padding (m/EdgeInsets.only .top 4.0)
-                        .child (mgl/MongolText.
-                                (.format (intl/DateFormat "yyyy-MM-dd") due-date)
-                                .style (m/TextStyle. .fontSize 10.0 .color on-surface)))
-                       (m/SizedBox.shrink))]))
+                     (m/SizedBox. .height (tokens/space :m))
+
+                     ;; Date filter
+                     (m/Column.
+                      .children
+                      [(m/IconButton.
+                        .icon (m/Icon. (if due-date m/Icons.calendar_today m/Icons.calendar_today_outlined)
+                                       .color (if due-date primary nil))
+                        .onPressed (fn []
+                                     (picker/show-picker ctx
+                                                         (fn [d]
+                                                           (swap! store/app-ui-state assoc :selected-due-date d))
+                                                         :initial-date (or due-date (dc/DateTime.now))
+                                                         :show-time false)
+                                     nil))
+                       (if due-date
+                         (m/Container. .width 6.0 .height 6.0
+                                       .decoration (m/BoxDecoration. .color primary .shape m/BoxShape.circle))
+                         (m/SizedBox.shrink))
+                       (if due-date
+                         (m/Padding.
+                          .padding (m/EdgeInsets.only .top 4.0)
+                          .child (mgl/MongolText.
+                                  (.format (intl/DateFormat "yyyy-MM-dd") due-date)
+                                  .style (m/TextStyle. .fontSize 10.0 .color on-surface)))
+                         (m/SizedBox.shrink))])]))
 
                   ;; C. Right: Result Preview Cards
                   (m/Expanded.
