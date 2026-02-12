@@ -158,56 +158,86 @@
          ;; --- C. Metadata Properties Area ---
 
          ;; 1. Date Block (Fixed)
-         (m/GestureDetector.
-          .onTap (fn []
-                   (picker/show-picker ctx
-                                      (fn [d]
-                                        (when d
-                                          (db/update-task! task-id :due-date d)
-                                          ;; Sync selected-task in store so detail page shows new date immediately
-                                          (swap! store/app-ui-state
-                                            (fn [state]
-                                              (let [current (:selected-task state)
-                                                    updated (if current (assoc current "due_date" d) nil)]
-                                                (assoc state :selected-task updated))))))
-                                      :initial-date (or due-date (dc/DateTime.now))
-                                      :show-time false))
-          .child (mgl/MongolListTile.
-                  .leading (m/Icon. m/Icons.calendar_today_rounded
-                                    .color (if due-date primary m/Colors.grey))
-                  .title (mgl/MongolText. (if due-date
-                                            (.format (intl/DateFormat "yyyy-MM-dd") due-date)
-                                            "ᠬᠤᠭᠤᠴᠠᠭ᠎ᠠ ᠲᠣᠭᠲᠠᠭᠠᠬᠤ"))))
+         (m/Column.
+          .mainAxisAlignment m/MainAxisAlignment.start
+          .mainAxisSize m/MainAxisSize.max
+          .children
+          [(m/IntrinsicHeight.
+            .child (m/GestureDetector.
+                    .onTap (fn []
+                             (picker/show-picker ctx
+                                                 (fn [d]
+                                                   (when d
+                                                     (db/update-task! task-id :due-date d)
+                                                     ;; Sync selected-task in store so detail page shows new date immediately
+                                                     (swap! store/app-ui-state
+                                                            (fn [state]
+                                                              (let [current (:selected-task state)
+                                                                    updated (if current (assoc current "due_date" d) nil)]
+                                                                (assoc state :selected-task updated))))))
+                                                 :initial-date (or due-date (dc/DateTime.now))
+                                                 :show-time false))
+                    .child (mgl/MongolListTile.
+                            .leading (m/Icon. m/Icons.calendar_today_rounded
+                                              .color (if due-date primary m/Colors.grey))
+                            .title (mgl/MongolText. (if due-date
+                                                      (.format (intl/DateFormat "yyyy-MM-dd") due-date)
+                                                      "ᠬᠤᠭᠤᠴᠠᠭ᠎ᠠ ᠲᠣᠭᠲᠠᠭᠠᠬᠤ")))))
+           (if due-date
+             (m/IconButton.
+              .icon (m/Icon. m/Icons.clear_rounded .size 20.0 .color m/Colors.grey)
+              .onPressed (fn []
+                           (db/update-task! task-id :due-date nil)
+                           (swap! store/app-ui-state
+                                  (fn [state]
+                                    (let [current (:selected-task state)
+                                          updated (if current (assoc current "due_date" nil) nil)]
+                                      (assoc state :selected-task updated))))))
+             (m/SizedBox.shrink))])
+
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
          ;; --- Reminder Time Block ---
-         (m/GestureDetector.
-          .onTap (fn []
-                   ;; 1. Select date first, then time, or use your existing picker
-                   (picker/show-picker 
-                    ctx 
-                    (fn [d] 
-                      (when d
-                        ;; 2. Update database
-                        (db/update-task! task-id :reminder-at d)
-                        ;; 3. Schedule notification
-                        (notification/cancel-task-reminder! task-id)
-                        (notification/schedule-task-reminder! task-id title d)
-                        ;; 4. Sync store so detail page shows new reminder time immediately
-                        (swap! store/app-ui-state
-                          (fn [state]
-                            (let [current (:selected-task state)
-                                  updated (if current (assoc current "reminder_at" d) nil)]
-                              (assoc state :selected-task updated))))))
-                    :initial-date (or reminder-at (dc/DateTime.now))
-                    :show-time true)) ;; Enable time selection
-          .child (mgl/MongolListTile.
-                  .leading (m/Icon. m/Icons.notifications_active_rounded
-                                    .color (if reminder-at primary m/Colors.grey))
-                  .title (mgl/MongolText. (if reminder-at
-                                            (.format (intl/DateFormat "MM-dd HH:mm") reminder-at)
-                                            "ᠮᠡᠳᠡᠭᠳᠡᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ")))) ; Set reminder
+         (m/Column.
+          .mainAxisSize m/MainAxisSize.min
+          .mainAxisAlignment m/MainAxisAlignment.start
+          .children
+          [(m/IntrinsicHeight.
+            .child (m/GestureDetector.
+                    .onTap (fn []
+                             (picker/show-picker
+                              ctx
+                              (fn [d]
+                                (when d
+                                  (db/update-task! task-id :reminder-at d)
+                                  (notification/cancel-task-reminder! task-id)
+                                  (notification/schedule-task-reminder! task-id title d)
+                                  (swap! store/app-ui-state
+                                         (fn [state]
+                                           (let [current (:selected-task state)
+                                                 updated (if current (assoc current "reminder_at" d) nil)]
+                                             (assoc state :selected-task updated))))))
+                              :initial-date (or reminder-at (dc/DateTime.now))
+                              :show-time true))
+                    .child (mgl/MongolListTile.
+                            .leading (m/Icon. m/Icons.notifications_active_rounded
+                                              .color (if reminder-at primary m/Colors.grey))
+                            .title (mgl/MongolText. (if reminder-at
+                                                      (.format (intl/DateFormat "MM-dd HH:mm") reminder-at)
+                                                      "ᠮᠡᠳᠡᠭᠳᠡᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ")))))
+           (if reminder-at
+             (m/IconButton.
+              .icon (m/Icon. m/Icons.clear_rounded .size 20.0 .color m/Colors.grey)
+              .onPressed (fn []
+                           (db/update-task! task-id :reminder-at nil)
+                           (notification/cancel-task-reminder! task-id)
+                           (swap! store/app-ui-state
+                                  (fn [state]
+                                    (let [current (:selected-task state)
+                                          updated (if current (assoc current "reminder_at" nil) nil)]
+                                      (assoc state :selected-task updated))))))
+             (m/SizedBox.shrink))])
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
@@ -260,18 +290,18 @@
                     ctx
                     {:current-id cat-id
                      :on-select (fn [new-id]
-                                 (db/update-task! task-id :category-id new-id)
-                                 (swap! store/app-ui-state
-                                   (fn [state]
-                                     (let [current (:selected-task state)
-                                           updated (if current (assoc current "category_id" new-id) nil)]
-                                       (assoc state :selected-task updated)))))}))
+                                  (db/update-task! task-id :category-id new-id)
+                                  (swap! store/app-ui-state
+                                         (fn [state]
+                                           (let [current (:selected-task state)
+                                                 updated (if current (assoc current "category_id" new-id) nil)]
+                                             (assoc state :selected-task updated)))))}))
           .child
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
            .title (mgl/MongolText. (or cat-name "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
-                                  .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
+                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 

@@ -181,7 +181,7 @@
    (fn [v]
      (drift/TasksCompanion.
       .dueDate (if (nil? v)
-                 (d/Value.absent)
+                 (d/Value nil)
                  (d/Value ^dc/DateTime? v))))
 
    :priority

@@ -2,35 +2,42 @@
   (:require ["package:flutter_local_notifications/flutter_local_notifications.dart" :as n]
             ["package:timezone/timezone.dart" :as tz]
             ["package:timezone/data/latest.dart" :as tz_data]
+            ["package:flutter_timezone/flutter_timezone.dart" :as fntz]
             ["dart:io" :as io]
             ["dart:core" :as dc]
             ["package:cljd_mongol_focus/notification_helper.dart" :as helper]))
 
 (defonce ^:private plugin (n/FlutterLocalNotificationsPlugin.))
 
-(defn init! 
+(defn init!
   "Initialize notification service, called when main function starts"
   []
-  (let [;; 1. Initialize timezone (required for scheduled notifications)
-        _ (tz_data/initializeTimeZones)
-        
-        ;; 2. Android initialization settings
+  ;; 1. Initialize timezone (required for scheduled notifications)
+  (tz_data/initializeTimeZones)
+  ;; 1.1 Set device local timezone (default is UTC, would cause wrong notification time!)
+  (try
+    (let [tz-info (await (.getLocalTimezone fntz/FlutterTimezone))
+          tz-name (.-identifier tz-info)
+          location (tz/getLocation tz-name)]
+      (tz/setLocalLocation location))
+    (catch Exception _ nil))
+  (let [;; 2. Android initialization settings
         ;; @mipmap/ic_launcher is the app icon, make sure your Android project has this icon
         android-settings (n/AndroidInitializationSettings. "@mipmap/ic_launcher")
-        
+
         ;; 3. iOS / Darwin initialization settings
         ios-settings (n/DarwinInitializationSettings.
                       .requestAlertPermission true
                       .requestBadgePermission true
                       .requestSoundPermission true)
-        
-        init-settings (n/InitializationSettings. 
-                       .android android-settings 
+
+        init-settings (n/InitializationSettings.
+                       .android android-settings
                        .iOS ios-settings)]
-    
+
     ;; 4. Execute plugin initialization
-    (await (.initialize plugin init-settings 
-                        .onDidReceiveNotificationResponse 
+    (await (.initialize plugin init-settings
+                        .onDidReceiveNotificationResponse
                         (fn [response]
                           ;; Handle logic after user clicks notification here
                           (dart:core/print (str "Notification clicked: " (.-payload response))))))))
@@ -57,7 +64,11 @@
                          .channelDescription "For sending scheduled reminders for tasks"
                          .importance n/Importance.max 
                          .priority n/Priority.high)
-        notification-details (n/NotificationDetails. .android android-details)
+        ;; iOS needs DarwinNotificationDetails, otherwise notification won't show
+        ios-details (n/DarwinNotificationDetails.)
+        notification-details (n/NotificationDetails. 
+                              .android android-details 
+                              .iOS ios-details)
         ;; Convert Dart's DateTime to TZDateTime
         tz-date (tz/TZDateTime.from scheduled-date tz/local)]
     
@@ -66,7 +77,7 @@
       plugin
       id       ;; Use task ID as notification ID for easy cancellation later
       title    ;; Notification title
-      "Таны даалгаврын цаг боллоо!" ;; Notification content (Mongolian: Your task time has arrived)
+      "ᠲᠠᠨ ᠎ᠤ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠴᠠᠭ ᠪᠣᠯᠤᠯ᠎ᠠ !" ;; Notification content (Mongolian: Your task time has arrived)
       tz-date
       notification-details
       .androidScheduleMode n/AndroidScheduleMode.exactAllowWhileIdle))))
