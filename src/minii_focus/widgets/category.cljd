@@ -96,10 +96,11 @@
    (m/ListView.builder
     .scrollDirection m/Axis.horizontal
     .padding (m/EdgeInsets.symmetric .horizontal 16.0)
-    .itemCount (inc (count categories))
+    .itemCount (+ 2 (count categories))
     .itemBuilder
     (fn [_ctx idx]
-      (if (zero? idx)
+      (cond
+        (zero? idx)
         (m/Padding.
          .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 8.0)
          .child
@@ -109,7 +110,15 @@
                                   .style (m/TextStyle. .color primary .fontSize 14.0))
           .onPressed #(when on-search-tap (on-search-tap))))
 
-        (let [cat (nth categories (dec idx))]
+        (= idx 1)
+        (category-card
+         {:name "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ"
+          :icon-code (int 0xe1b8)
+          :is-selected (nil? current-id)
+          :on-tap #(on-select nil)})
+
+        :else
+        (let [cat (nth categories (- idx 2))]
           (category-card
            {:name (get cat "name")
             :icon-code (get cat "icon_code")
