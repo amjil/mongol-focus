@@ -84,7 +84,8 @@
                                      (case name
                                        "/task-detail" (task-detail/task-detail-page)
                                        "/subtasks-list" (let [parent-id (get args "parentId")
-                                                              parent-title (get args "parentTitle")]
-                                                          (subtasks-list/subtasks-list-page parent-id parent-title))
+                                                              parent-title (get args "parentTitle")
+                                                              parent-task (get args "parentTask")]
+                                                          (subtasks-list/subtasks-list-page parent-id parent-title parent-task))
                                        "/category-management" (category-management/category-management-page)
                                        (home/home-page))))))))))
