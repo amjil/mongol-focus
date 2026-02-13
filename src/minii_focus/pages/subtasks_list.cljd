@@ -80,7 +80,7 @@
           (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
                            .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 
-(defn subtasks-list-page [parent-task-id parent-title]
+(defn subtasks-list-page [parent-task-id parent-title parent-task]
   (f/widget
    :context ctx
    :get {{{primary .-primary surface .-surface} .-colorScheme} m/Theme}
@@ -96,7 +96,11 @@
              .elevation 0
              .leading (m/IconButton.
                       .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
-                      .onPressed (fn [] (m/Navigator.pop ctx)))
+                      .onPressed (fn []
+                                   ;; 返回时恢复父任务到 selected-task，父 task-detail 页才能显示正确标题
+                                   (when parent-task
+                                     (swap! app-ui-state assoc :selected-task parent-task))
+                                   (m/Navigator.pop ctx)))
              .actions [(m/IconButton.
                        .icon (m/Icon m/Icons.add_circle_outline)
                        .onPressed (fn []

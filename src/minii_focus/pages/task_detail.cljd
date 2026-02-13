@@ -309,7 +309,7 @@
          (m/GestureDetector.
           .onTap (fn []
                    (s/HapticFeedback.mediumImpact)
-                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title})
+                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title "parentTask" (into {} task)})
                    nil)
           .child
           (mgl/MongolListTile.

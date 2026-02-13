@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mongol Focus - ᠮᠣᠩᠭᠣᠯ ᠪᠣᠰᠤᠭ᠎ᠠ ᠪᠢᠴᠢᠯᠭᠡ᠎ᠲᠡᠢ ᠣᠷᠴᠢᠨ ᠦᠶ᠎ᠡ᠎ᠶᠢᠨ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠤᠳᠤᠷᠢᠳᠤᠯᠭ᠎ᠠ᠎ᠶᠢᠨ ᠠᠫᠫ. Things᠎ᠠᠴᠠ ᠰᠠᠨᠠᠭ᠎ᠠ ᠠᠪᠤᠭᠰᠠᠨ᠂ Flutter ᠪᠣᠯᠤᠨ ClojureDart᠎ᠪᠠᠷ ᠬᠢᠭᠳᠡᠭᠰᠡᠨ᠃">
+  <title>Mongol Task - ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠳᠤ ᠠᠩᠬᠠᠷ᠂ ᠴᠢᠯᠦᠭᠡᠲᠡᠢ ᠪᠢᠴᠢᠬᠦ </title>
+  <style>
+    @font-face {
+      font-family: 'OyunQaganTig';
+      src: url('fonts/OyunQaganTig.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    :root {
+      --bg: #0c1222;
+      --surface: #141c2e;
+      --surface-2: #1a2540;
+      --text: #e8ecf4;
+      --text-muted: #8b9bb5;
+      --accent: #e8b86d;
+      --accent-soft: rgba(232,184,109,0.15);
+      --border: rgba(255,255,255,0.06);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'OyunQaganTig', serif;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.8;
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+
+    .bg {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-soft), transparent);
+      z-index: 0;
+    }
+
+    .container {
+      max-height: 90vh;
+      width: 90vw;
+      min-height: 90vh;
+      background: var(--surface);
+      padding: 40px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      margin: 0 auto;
+      overflow-y: hidden;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+      position: relative;
+      z-index: 1;
+    }
+
+    .container-inner {
+      column-width: 280px;
+      column-fill: auto;
+      column-gap: 2.5em;
+      display: block;
+      width: max-content;
+      min-width: calc(90vw - 40px);
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    header {
+      padding: 1.5rem 0;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 1.5em;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    .logo span { color: var(--accent); }
+
+    nav {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    nav a:hover { color: var(--accent); }
+
+    .hero {
+      padding: 2rem 0 3rem;
+      text-align: center;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      margin-bottom: 2rem;
+    }
+
+    .hero .tagline {
+      color: var(--accent);
+      margin-bottom: 1rem;
+      font-size: 1.1em;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.8em, 4vw, 2.5em);
+      font-weight: 700;
+      margin-bottom: 1rem;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      word-break: normal;
+      hyphens: none;
+      break-inside: avoid;
+    }
+
+    .intro-box {
+      margin: 1.5rem 0;
+      padding: 1.25rem 1.5rem;
+      min-height: 10em;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      border-top: 4px solid var(--accent);
+      text-align: justify;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    .intro-box p { margin: 0; font-size: 1em; color: var(--text-muted); line-height: 1.9; }
+
+    .btn-row {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      margin: 2rem 0;
+      justify-content: center;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      min-height: 120px;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-p {
+      background: var(--accent);
+      color: #0c1222;
+    }
+    .btn-p:hover { box-shadow: 0 8px 24px rgba(232,184,109,0.35); }
+    .btn-s {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-s:hover { border-color: rgba(255,255,255,0.12); }
+
+    .section {
+      padding: 2rem 0;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      margin-bottom: 2rem;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: 1.6em;
+      margin-bottom: 2rem;
+      color: var(--text);
+      border-right: 2px solid var(--accent);
+      padding-right: 0.5rem;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .features {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      min-width: 200px;
+      max-width: 260px;
+      transition: border-color .2s, transform .2s;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    .card:hover {
+      border-color: rgba(232,184,109,0.25);
+      transform: translateY(-2px);
+    }
+    .card h3 { margin-bottom: 0.5rem; font-size: 1.15em; }
+    .card p { color: var(--text-muted); font-size: 0.95em; }
+
+    .tech-stack {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      font-size: 0.95em;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    .license-section {
+      padding: 1.5rem;
+      background: var(--surface-2);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+    .license-section h3 { font-size: 1.1em; margin-bottom: 0.75rem; color: var(--text); }
+    .license-section p { font-size: 0.95em; margin: 0; color: var(--text-muted); }
+
+    footer {
+      padding: 2rem 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9em;
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+      margin-top: 2rem;
+    }
+    footer a { color: var(--accent); }
+
+    h1, h2, h3, p, a, .content {
+      writing-mode: vertical-lr;
+      text-orientation: sideways-right;
+    }
+
+    /* 移动端：保持竖写，仅加大行高与间距缓解扁平 */
+    @media screen and (max-width: 768px) {
+      body { padding: 12px; line-height: 2.2; }
+      .container { max-width: 95vw; padding: 24px 18px; min-height: 85vh; }
+      .container-inner { column-width: 240px; column-gap: 3em; }
+      header { padding: 1.25rem 0; margin-bottom: 2.5rem; }
+      .hero { padding: 2.5rem 0 3.5rem; margin-bottom: 2.5rem; }
+      .hero .tagline { margin-bottom: 1.25rem; }
+      .hero h1 { font-size: 1.6em; margin-bottom: 1.25rem; }
+      .intro-box {
+        margin: 2rem 0;
+        padding: 2rem 2rem;
+        min-height: 14em;
+      }
+      .intro-box p { line-height: 2.4; }
+      .btn-row { margin: 2.5rem 0; gap: 1.25rem; }
+      .section { padding: 2.5rem 0; margin-bottom: 2.5rem; }
+      .section-title { font-size: 1.4em; margin-bottom: 2.5rem; }
+      .features { gap: 2rem; }
+      .card { min-width: 180px; padding: 1.75rem; }
+      .card h3 { margin-bottom: 0.75rem; line-height: 2; }
+      .card p { line-height: 2.2; }
+      .tech-stack { margin-bottom: 2rem; line-height: 2.2; }
+      .license-section { padding: 1.75rem; }
+      .license-section h3 { margin-bottom: 1rem; }
+      .license-section p { line-height: 2.2; }
+      footer { padding: 2.5rem 0; margin-top: 2.5rem; line-height: 2.2; }
+    }
+
+    @media screen and (max-width: 480px) {
+      body { padding: 8px; line-height: 2.4; }
+      .container { max-width: 98vw; padding: 20px 14px; min-height: 82vh; }
+      .container-inner { column-width: 220px; column-gap: 3.5em; }
+      .hero h1 { font-size: 1.4em; margin-bottom: 1.5rem; }
+      .intro-box {
+        margin: 2.25rem 0;
+        padding: 2rem 1.75rem;
+        min-height: 16em;
+      }
+      .intro-box p { line-height: 2.6; }
+      .btn { min-height: 110px; padding: 1rem 1.25rem; }
+      .card { padding: 2rem; }
+      .card p { line-height: 2.4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="container">
+    <div class="container-inner">
+      <header>
+        <div class="logo">Mongol <span>Task</span></div>
+        <nav>
+          <a href="#features">ᠣᠨᠴᠠᠯᠢᠭ</a>
+          <a href="#tech">ᠲᠧᠭᠨᠣᠯᠣᠭᠢ</a>
+          <a href="https://github.com/amjil/mongol-focus" target="_blank" rel="noopener">GitHub</a>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <p class="tagline">ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠤᠳᠤᠷᠢᠳᠤᠯᠭ᠎ᠠ · ᠮᠣᠩᠭᠣᠯ ᠪᠣᠰᠤᠭ᠎ᠠ ᠪᠢᠴᠢᠯᠭᠡ᠎ᠶᠢᠨ ᠳᠡᠮᠵᠢᠯᠭᠡ</p>
+        <h1>ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠳᠤ ᠠᠩᠬᠠᠷ</h1>
+        <div class="intro-box">
+          <p>ᠮᠣᠩᠭᠣᠯ ᠬᠡᠯᠡᠨ᠎ᠳᠦ ᠵᠣᠷᠢᠭᠤᠯᠤᠭᠰᠠᠨ ᠣᠷᠴᠢᠨ ᠦᠶ᠎ᠡ᠎ᠶᠢᠨ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠤᠳᠤᠷᠢᠳᠤᠯᠭ᠎ᠠ᠎ᠶᠢᠨ ᠠᠫᠫ. Things᠎ᠠᠴᠠ ᠰᠠᠨᠠᠭ᠎ᠠ ᠠᠪᠤᠭᠰᠠᠨ᠂ Flutter ᠪᠣᠯᠤᠨ ClojureDart᠎ᠪᠠᠷ ᠬᠢᠭᠳᠡᠭᠰᠡᠨ᠃ ᠪᠣᠰᠤᠭ᠎ᠠ ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠯᠭᠡ᠂ ᠠᠩᠭᠢᠯᠠᠯ᠂ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠃</p>
+        </div>
+        <div class="btn-row">
+          <a href="https://gitee.com/amjil/mongol-focus/releases/download/1.0.0+2/app-release.apk" class="btn btn-p" download>Android</a>
+          <a href="https://apps.apple.com/app/6759153186" class="btn btn-s" target="_blank" rel="noopener">iOS</a>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <h2 class="section-title">ᠭᠣᠣᠯ ᠣᠨᠴᠠᠯᠢᠭ᠎ᠤᠳ</h2>
+        <div class="features">
+          <div class="card">
+            <h3>ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ</h3>
+            <p>ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠡᠭᠦᠰᠭᠡᠬᠦ᠂ ᠵᠠᠰᠠᠬᠤ᠂ ᠳᠠᠭᠤᠰᠬᠠᠬᠤ; ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠂ ᠳᠠᠭᠤᠰᠬᠤ ᠬᠤᠭᠤᠴᠠᠭ᠎ᠠ᠂ ᠲᠡᠷᠢᠭᠦᠯᠡᠬᠦ ᠡᠷᠡᠮᠪᠡ ᠪᠣᠯᠤᠮᠵᠢ᠎ᠲᠠᠢ᠃</p>
+          </div>
+          <div class="card">
+            <h3>ᠠᠩᠭᠢᠯᠠᠯ</h3>
+            <p>ᠠᠩᠭᠢᠯᠠᠯ᠂ ᠳᠦᠷᠰᠦ᠎ᠶᠢ ᠲᠤᠬᠢᠷᠠᠭᠤᠯᠬᠤ; ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢ ᠠᠩᠭᠢᠯᠠᠯ᠎ᠢᠶᠠᠷ ᠰᠢᠭᠦᠬᠦ᠃</p>
+          </div>
+          <div class="card">
+            <h3>ᠬᠠᠢᠯᠲᠠ ᠪᠠ ᠬᠠᠷᠠᠬᠤ ᠭᠣᠷᠢᠮ</h3>
+            <p>ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠭᠠᠷᠴᠠᠭ᠂ ᠲᠡᠮᠳᠡᠭᠯᠡᠯ᠎ᠳᠦ ᠪᠦᠲᠦᠨ ᠪᠢᠴᠢᠯᠭᠡ᠎ᠪᠡᠷ ᠬᠠᠢᠬᠤ; ᠥᠨᠥᠳᠥᠷ᠎ᠦᠨ ᠬᠠᠷᠠᠬᠤ ᠭᠣᠷᠢᠮ᠂ ᠳᠠᠭᠤᠰᠤᠭᠰᠠᠨ ᠲᠡᠮᠳᠡᠭᠯᠡᠯ ᠨᠢᠭᠡ ᠬᠠᠷᠠᠴᠠ᠎ᠪᠠᠷ᠃</p>
+          </div>
+          <div class="card">
+            <h3>ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠯᠭᠡ᠎ᠶᠢᠨ ᠳᠡᠮᠵᠢᠯᠭᠡ</h3>
+            <p>ᠪᠣᠰᠤᠭ᠎ᠠ ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠯᠭᠡ᠂ ᠣᠯᠠᠨ ᠹᠣᠨᠲ᠃</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="tech" class="section">
+        <h2 class="section-title">ᠲᠧᠭᠨᠣᠯᠣᠭᠢ᠎ᠶᠢᠨ ᠰᠲ᠋ᠧᠺ</h2>
+        <p class="tech-stack">Flutter · ClojureDart · Drift (SQLite) · Material Design 3 · mongol ᠪᠣᠰᠤᠭ᠎ᠠ ᠮᠣᠩᠭᠣᠯ · ᠪᠠᠷᠠᠭᠠᠨ ᠭᠣᠷᠢᠮ</p>
+        <div class="license-section">
+          <h3>ᠨᠡᠭᠡᠭᠡᠯᠲᠡᠲᠡᠢ ᠡᠬᠡ</h3>
+          <p>MIT ᠵᠥᠪᠰᠢᠶᠡᠷᠡᠯ ᠎ᠦᠨ ᠭᠡᠷ᠎ᠡ ᠎ᠶᠢᠨ ᠳᠠᠭᠠᠤ. ᠮᠣᠩᠭᠣᠯ ᠬᠡᠷᠡᠭᠯᠡᠭᠴᠢᠳ᠎ᠲᠦ ᠵᠣᠷᠢᠭᠤᠯᠵᠤ ❤️᠎ᠪᠡᠷ ᠬᠢᠭᠰᠡᠨ᠃</p>
+        </div>
+      </section>
+
+      <footer>
+        <p>Mongol Task · Flutter ᠪᠣᠯᠤᠨ ClojureDart᠎ᠪᠠᠷ ᠬᠢᠭᠳᠡᠭᠰᠡᠨ · <a href="https://github.com/amjil/mongol-focus" target="_blank" rel="noopener">GitHub</a></p>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>
