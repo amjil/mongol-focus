@@ -49,7 +49,9 @@
     ;; Use helper function to call generic method with type parameter
     (let [android-plugin (helper/resolveAndroidImpl plugin)]
       (when android-plugin
-        (await (.requestNotificationsPermission android-plugin))))
+        (await (.requestNotificationsPermission android-plugin))
+        ;; Android 12+ requires exact alarm permission for on-time scheduled notifications
+        (await (.requestExactAlarmsPermission android-plugin))))
     (when (io/Platform.isIOS)
       ;; Use helper function to call generic method with type parameter
       (let [ios-plugin (helper/resolveIOSImpl plugin)]

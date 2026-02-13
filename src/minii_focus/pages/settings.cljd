@@ -80,7 +80,7 @@
     (bs/bottom-sheet
      ctx
      [{:type :header :title ""}
-      {:title (str "版本: " (or version "unknown"))
+      {:title (str "Version: " (or version "unknown"))
        :on-tap #(log-action "version")}
       {:title "ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ"
        :on-tap #(log-action "help-feedback")}
