@@ -1,0 +1,85 @@
+(ns minii-focus.widgets.feedback-dialog
+  "Single-field feedback dialog with Mongolian keyboard (content only, no title field)."
+  (:require
+   ["package:flutter/material.dart" :as m]
+   [cljd.flutter :as f]
+   [clojure.string :as str]
+   [virtual-keyboard.keyboard :as keyboard]
+   [components.tokens :as tokens]
+   [components.dialog :as dialog]
+   [components.text :as text]
+   [components.text-field :as text-field]
+   [minii-focus.widgets.action-toolbar :as action-toolbar]))
+
+(defn feedback-dialog
+  "Dialog with one content field + Mongolian keyboard. on-submit receives the content string."
+  [{:keys [on-submit on-cancel]}]
+  (let [content-atom (atom "")]
+    (f/widget
+     :managed [content-ctrl (m/TextEditingController.)
+               focus-node (m/FocusNode)]
+     :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
+            {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
+     (dialog/vertical-custom-dialog
+      {:width-factor 1
+       :height-factor 0.95
+       :inset-padding m/EdgeInsets.zero
+       :child
+       (m/Column
+        .children
+        [(m/Expanded
+          .child
+          (m/Stack
+           .children
+           [(m/Row
+             .crossAxisAlignment m/CrossAxisAlignment.stretch
+             .children
+             [(m/Container
+               .alignment m/Alignment.topCenter
+               .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+               .decoration (m/BoxDecoration
+                            .border (m/Border .right (m/BorderSide .color surfaceVariant .width 1.5)))
+               .child (text/text-block
+                       {:text "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ"
+                        :style (.copyWith titleLarge
+                                         .fontWeight m/FontWeight.bold
+                                         .color onSurface)}))
+
+              (m/Expanded
+               .child
+               (m/Align
+                .alignment m/Alignment.topLeft
+                .child
+                (m/Padding
+                 .padding (m/EdgeInsets.all (tokens/space :l))
+                 .child
+                 (text-field/text-field
+                  {:controller content-ctrl
+                   :autofocus true
+                   :focus-node focus-node
+                   :hint "ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠁"
+                   :max-lines nil
+                   :style (.copyWith bodyMedium
+                                     .fontSize 18.0
+                                     .color (.withOpacity onSurface 0.6))
+                   :on-changed #(swap! content-atom (constantly %))}))))])
+
+            (m/Align
+             .alignment m/Alignment.topRight
+             .child (m/IconButton
+                     .icon (m/Icon m/Icons.close)
+                     .onPressed on-cancel))
+
+            (f/widget
+             :watch [content content-atom]
+             (action-toolbar/floating-action-toolbar
+              {:is-active (not (str/blank? content))
+               :on-paste (fn [])
+               :on-submit #(on-submit (str/trim @content-atom))}))
+
+            (keyboard/candidates nil)]))
+
+         (m/Container
+          .decoration (m/BoxDecoration
+                       .border (m/Border .top (m/BorderSide .color surfaceVariant .width 0.5)))
+          .child (keyboard/keyboard {}))])}))))

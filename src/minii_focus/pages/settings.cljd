@@ -6,6 +6,7 @@
    [cljd.flutter :as f]
    [minii-focus.state.store :as store] ;; Import your store
    [minii-focus.logic.update :as update]
+   [minii-focus.logic.feedback :as feedback]
    [components.bottom-sheet :as bs]
    [components.setting :as sett]))
 
@@ -79,7 +80,7 @@
       {:title (str "Version: " (or version "unknown"))
        :on-tap #(log-action "version")}
       {:title "ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ"
-       :on-tap #(log-action "help-feedback")}
+       :on-tap #(do (m/Navigator.pop ctx) (feedback/open-feedback-dialog! ctx))}
       {:title "ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
        :on-tap #(log-action "rate-app")}]
      :height-factor 0.35)))
@@ -140,6 +141,11 @@
            :leading m.Icons/info_outline
            :show-arrow? true
            :on-tap #(open-app-info-sheet ctx)}
+          {:title "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ"
+           :subtitle "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ ᠶᠢᠨ ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠪᠢᠴᠢᠬᠤ"
+           :leading m.Icons/feedback
+           :show-arrow? true
+           :on-tap #(feedback/open-feedback-dialog! ctx)}
           {:title "ᠰᠢᠨᠡᠴᠢᠯᠡᠯᠲᠡ᠎ᠶᠢ ᠰᠢᠯᠭᠠᠬᠤ"
            :subtitle "ᠰᠢᠨ᠎ᠡ ᠬᠤᠪᠢᠯᠪᠤᠷᠢ᠎ᠶᠢ ᠰᠢᠯᠭᠠᠬᠤ"
            :leading m.Icons/system_update

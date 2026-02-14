@@ -1,0 +1,56 @@
+(ns minii-focus.logic.feedback
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:http/http.dart" :as http]
+   ["package:mongol/mongol.dart" :as mgl]
+   ["dart:convert" :as convert]
+   ["dart:core" :as dc]
+   [clojure.string :as str]
+   [minii-focus.logic.env :as env]
+   [minii-focus.logic.stats :as stats]
+   [minii-focus.widgets.feedback-dialog :as feedback-dialog]))
+
+(defn- feedback-url [base-url]
+  (if (str/ends-with? base-url "/")
+    (str base-url "feedback")
+    (str base-url "/feedback")))
+
+(defn submit!
+  "Submit feedback content to stats server. Returns true if status 2xx, false otherwise.
+   Does not throw; logs and returns false on error."
+  [content]
+  (let [base-url (env/get "stats_server_url")
+        app-id (env/get "stats_app_id")]
+    (if (or (str/blank? base-url) (str/blank? app-id) (str/blank? content))
+      false
+      (try
+        (let [device-id (await (stats/get-device-id!))
+              uri (dc/Uri.parse (feedback-url base-url))
+              body (convert/jsonEncode {"app_id" app-id "device_id" device-id "content" content})
+              resp (await (http/post uri
+                                     .headers {"Content-Type" "application/json"}
+                                     .body body))]
+          (<= 200 (.-statusCode resp) 299))
+        (catch Exception e
+          (dart:core/print (str "feedback submit failed: " e))
+          false)))))
+
+(defn open-feedback-dialog!
+  "Open the feedback dialog with Mongolian input (same keyboard as task editor).
+   On submit, POSTs content to stats server and shows SnackBar."
+  [ctx]
+  (m/showDialog
+   .context ctx
+   .barrierDismissible false
+   .builder
+   (fn [dialog-ctx]
+     (feedback-dialog/feedback-dialog
+      {:on-submit (fn [content]
+                    (when (not (str/blank? content))
+                      (let [ok? (await (submit! content))]
+                        (m/Navigator.pop dialog-ctx)
+                        (.showSnackBar (m/ScaffoldMessenger.of ctx)
+                                       (m/SnackBar.
+                                        .content (mgl/MongolText. (if ok? "ᠰᠠᠨᠠᠯ ᠪᠣᠯᠤᠭᠠᠷᠠᠢ" "ᠰᠠᠨᠠᠯ ᠪᠣᠯᠤᠭᠠᠷᠠ ᠦᠭᠡᠢ ᠪᠣᠯᠤᠯᠠ"))
+                                        .duration (m/Duration. .seconds 2))))))
+       :on-cancel #(m/Navigator.pop dialog-ctx)}))))

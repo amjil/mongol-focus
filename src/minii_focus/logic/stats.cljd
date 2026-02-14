@@ -37,6 +37,12 @@
 (defn- should-report? [prefs today]
   (not= (.getString prefs last-report-date-key) today))
 
+(defn get-device-id!
+  "Return the device id used for stats/feedback (ensures one exists)."
+  []
+  (let [prefs (await (.getInstance sp/SharedPreferences))]
+    (await (ensure-device-id! prefs))))
+
 (defn report-daily!
   "Report daily activity to stats server at most once per day."
   []
