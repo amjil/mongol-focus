@@ -141,8 +141,8 @@
            :leading m.Icons/info_outline
            :show-arrow? true
            :on-tap #(open-app-info-sheet ctx)}
-          {:title "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ"
-           :subtitle "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ ᠶᠢᠨ ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠪᠢᠴᠢᠬᠤ"
+          {:title "ᠰᠠᠨᠠᠯ ᠵᠥᠪᠯᠡᠯᠭᠡ "
+           :subtitle "ᠰᠠᠨᠠᠯ ᠵᠥᠪᠯᠡᠯᠭᠡ ᠨᠡᠷ᠎ᠡ ᠦᠭᠡᠢ ᠪᠢᠴᠢᠵᠦ ᠦᠯᠡᠳᠡᠭᠡᠬᠦ "
            :leading m.Icons/feedback
            :show-arrow? true
            :on-tap #(feedback/open-feedback-dialog! ctx)}

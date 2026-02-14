@@ -40,7 +40,7 @@
                .decoration (m/BoxDecoration
                             .border (m/Border .right (m/BorderSide .color surfaceVariant .width 1.5)))
                .child (text/text-block
-                       {:text "ᠰᠠᠨᠠᠯ ᠪᠢᠴᠢᠬᠤ"
+                       {:text "ᠰᠠᠨᠠᠯ ᠵᠥᠪᠯᠡᠯᠭᠡ "
                         :style (.copyWith titleLarge
                                          .fontWeight m/FontWeight.bold
                                          .color onSurface)}))
@@ -57,7 +57,7 @@
                   {:controller content-ctrl
                    :autofocus true
                    :focus-node focus-node
-                   :hint "ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠁"
+                   :hint "ᠰᠠᠨᠠᠯ ᠵᠥᠪᠯᠡᠯᠭᠡ ᠁"
                    :max-lines nil
                    :style (.copyWith bodyMedium
                                      .fontSize 18.0
