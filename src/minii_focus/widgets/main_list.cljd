@@ -86,14 +86,14 @@
          .mainAxisAlignment m/MainAxisAlignment.center
          .children
          [;; Vertical Title
-          (mgl/MongolText. (str title " - ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
+          (mgl/MongolText. (str title " - ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
                            .style titleLarge
                            .textAlign mgl/MongolTextAlign.center)
 
           (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
 
           ;; Guidance Text (Light Color)
-          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ" ;; "Click the button below to add a new task"
+          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ" ;; "Click the button below to add a new task"
                            .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 ;; --- 2. Task Stream Main View (Horizontal Scroll) ---
 
@@ -110,9 +110,9 @@
                                "logbook" (db/watch-logbook)
                                (db/watch-active-tasks)))]
    :let [display-title (case selected-nav-id
-                         "today"   "ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"
+                         "today"   "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"
                          "logbook" "ᠡᠷᠭᠢᠴᠡᠭᠦᠯᠦᠯ"
-                         "ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")]
+                         "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")]
 
    (m/AnimatedSwitcher.
     .duration (dart:core/Duration. .milliseconds 400)

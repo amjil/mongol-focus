@@ -30,11 +30,7 @@
                                        .fontSize 26
                                        .fontWeight m.FontWeight/bold
                                        .color (.-onSurface color-scheme)))
-               (m/Container .width 8)
-               (mgl/MongolText "ᠲᠣᠬᠢᠷᠠᠭᠠᠨ᠎ᠤ ᠰᠣᠩᠭᠣᠯᠲᠠ"
-                               .style (m/TextStyle
-                                       .fontSize 14
-                                       .color (.-onSurfaceVariant color-scheme)))])
+               (m/Container .width 8)])
 
    (m/Container .width 24)])
 
@@ -138,9 +134,9 @@
 
         ;; --- Group 3: App Information ---
         (sett/settings-section
-         "ᠠᠪᠪ"
-         [{:title "ᠠᠪᠪ᠎ᠡ᠎ᠦ ᠲᠤᠬᠠᠢ"
-           :subtitle "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ, ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ, ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
+         "ᠠᠫᠫ"
+         [{:title "ᠠᠫᠫ᠎ᠤᠨ ᠲᠤᠬᠠᠢ   "
+           :subtitle "ᠬᠤᠪᠢᠯᠪᠤᠷᠢ᠂ ᠲᠤᠰᠠᠯᠠᠮᠵᠢ ᠪᠠ ᠰᠠᠨᠠᠯ᠂ ᠦᠨᠡᠯᠡᠭᠡ ᠥᠭᠬᠦ"
            :leading m.Icons/info_outline
            :show-arrow? true
            :on-tap #(open-app-info-sheet ctx)}

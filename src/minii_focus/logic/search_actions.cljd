@@ -150,7 +150,7 @@
                                         .padding (m/EdgeInsets.only .right (tokens/space :s))
                                         .child
                                         (m/GestureDetector.
-                                         .onTap #(do (swap! store/app-ui-state assoc :selected-task task)
+                                         .onTap #(do (swap! store/app-ui-state assoc :selected-task (into {} task))
                                                      (m/Navigator.pop ctx)
                                                      (m/Navigator.pushNamed ctx "/task-detail")
                                                      nil)
@@ -163,11 +163,20 @@
                                                         .color surface-variant
                                                         .borderRadius (m/BorderRadius.circular 12.0)
                                                         .border (m/Border.all .color (.withOpacity on-surface 0.05)))
-                                           .child (mgl/MongolText. (get task "title")
+                                           .child (let [parent-title (get task "parent_title")
+                                                       max-parent-len 12
+                                                       truncated-parent (when (and parent-title (not= parent-title ""))
+                                                                          (if (> (count (str parent-title)) max-parent-len)
+                                                                            (str (subs (str parent-title) 0 max-parent-len) "…")
+                                                                            parent-title))
+                                                       display-title (if truncated-parent
+                                                                       (str truncated-parent " › " (get task "title"))
+                                                                       (get task "title"))]
+                                                   (mgl/MongolText. display-title
                                                                   .style (m/TextStyle. .fontSize (* 15.0 text-scale) 
                                                                                       .height 1.2 
                                                                                       .color on-surface
-                                                                                      .fontFamily font-family)))))))))
+                                                                                      .fontFamily font-family))))))))))
                      (m/Center. .child (mgl/MongolText. "ᠬᠣᠭᠣᠰᠣᠨ" .style (m/TextStyle. .color (.withOpacity on-surface 0.3))))))
 
                   ;; D. Rightmost: Action Buttons Column
@@ -188,7 +197,7 @@
                                   (swap! store/app-ui-state assoc :search-term @search-term-atom)
                                   (m/Navigator.pop ctx)
                                   nil)
-                     .child (mgl/MongolText. "ᠬᠠᠠᠭᠠᠬᠤ"))
+                     .child (mgl/MongolText. "ᠬᠠᠭᠠᠬᠤ"))
                     
                     (mgl/MongolTextButton.
                      .onPressed (fn [] (m/Navigator.pop ctx) nil)

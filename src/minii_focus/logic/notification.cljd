@@ -79,7 +79,7 @@
       plugin
       id       ;; Use task ID as notification ID for easy cancellation later
       title    ;; Notification title
-      "ᠲᠠᠨ ᠎ᠤ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠴᠠᠭ ᠪᠣᠯᠤᠯ᠎ᠠ !" ;; Notification content (Mongolian: Your task time has arrived)
+      "ᠲᠠᠨ ᠎ᠤ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠶᠢᠨ ᠴᠠᠭ ᠪᠣᠯᠤᠯ᠎ᠠ !" ;; Notification content (Mongolian: Your task time has arrived)
       tz-date
       notification-details
       .androidScheduleMode n/AndroidScheduleMode.exactAllowWhileIdle))))

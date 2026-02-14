@@ -44,11 +44,14 @@
     (async/Stream.empty)))
 
 (defn watch-tasks-filtered
-  "Filter tasks by keyword, category ID, and due date (excluding subtasks)"
+  "Filter tasks by keyword, category ID, and due date. Includes both parent tasks and subtasks."
   [{:keys [search-term category-id due-date]}]
-  (let [query (str "SELECT t.*, c.name as category_name, c.icon_code as category_icon "
-                   "FROM tasks t LEFT JOIN categories c ON t.category_id = c.id "
-                   "WHERE t.is_done = false AND t.parent_id IS NULL "
+  (let [query (str "SELECT t.*, c.name as category_name, c.icon_code as category_icon, "
+                   "p.title as parent_title "
+                   "FROM tasks t "
+                   "LEFT JOIN categories c ON t.category_id = c.id "
+                   "LEFT JOIN tasks p ON t.parent_id = p.id "
+                   "WHERE t.is_done = false "
                    (when-not (str/blank? search-term)
                      "AND (t.title LIKE ? OR t.notes LIKE ?) ")
                    (when category-id
@@ -61,7 +64,8 @@
                category-id (conj category-id)
                due-date (conj due-date))]
     (if-let [^drift/AppDatabase database @db]
-      (.watch (.customSelect database query .variables (map #(d/Variable. %) vars)))
+      (.watch (.customSelect database query .variables (map #(d/Variable. %) vars)
+              .readsFrom #{(.-tasks database) (.-categories database)}))
       (async/Stream.empty))))
 
 

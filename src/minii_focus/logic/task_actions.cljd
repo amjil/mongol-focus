@@ -23,7 +23,7 @@
       .builder 
       (fn [ctx]
         (input-dialog/generic-input-dialog
-         {:title (if is-edit? "ᠵᠠᠰᠠᠬᠤ" (if parent-id "ᠰᠢᠨ᠎ᠡ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ" "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")) ;; Edit / New Task / New Subtask
+         {:title (if is-edit? "ᠵᠠᠰᠠᠬᠤ" (if parent-id "ᠰᠢᠨ᠎ᠡ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ" "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")) ;; Edit / New Task / New Subtask
           :initial-text (or title "")
           :initial-notes (or notes "")
           :on-submit (fn [new-data]
@@ -36,10 +36,11 @@
                                               :title-and-notes 
                                               {:title new-title :notes new-notes})
                              ;; 2. Synchronously update selected task in Store to ensure detail page UI refreshes immediately
-                             ;; current-task is already a Clojure map, so we can directly merge updates
+                             ;; selected-task may be a Dart Map (e.g. from search), so convert to Clojure map before merge
                              (swap! store/app-ui-state 
                                     (fn [state]
-                                      (let [current-task (:selected-task state)
+                                      (let [raw-task (:selected-task state)
+                                            current-task (when raw-task (into {} raw-task))
                                             updated-task (if current-task
                                                           (merge current-task {"title" new-title "notes" new-notes})
                                                           nil)]
@@ -70,7 +71,7 @@
         .padding (m/EdgeInsets.all (tokens/space :l))
         .child
         (m/Center.
-         .child (mgl/MongolText. "ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
+         .child (mgl/MongolText. "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
                                 .style (m/TextStyle. .fontSize 16.0))))
        :actions [(mgl/MongolTextButton.
                   .onPressed #(m/Navigator.pop dialog-ctx)

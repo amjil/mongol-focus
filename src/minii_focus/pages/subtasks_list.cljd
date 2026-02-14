@@ -72,12 +72,12 @@
         (m/Row
          .mainAxisAlignment m/MainAxisAlignment.center
          .children
-         [(mgl/MongolText. (str title " - ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
+         [(mgl/MongolText. (str title " - ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
                            .maxLines 5
                            .style titleLarge
                            .textAlign mgl/MongolTextAlign.center)
           (m/Padding. .padding (m/EdgeInsets.only .left (tokens/space :m)))
-          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
+          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
                            .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 
 (defn subtasks-list-page [parent-task-id parent-title parent-task]

@@ -289,7 +289,7 @@
                 :on-search-tap #(open-add-category-dialog ctx categories (atom 0xe2a3))})
         :actions [(mgl/MongolTextButton.
                    .onPressed #(m/Navigator.pop ctx)
-                   .child (mgl/MongolText. "ᠬᠠᠠᠭᠠᠬᠤ"))]})))))
+                   .child (mgl/MongolText. "ᠬᠠᠭᠠᠬᠤ"))]})))))
 
 ;; --- 5. Core: Main Page Category Scroll View ---
 
