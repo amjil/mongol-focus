@@ -19,9 +19,9 @@
 
 (def ^:private priority-options
   [{:type :header :title "ᠤᠷᠢᠲᠠᠮᠵᠢ ᠰᠣᠩᠭᠣᠬᠤ"}
-   {:title "ᠥᠨᠳᠥᠷ"   :icon m/Icons.label_important_rounded :value 2}
-   {:title "ᠳᠤᠮᠳᠠ"    :icon m/Icons.label_rounded           :value 1}
-   {:title "ᠪᠠᠭ᠎ᠠ"    :icon m/Icons.label_outline_rounded   :value 0}])
+   {:title "ᠥᠨᠳᠥᠷ"   :icon m/Icons.label_important_rounded :value 2 :color m/Colors.red}
+   {:title "ᠳᠤᠮᠳᠠ"    :icon m/Icons.label_rounded           :value 1 :color m/Colors.orange}
+   {:title "ᠪᠠᠭ᠎ᠠ"    :icon m/Icons.label_outline_rounded   :value 0 :color m/Colors.blue}])
    
 
 (def ^:private recurrence-options
@@ -249,7 +249,15 @@
                     (map (fn [item]
                            (if (= (:type item) :header)
                              item
-                             (assoc item :on-tap #(db/update-task! task-id :priority (:value item)))))
+                             (let [new-priority (:value item)]
+                               (assoc item :on-tap #(do
+                                                      (db/update-task! task-id :priority new-priority)
+                                                      ;; Sync selected-task in store so detail page shows new priority immediately
+                                                      (swap! store/app-ui-state
+                                                             (fn [state]
+                                                               (let [current (:selected-task state)
+                                                                     updated (if current (assoc current "priority" new-priority) nil)]
+                                                                 (assoc state :selected-task updated)))))))))
                          priority-options)
                     :height-factor 0.35))
           .child
