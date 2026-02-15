@@ -100,7 +100,13 @@
          cat-name  (or (get cat "name") (get task "category_name"))
          cat-icon  (or (get cat "icon_code") (get task "category_icon"))
          subtask-count (get task "subtask_count")
-         subtask-done-count (get task "subtask_done_count")]
+         subtask-done-count (get task "subtask_done_count")
+         recurrence-mode (or (get task "recurrence_mode") 0)
+         recurrence-label (or (some #(when (and (not= (:type %) :header)
+                                                (= (:value %) recurrence-mode))
+                                      (:title %))
+                              recurrence-options)
+                            "ᠳᠠᠪᠲᠠᠬᠤ ᠦᠭᠡᠢ")]
    :get {{{bg .-surface primary .-primary onSurface .-onSurface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
@@ -280,14 +286,21 @@
                     (map (fn [item]
                            (if (= (:type item) :header)
                              item
-                             (assoc item :on-tap #(db/update-task! task-id :recurrence-mode (:value item)))))
+                             (let [new-mode (:value item)]
+                               (assoc item :on-tap #(do
+                                                      (db/update-task! task-id :recurrence-mode new-mode)
+                                                      (swap! store/app-ui-state
+                                                             (fn [state]
+                                                               (let [current (:selected-task state)
+                                                                     updated (if current (assoc current "recurrence_mode" new-mode) nil)]
+                                                                 (assoc state :selected-task updated)))))))))
                          recurrence-options)
                     :height-factor 0.4))
           .child
           (mgl/MongolListTile.
            .leading (m/Icon. m/Icons.autorenew_rounded
-                             .color (if (> (or (get task "recurrence_mode") 0) 0) primary m/Colors.grey))
-           .title (mgl/MongolText. "ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠶᠢᠨ ᠭᠣᠷᠢᠮ")))
+                             .color (if (> recurrence-mode 0) primary m/Colors.grey))
+           .title (mgl/MongolText. (str "ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠶᠢᠨ ᠭᠣᠷᠢᠮ · " recurrence-label))))
 
          (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
 
