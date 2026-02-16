@@ -97,7 +97,7 @@
              .leading (m/IconButton.
                       .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
                       .onPressed (fn []
-                                   ;; 返回时从 DB 刷新父任务（含最新 subtask_count），再 pop，task-detail 才能显示正确子任务数
+                                   ;; On back: refresh parent task from DB (with latest subtask_count) then pop so task-detail shows correct count
                                    (-> (db/get-task-with-subtask-counts parent-task-id)
                                        (.then (fn [refreshed]
                                                 (when refreshed
