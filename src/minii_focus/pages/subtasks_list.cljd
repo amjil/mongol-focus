@@ -80,7 +80,7 @@
           (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
                            .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
 
-(defn subtasks-list-page [parent-task-id parent-title parent-task]
+(defn subtasks-list-page [parent-task-id parent-title _parent-task]
   (f/widget
    :context ctx
    :get {{{primary .-primary surface .-surface} .-colorScheme} m/Theme}
@@ -97,10 +97,12 @@
              .leading (m/IconButton.
                       .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
                       .onPressed (fn []
-                                   ;; 返回时恢复父任务到 selected-task，父 task-detail 页才能显示正确标题
-                                   (when parent-task
-                                     (swap! app-ui-state assoc :selected-task parent-task))
-                                   (m/Navigator.pop ctx)))
+                                   ;; 返回时从 DB 刷新父任务（含最新 subtask_count），再 pop，task-detail 才能显示正确子任务数
+                                   (-> (db/get-task-with-subtask-counts parent-task-id)
+                                       (.then (fn [refreshed]
+                                                (when refreshed
+                                                  (swap! app-ui-state assoc :selected-task (into {} refreshed)))
+                                                (m/Navigator.pop ctx))))))
              .actions [(m/IconButton.
                        .icon (m/Icon m/Icons.add_circle_outline)
                        .onPressed (fn []

@@ -3,6 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
+            [clojure.string :as str]
             [minii-focus.logic.db :as db]
             [minii-focus.state.store :as store]
             [minii-focus.logic.task-actions :as actions]
@@ -64,7 +65,7 @@
                        (map (fn [rows] (map (fn [row] (.-data row)) rows)))
                        (map (fn [_] []))
                        :as-values (db/watch-categories))
-          state store/app-ui-state]
+           state store/app-ui-state]
    :let [task      (:selected-task state)
          font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
@@ -89,7 +90,7 @@
          ;; --- Reminder Time Block ---
          reminder-at-raw (get task "reminder_at")
          ;; Handle time format returned from database (same logic as due-date)
-         reminder-at (cond 
+         reminder-at (cond
                        (nil? reminder-at-raw) nil
                        (instance? dc/DateTime reminder-at-raw) reminder-at-raw
                        :else (dc/DateTime.fromMillisecondsSinceEpoch (* (long reminder-at-raw) 1000)))
@@ -104,17 +105,17 @@
          recurrence-mode (or (get task "recurrence_mode") 0)
          recurrence-label (or (some #(when (and (not= (:type %) :header)
                                                 (= (:value %) recurrence-mode))
-                                      (:title %))
-                              recurrence-options)
-                            "ᠳᠠᠪᠲᠠᠬᠤ ᠦᠭᠡᠢ")]
+                                       (:title %))
+                                    recurrence-options)
+                              "ᠳᠠᠪᠲᠠᠬᠤ ᠦᠭᠡᠢ")]
    :get {{{bg .-surface primary .-primary onSurface .-onSurface} .-colorScheme} m/Theme}
 
    (m/Scaffold.
     .backgroundColor bg
-    .appBar (m/AppBar. 
-             .backgroundColor m/Colors.transparent 
+    .appBar (m/AppBar.
+             .backgroundColor m/Colors.transparent
              .elevation 0
-             .leading (m/IconButton. 
+             .leading (m/IconButton.
                        .icon (m/Icon. m/Icons.arrow_back_ios_new_rounded)
                        .onPressed (fn [] (m/Navigator.pop ctx)))
              .actions [(m/IconButton.
@@ -149,15 +150,36 @@
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
          ;; --- B. Notes Content Area ---
+         (if (and notes (not (empty? notes)))
+           (m/GestureDetector.
+            .onTap (fn [] (show-notes-dialog ctx notes font-family text-scale))
+            .child
+            (m/Padding.
+             .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
+             .child (mgl/MongolText. (or notes "")
+                                     .style (m/TextStyle. .fontSize (* 16.0 text-scale) .color primary .fontFamily font-family)
+                                     .maxLines 3
+                                     .overflow m/TextOverflow.ellipsis)))
+           (m/SizedBox.shrink))
+
+         (if (and notes (not (empty? notes)))
+           (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
+           (m/SizedBox.shrink))
+
+         ;; --- Subtasks Block (after notes) ---
+         (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
          (m/GestureDetector.
-          .onTap (fn [] (show-notes-dialog ctx notes font-family text-scale))
+          .onTap (fn []
+                   (s/HapticFeedback.mediumImpact)
+                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title "parentTask" (into {} task)})
+                   nil)
           .child
-          (m/Padding.
-           .padding (m/EdgeInsets.only .left 40.0 .right 32.0 .top 10.0 .bottom 40.0)
-           .child (mgl/MongolText. (or notes "")
-                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .color primary .fontFamily font-family)
-                                   .maxLines 3
-                                   .overflow m/TextOverflow.ellipsis)))
+          (mgl/MongolListTile.
+           .leading (m/Icon. m/Icons.list_alt_rounded
+                             .color primary)
+           .title (mgl/MongolText. (str "ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ (" (or subtask-count 0) ")"))
+           .trailing (m/Icon. m/Icons.chevron_right_rounded
+                              .color onSurface)))
 
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
@@ -324,19 +346,4 @@
            .title (mgl/MongolText. (or cat-name "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
                                    .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
 
-         (m/VerticalDivider. .width 1.0 .indent 60.0 .endIndent 60.0)
-
-         ;; 4. Subtasks Block - Show count and button to navigate to subtasks list
-         (m/GestureDetector.
-          .onTap (fn []
-                   (s/HapticFeedback.mediumImpact)
-                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title "parentTask" (into {} task)})
-                   nil)
-          .child
-          (mgl/MongolListTile.
-           .leading (m/Icon. m/Icons.list_alt_rounded
-                             .color primary)
-           .title (mgl/MongolText. (str "ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ (" (or subtask-count 0) ")"))
-           .trailing (m/Icon. m/Icons.chevron_right_rounded
-                              .color onSurface)))]
-       ))))))
+         ]))))))

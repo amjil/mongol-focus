@@ -232,6 +232,29 @@
        (.where (fn [^drift/Tasks tbl] (.equals (.-id tbl) id)))))
     (throw (ex-info "Database not initialized" {}))))
 
+(defn get-task-with-subtask-counts
+  "One-off fetch of a task by id with subtask_count, subtask_done_count and category fields.
+   Returns the task map or nil if not found. Use when returning to task-detail so counts are fresh."
+  [id]
+  (if-let [^drift/AppDatabase database @db]
+    (let [selectable (.customSelect
+                      database
+                      "SELECT 
+                       t.*, 
+                       c.name as category_name, 
+                       c.icon_code as category_icon,
+                       (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id) as subtask_count,
+                       (SELECT COUNT(*) FROM tasks WHERE parent_id = t.id AND is_done = 1) as subtask_done_count
+                       FROM tasks t
+                       LEFT JOIN categories c ON t.category_id = c.id
+                       WHERE t.id = ?"
+                      .variables [(d/Variable id)]
+                      .readsFrom #{(.-tasks database) (.-categories database)})
+          rows (await (.get selectable))]
+      (when-let [row (first rows)]
+        (.-data row)))
+    (throw (ex-info "Database not initialized" {}))))
+
 (defn update-task!
   [id field value]
   (if-let [build (get task-field->companion field)]
