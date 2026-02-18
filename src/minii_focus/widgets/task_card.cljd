@@ -7,13 +7,16 @@
             [minii-focus.state.store :as store]
             [components.tokens :as tokens]
             [components.slide :as slide]
+            [components.toast :as toast]
             [minii-focus.logic.db :as db]))
 
 (defn task-item
   [{:keys [id title notes is-done? on-tap subtask-count subtask-done-count]}]
-  (f/widget
-   :watch [state store/app-ui-state]
-   :let [font-family (get-in state [:settings :font-family])
+  (let [on-delete #(db/delete-task! id)]
+    (f/widget
+     :context ctx
+     :watch [state store/app-ui-state]
+     :let [font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
          text-scale (case font-size
                       "ᠵᠢᠵᠢᠭ" 0.9
@@ -30,8 +33,8 @@
      :extent-ratio 0.25
      :bottom-actions [{:icon m/Icons.delete_outline_rounded
                        :color m/Colors.red
-                       :on-pressed (fn [] (db/delete-task! id))}]
-     :on-dismiss-bottom (fn [] (db/delete-task! id))
+                       :on-pressed on-delete}]
+     :on-dismiss-bottom on-delete
      :child
      (m/Padding.
       .padding (m/EdgeInsets.symmetric .horizontal (tokens/space :s) .vertical (tokens/space :xs))
@@ -66,7 +69,9 @@
            .onChanged (fn [v]
                         (s/HapticFeedback.mediumImpact)
                         (notification/cancel-task-reminder! id)
-                        (db/handle-task-completion! id v)
+                        (let [created-mode (await (db/handle-task-completion! id v))]
+                          (when (= created-mode 1)
+                            (toast/success ctx "ᠮᠠᠷᠭᠠᠰᠢ᠎ᠶᠢᠨ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠭᠰᠡᠨ ᠰᠢᠦ")))
                         (db/update-task! id :is-done v))))
 
          ;; --- B. Content (IgnorePointer so tap goes to outer GestureDetector) ---
@@ -125,4 +130,4 @@
                                            .fontSize 12.0
                                            .color m/Colors.grey
                                            .fontWeight m/FontWeight.bold))]))
-               (m/SizedBox.shrink))])))]))))})))
+               (m/SizedBox.shrink))])))]))))}))))

@@ -145,7 +145,8 @@
 ;; =============================================================================
 
 (defn add-task!
-  [{:keys [title notes category-id priority parent-id recurrence-mode] :or {priority 0 recurrence-mode 0}}]
+  [{:keys [title notes category-id priority parent-id recurrence-mode due-date reminder-at]
+    :or {priority 0 recurrence-mode 0}}]
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/TasksCompanion.insert
                      :title title
@@ -160,6 +161,8 @@
                      :priority (d/Value ^int priority)
                      :isDone (d/Value false)
                      :displayOrder (d/Value 0.0)
+                     :dueDate (if (nil? due-date) (d/Value nil) (d/Value ^dc/DateTime? due-date))
+                     :reminderAt (if (nil? reminder-at) (d/Value nil) (d/Value ^dc/DateTime? reminder-at))
                      :recurrenceMode (d/Value ^int recurrence-mode))]
       (.insert (.into database (.-tasks database)) companion))
     (throw (ex-info "Database not initialized" {}))))
@@ -285,13 +288,29 @@
         ;; Use the smaller value between the original day and the number of days in the target month
         safe-day (min (.-day dt) last-day-of-month)]
     (dc/DateTime. final-year final-month safe-day (.-hour dt) (.-minute dt))))
+
+(defn- normalize-datetime
+  "CustomSelect may return DateTime or a unix timestamp number.
+   We accept seconds (common in drift sqlite) or milliseconds (very large numbers)."
+  [v]
+  (cond
+    (nil? v) nil
+    (instance? dc/DateTime v) v
+    (number? v) (let [ts (long v)]
+                  (if (> ts 10000000000)
+                    (dc/DateTime.fromMillisecondsSinceEpoch ts)
+                    (dc/DateTime.fromMillisecondsSinceEpoch (* ts 1000))))
+    :else nil))
     
 (defn handle-task-completion! [id is-done]
-  (let [task (await (get-task-by-id id))
+  ;; IMPORTANT: `get-task-by-id` returns Drift's `TasksData` object (not a map),
+  ;; but recurrence cloning logic expects map-like access. Use a customSelect map instead.
+  (let [task (await (get-task-with-subtask-counts id))
         mode (get task "recurrence_mode" 0)]
     (when (and (true? is-done) (> mode 0))
       ;; --- Handle recurrence task ---
-      (let [current-due (or (get task "due_date") (dc/DateTime.now))
+      (let [current-due (or (normalize-datetime (get task "due_date"))
+                            (dc/DateTime.now))
             next-due (cond
                        (= mode 1) (.add current-due (dc/Duration. .days 1))   ; Daily
                        (= mode 2) (.add current-due (dc/Duration. .days 7))   ; Weekly
@@ -299,12 +318,14 @@
                        :else nil)]
         (when next-due
           ;; Clone a new task to the database
-          (await (add-task! {:title (.-title task)
+          (await (add-task! {:title (or (get task "title") "")
                              :notes (get task "notes")
                              :category-id (get task "category_id")
                              :priority (get task "priority")
                              :due-date next-due
-                             :recurrence-mode mode})))))))
+                             :recurrence-mode mode}))
+          ;; Return mode so UI can decide whether to toast (we only toast daily).
+          mode)))))
 
 (defn delete-task!
   "Permanently delete a task."
