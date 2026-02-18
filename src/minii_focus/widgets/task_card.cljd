@@ -70,8 +70,9 @@
                         (s/HapticFeedback.mediumImpact)
                         (notification/cancel-task-reminder! id)
                         (let [created-mode (await (db/handle-task-completion! id v))]
-                          (when (= created-mode 1)
-                            (toast/success ctx "ᠮᠠᠷᠭᠠᠰᠢ᠎ᠶᠢᠨ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠭᠰᠡᠨ ᠰᠢᠦ")))
+                          (when created-mode
+                            (toast/success ctx "ᠳᠠᠷᠠᠭ᠎ᠠ᠎ᠶᠢᠨ ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠳᠤ ᠵᠣᠷᠢᠭᠤᠯᠵᠤ ᠡᠭᠦᠰᠬᠡᠭᠰᠡᠨ ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷ
+ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ")))
                         (db/update-task! id :is-done v))))
 
          ;; --- B. Content (IgnorePointer so tap goes to outer GestureDetector) ---
