@@ -39,7 +39,7 @@ dependencies:
   archive: ^4.0.7
   flutter_styled_toast: ^2.3.0
   vibration: ^3.1.5
-  mongol: ^9.0.0
+  mongol: ^9.2.1
   mongol_code: ^1.0.5
   path_provider: ^2.1.5
   drift: ^2.30.1
@@ -66,6 +66,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   drift_dev: ^2.30.1
   build_runner: ^2.10.5
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -151,3 +152,12 @@ flutter:
         - asset: assets/fonts/OyunSoninTig.ttf
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  image_path: assets/app_icon_launcher.png
+  remove_alpha_ios: true
+  android: true
+  ios: true
+  adaptive_icon_foreground_inset: 0
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/app_icon_launcher.png
