@@ -159,5 +159,6 @@ flutter_launcher_icons:
   android: true
   ios: true
   adaptive_icon_foreground_inset: 0
-  adaptive_icon_background: "#FFFFFF"
+  # Match icon face blue so adaptive-icon mask edges never show white fringes
+  adaptive_icon_background: "#395CD4"
   adaptive_icon_foreground: assets/app_icon_launcher.png
