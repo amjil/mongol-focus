@@ -2,8 +2,8 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:cljd_mongol_focus/post_frame_trigger.dart" :as pft]
-            [minii-focus.state.store :refer [app-ui-state]]
-            [minii-focus.widgets.main-list :as list]
+            [minii-focus.state.store :as store]
+            [minii-focus.widgets.main-list :as main-list]
             [minii-focus.widgets.bottom-nav :as nav]
             [minii-focus.widgets.fab :as fab]
             [minii-focus.widgets.app-drawer :as drawer]
@@ -13,62 +13,55 @@
             [minii-focus.logic.update :as update]
             ["dart:core" :as dc]))
 
+(defn- page-body [scroll-controller selected-nav-id]
+  (case selected-nav-id
+    "today"
+    (m/Container.
+     .key (m/ValueKey. "page-today")
+     .child (main-list/task-stream-view {:scroll-controller scroll-controller :mode :today}))
+
+    "logbook"
+    (m/Container.
+     .key (m/ValueKey. "page-logbook")
+     .child (main-list/task-stream-view {:scroll-controller scroll-controller :mode :logbook}))
+
+    "settings"
+    (m/Container.
+     .key (m/ValueKey. "page-settings")
+     .child (settings/settings-page))
+
+    (m/Container.
+     .key (m/ValueKey. "page-today-fallback")
+     .child (main-list/task-stream-view {:scroll-controller scroll-controller :mode :today}))))
+
 (defn home-page []
   (f/widget
    :context ctx
-   ;; 1. Declare scroll controller for FAB auto-collapse and MainList scroll binding
    :let [scroll-controller (m/ScrollController.)]
-
-   ;; 2. Watch navigation state to determine which page to display in Body
-   :watch [{:keys [selected-nav-id]} app-ui-state]
-
-   ;; 3. Deeply destructure theme colors to ensure Scaffold background matches global theme
+   :watch [{:keys [selected-nav-id]} store/app-ui-state]
    :get {{{bg .-surface} .-colorScheme} m/Theme}
 
    (pft/PostFrameTrigger
     .onLayout #(update/ensure-startup-check! ctx)
     .child
     (m/Scaffold.
-     .appBar (m/AppBar .actions (if (not= selected-nav-id "settings")
-                                  [(search-button/filter-aware-search-button)]
-                                  []))
+     .appBar (m/AppBar.
+              .actions (if (not= selected-nav-id store/nav-settings)
+                         [(search-button/filter-aware-search-button)]
+                         []))
      .backgroundColor bg
-
-     ;; Sidebar: Contains brand display and feature entries
      .drawer (drawer/main-drawer)
-
-     ;; Dynamic Body switching logic
      .body
      (m/SafeArea.
       .child
       (m/AnimatedSwitcher.
        .duration (dc/Duration. .milliseconds 300)
-       ;; Smooth fade in/out when switching pages
        .transitionBuilder (fn [child animation]
                             (m/FadeTransition. .opacity animation .child child))
-       .child
-       (case selected-nav-id
-         "today"    (m/Container.
-                     .key (m/ValueKey. "page-today")
-                     .child (list/task-stream-view))
-
-         "logbook"  (m/Center.
-                     .key (m/ValueKey. "page-logbook")
-                     .child (list/task-stream-view)) ;; History page placeholder
-
-         "settings" (m/Container.
-                     .key (m/ValueKey. "page-settings")
-                     .child (settings/settings-page))
-
-         ;; Default fallback to today
-         (list/task-stream-view))))
-
-     ;; Bottom Navigation Bar
+       .child (page-body scroll-controller selected-nav-id)))
      .bottomNavigationBar (nav/main-navigation-bar)
-
-     ;; Smart FAB: Only displayed on "today" page, supports scroll hiding
      .floatingActionButton
-     (if (= selected-nav-id "today")
+     (if (= selected-nav-id store/nav-today)
        (fab/task-fab
         {:scroll-controller scroll-controller
          :on-pressed (fn [] (actions/open-task-editor ctx))})

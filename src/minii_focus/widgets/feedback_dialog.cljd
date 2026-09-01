@@ -18,6 +18,7 @@
     (f/widget
      :managed [content-ctrl (m/TextEditingController.)
                focus-node (m/FocusNode)]
+     :let [kb-state (atom {})]
      :get {{{:flds [surfaceVariant onSurface]} .-colorScheme
             {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
      (dialog/vertical-custom-dialog
@@ -54,6 +55,7 @@
                  .padding (m/EdgeInsets.all (tokens/space :l))
                  .child
                  (text-field/text-field
+                  kb-state
                   {:controller content-ctrl
                    :autofocus true
                    :focus-node focus-node

@@ -1,0 +1,5 @@
+(ns minii-focus.route-names)
+
+(def task-detail "/task-detail")
+(def subtasks-list "/subtasks-list")
+(def category-management "/category-management")

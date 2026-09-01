@@ -1,48 +1,41 @@
 (ns minii-focus.widgets.main-list
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
-            ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
             ["dart:async" :as async]
             [minii-focus.logic.db :as db]
-            [minii-focus.logic.task-actions :as actions]
-            [minii-focus.state.store :refer [app-ui-state]]
+            [minii-focus.logic.stream-util :as stream-util]
+            [minii-focus.state.store :as store]
             [minii-focus.widgets.task-card :as task-card]
+            [minii-focus.route-names :as routes]
             [components.tokens :as tokens]))
 
-(defn- title-entry-animation
-  "Provide slide-in from left and fade-out animation for large background title"
-  [{:keys [child]}]
+(defn- title-entry-animation [{:keys [child]}]
   (f/widget
    (m/TweenAnimationBuilder.
     .tween (m/Tween. .begin 0.0 .end 1.0)
-    .duration (dart:core/Duration. .milliseconds 800) ;; Animation duration longer than cards
-    .curve m/Curves.easeOutQuad ;; Smoother curve
-    .builder (fn [ctx value prebuilt-child]
+    .duration (dart:core/Duration. .milliseconds 800)
+    .curve m/Curves.easeOutQuad
+    .builder (fn [_ctx value prebuilt-child]
                (m/Opacity.
                 .opacity value
                 .child (m/Transform.translate
-                        ;; Slide in from left with larger offset
                         .offset (m/Offset. (* -50.0 (- 1.0 value)) 0.0)
                         .child prebuilt-child)))
     .child child)))
 
-(defn- entry-animation
-  "Provide fade-in and displacement effects for components, using Future to implement true lazy loading"
-  [{:keys [child i]}]
+(defn- entry-animation [{:keys [child i]}]
   (f/widget
-   :let [delay-ms (* i 80) ;; Slightly reduce delay for smoother flow
+   :let [delay-ms (* i 80)
          duration-ms 600]
-   ;; 1. Use FutureBuilder to implement waiting effect
    (m/FutureBuilder.
     .future (async/Future.delayed (dart:core/Duration. .milliseconds delay-ms) (fn [] true))
     .builder (fn [_ctx snapshot]
-               ;; 2. Only show animation when Future is completed (hasData)
                (if (.-hasData snapshot)
                  (m/TweenAnimationBuilder.
                   .tween (m/Tween. .begin 0.0 .end 1.0)
                   .duration (dart:core/Duration. .milliseconds duration-ms)
-                  .curve m/Curves.easeOutCubic 
+                  .curve m/Curves.easeOutCubic
                   .child child
                   .builder (fn [_ctx value child]
                              (m/Opacity.
@@ -50,89 +43,80 @@
                               .child (m/Transform.translate
                                       .offset (m/Offset. 0.0 (* 25.0 (- 1.0 value)))
                                       .child child))))
-                 ;; 3. During delay waiting period, return transparent placeholder to maintain layout space
                  (m/Opacity. .opacity 0.0 .child child))))))
 
-;; --- 1. Empty State View (Vertical Mongolian) ---
-
-(defn- empty-state-view [title]
+(defn- empty-state-view [title hint-text]
   (f/widget
-   :context ctx
    :get {{{primary .-primary} .-colorScheme
           {titleLarge .-titleLarge} .-textTheme} m/Theme}
    (m/Center.
     .child
-    (m/Stack. ;; Use Stack to overlay decoration layer and text layer
+    (m/Stack.
      .alignment m/Alignment.center
      .children
-     [;; 1. Back Layer: Large decorative icon (watermark feel)
-      (m/Opacity.
+     [(m/Opacity.
        .opacity 0.03
-       .child (m/Icon. m/Icons.filter_vintage
-                       .size 240.0))
-
-      ;; 2. Front Layer: Vertically arranged text and guidance icon
+       .child (m/Icon. m/Icons.filter_vintage .size 240.0))
       (m/Column.
        .mainAxisSize m/MainAxisSize.min
        .children
-       [;; Guidance Icon
-        (m/Icon. m/Icons.assignment_turned_in_outlined
+       [(m/Icon. m/Icons.assignment_turned_in_outlined
                  .color (.withOpacity primary 0.4)
                  .size 48.0)
-
         (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :l)))
-
         (m/Row
          .mainAxisAlignment m/MainAxisAlignment.center
          .children
-         [;; Vertical Title
-          (mgl/MongolText. (str title " - ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
+         [(mgl/MongolText. (str title " - ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
                            .style titleLarge
                            .textAlign mgl/MongolTextAlign.center)
-
           (m/Padding. .padding (m/EdgeInsets.only .top (tokens/space :m)))
-
-          ;; Guidance Text (Light Color)
-          (mgl/MongolText. "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ" ;; "Click the button below to add a new task"
+          (mgl/MongolText. hint-text
                            .style (m/TextStyle .color m/Colors.grey .fontSize 14.0))])])]))))
-;; --- 2. Task Stream Main View (Horizontal Scroll) ---
 
-(defn task-stream-view []
+(def ^:private mode->title
+  {:today "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"
+   :logbook "ᠡᠷᠭᠢᠴᠡᠭᠦᠯᠦᠯ"})
+
+(def ^:private mode->hint
+  {:today "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠨᠡᠮᠡᠨ᠎ᠡ᠎ᠦᠦ"
+   :logbook "ᠡᠷᠭᠢᠴᠡᠭᠰᠡᠨ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ"})
+
+(defn task-stream-view
+  "Render horizontal task list. :mode is :today or :logbook."
+  [& {:keys [scroll-controller mode]}]
   (f/widget
+   :context ctx
    :get {{{primary .-primary} .-colorScheme} m/Theme}
-   :watch [{:keys [selected-nav-id]} app-ui-state
+   :watch [{:keys [selected-nav-id]} store/app-ui-state
            tasks (stream
-                  (map (fn [tasks]
-                         (map (fn [task] (.-data task)) tasks)))
-                  (map (fn [[_er _st]] []))
-                  :as-values (case selected-nav-id
-                               "today"   (db/watch-active-tasks)
-                               "logbook" (db/watch-logbook)
+                  (map stream-util/rows->records)
+                  (map stream-util/empty-on-error)
+                  :as-values (case (or mode (keyword selected-nav-id))
+                               :today (db/watch-active-tasks)
+                               :logbook (db/watch-logbook)
                                (db/watch-active-tasks)))]
-   :let [display-title (case selected-nav-id
-                         "today"   "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"
-                         "logbook" "ᠡᠷᠭᠢᠴᠡᠭᠦᠯᠦᠯ"
-                         "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")]
+   :let [view-mode (or mode (keyword selected-nav-id) :today)
+         display-title (get mode->title view-mode (mode->title :today))
+         empty-hint (get mode->hint view-mode (mode->hint :today))]
 
    (m/AnimatedSwitcher.
     .duration (dart:core/Duration. .milliseconds 400)
     .child
     (if (empty? tasks)
-      ;; 1. Empty State: Manually wrap Container to add unique Key
       (m/Container.
-       .key (m/ValueKey. (str "empty-" selected-nav-id))
-       .child (empty-state-view display-title))
+       .key (m/ValueKey. (str "empty-" view-mode))
+       .child (empty-state-view display-title empty-hint))
 
-      ;; 2. List State: ListView already has its own Key
       (m/ListView.builder
-       .key (m/ValueKey. (str "list-" selected-nav-id))
+       .key (m/ValueKey. (str "list-" view-mode))
+       .controller scroll-controller
        .scrollDirection m/Axis.horizontal
        .padding (m/EdgeInsets.symmetric .horizontal 30.0)
        .itemCount (inc (count tasks))
        .itemBuilder
-       (fn [ctx i]
+       (fn [_ctx i]
          (if (zero? i)
-           ;; Large title can also have animation, i=0
            (title-entry-animation
             {:child (m/Container.
                      .alignment m/Alignment.topLeft
@@ -141,26 +125,20 @@
                                                      .fontSize 36.0
                                                      .fontWeight m/FontWeight.w900
                                                      .color primary)))})
-
-
            (let [task (nth tasks (dec i))]
              (entry-animation
-              {:i i ;; Index i here will make cards slide in sequentially
+              {:i i
                :child
                (m/Padding.
                 .padding (m/EdgeInsets.only .right 12.0 .top 20.0 .bottom 20.0)
                 .child
                 (task-card/task-item
-                 {:id         (get task "id")
-                  :title      (get task "title")
-                  :notes      (get task "notes")
-                  :is-done?   (if (or (zero? (get task "is_done")) (nil? (get task "is_done")))
-                                false true)
-                  :subtask-count (get task "subtask_count")
-                  :subtask-done-count (get task "subtask_done_count")
-                  :on-tap     (fn []
-                                ;; 1. Store current task object in global state
-                                ;; Convert Dart Map to Clojure map
-                                (swap! app-ui-state assoc :selected-task (into {} task))
-                                ;; 2. Navigate to detail page using named route
-                                (m/Navigator.pushNamed ctx "/task-detail"))}))})))))))))
+                 {:id (:id task)
+                  :title (:title task)
+                  :notes (:notes task)
+                  :is-done? (:is-done? task)
+                  :subtask-count (:subtask-count task)
+                  :subtask-done-count (:subtask-done-count task)
+                  :on-tap (fn []
+                            (swap! store/app-ui-state assoc :selected-task task)
+                            (m/Navigator.pushNamed ctx routes/task-detail))}))})))))))))

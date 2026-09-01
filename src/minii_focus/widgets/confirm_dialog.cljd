@@ -1,0 +1,37 @@
+(ns minii-focus.widgets.confirm-dialog
+  (:require
+   ["package:flutter/material.dart" :as m]
+   ["package:mongol/mongol.dart" :as mgl]
+   [components.tokens :as tokens]
+   [components.dialog :as dialog]))
+
+(defn show!
+  "Show a vertical Mongolian confirmation dialog."
+  [ctx {:keys [title message confirm-label cancel-label on-confirm
+               width-factor height-factor]}]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [dialog-ctx]
+     (dialog/vertical-custom-dialog
+      {:title (or title "ᠠᠩᠬᠠᠷ")
+       :width-factor (or width-factor 0.8)
+       :height-factor (or height-factor 0.35)
+       :body
+       (m/Padding.
+        .padding (m/EdgeInsets.all (tokens/space :l))
+        .child
+        (m/Center.
+         .child (mgl/MongolText. message
+                                 .style (m/TextStyle. .fontSize 16.0))))
+       :actions
+       [(mgl/MongolTextButton.
+         .onPressed #(m/Navigator.pop dialog-ctx)
+         .child (mgl/MongolText. (or cancel-label "ᠪᠣᠯᠢᠬᠤ")))
+        (mgl/MongolElevatedButton.
+         .style (m/ButtonStyle. .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
+         .onPressed (fn []
+                      (when on-confirm (on-confirm))
+                      (m/Navigator.pop dialog-ctx))
+         .child (mgl/MongolText. (or confirm-label "ᠤᠰᠠᠳᠬᠠᠬᠤ")
+                                  .style (m/TextStyle. .color m/Colors.white)))]}))))

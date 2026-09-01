@@ -1,0 +1,57 @@
+(ns minii-focus.logic.records
+  (:require [clojure.string :as str]))
+
+(def ^:private sql-field->kw
+  {"id" :id
+   "title" :title
+   "notes" :notes
+   "is_done" :is-done?
+   "subtask_count" :subtask-count
+   "subtask_done_count" :subtask-done-count
+   "category_id" :category-id
+   "category_name" :category-name
+   "category_icon" :category-icon
+   "due_date" :due-date
+   "reminder_at" :reminder-at
+   "priority" :priority
+   "recurrence_mode" :recurrence-mode
+   "parent_id" :parent-id
+   "parent_title" :parent-title
+   "name" :name
+   "icon_code" :icon-code
+   "position" :position
+   "completed_at" :completed-at
+   "created_at" :created-at
+   "display_order" :display-order})
+
+(defn- done?-value [v]
+  (boolean (and (some? v) (not (zero? v)))))
+
+(defn- field-key [k]
+  (if (keyword? k)
+    k
+    (get sql-field->kw (name k)
+         (keyword (str/replace (name k) "_" "-")))))
+
+(defn- normalize-entry [[k v]]
+  (let [kw (field-key k)
+        val (if (= kw :is-done?) (done?-value v) v)]
+    [kw val]))
+
+(defn ->clj
+  "Convert a Drift/Dart map (string keys) into a Clojure map with keyword keys."
+  [m]
+  (when m
+    (let [raw (if (and (map? m) (every? keyword? (keys m)))
+                m
+                (into {} m))]
+      (into {} (map normalize-entry raw)))))
+
+(defn row->clj [row]
+  (->clj (.-data row)))
+
+(defn rows->clj [rows]
+  (mapv row->clj rows))
+
+(defn task-done? [task]
+  (:is-done? (->clj task)))

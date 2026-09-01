@@ -1,15 +1,13 @@
 (ns minii-focus.logic.task-actions
-  ;; Import store to manipulate UI state
   (:require
    [minii-focus.widgets.input-dialog :as input-dialog]
+   [minii-focus.widgets.confirm-dialog :as confirm]
    [minii-focus.logic.db :as db]
+   [minii-focus.logic.records :as rec]
    [minii-focus.state.store :as store]
-   [components.tokens :as tokens]
-   [components.dialog :as dialog]
-   ["package:mongol/mongol.dart" :as mgl]
    ["package:flutter/material.dart" :as m]))
 
-(defn open-task-editor 
+(defn open-task-editor
   "Open task editor dialog.
    Supports both create and edit modes.
    In is-edit? mode, it will update the selected-task that the detail page is watching."
@@ -19,11 +17,11 @@
          is-edit? (some? id)]
      (m/showDialog
       .context ctx
-      .barrierDismissible false ;; Force user to take action or click cancel
-      .builder 
+      .barrierDismissible false
+      .builder
       (fn [ctx]
         (input-dialog/generic-input-dialog
-         {:title (if is-edit? "ᠵᠠᠰᠠᠬᠤ" (if parent-id "ᠰᠢᠨ᠎ᠡ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ" "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ")) ;; Edit / New Task / New Subtask
+         {:title (if is-edit? "ᠵᠠᠰᠠᠬᠤ" (if parent-id "ᠰᠢᠨ᠎ᠡ ᠳᠡᠳ᠋ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ" "ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ"))
           :initial-text (or title "")
           :initial-notes (or notes "")
           :on-submit (fn [new-data]
@@ -31,23 +29,14 @@
                              new-notes (:notes new-data)]
                          (if is-edit?
                            (do
-                             ;; 1. Update database
-                             (db/update-task! id 
-                                              :title-and-notes 
-                                              {:title new-title :notes new-notes})
-                             ;; 2. Synchronously update selected task in Store to ensure detail page UI refreshes immediately
-                             ;; selected-task may be a Dart Map (e.g. from search), so convert to Clojure map before merge
-                             (swap! store/app-ui-state 
+                             (db/update-task! id :title-and-notes {:title new-title :notes new-notes})
+                             (swap! store/app-ui-state
                                     (fn [state]
-                                      (let [raw-task (:selected-task state)
-                                            current-task (when raw-task (into {} raw-task))
-                                            updated-task (if current-task
-                                                          (merge current-task {"title" new-title "notes" new-notes})
-                                                          nil)]
+                                      (let [current-task (rec/->clj (:selected-task state))
+                                            updated-task (when current-task
+                                                           (merge current-task {:title new-title :notes new-notes}))]
                                         (assoc state :selected-task updated-task)))))
-                           ;; Create mode (supports both regular tasks and subtasks)
                            (db/add-task! {:title new-title :notes new-notes :parent-id parent-id}))
-                         
                          (m/Navigator.pop ctx)))
           :on-cancel #(m/Navigator.pop ctx)}))))))
 
@@ -56,32 +45,13 @@
   [ctx parent-id]
   (open-task-editor ctx {:parent-id parent-id}))
 
-(defn delete-task-confirm 
+(defn delete-task-confirm
   [ctx editor-ctx id]
-  (m/showDialog
-   .context ctx
-   .builder 
-   (fn [dialog-ctx] ;; Renamed to dialog-ctx to avoid confusion with outer ctx
-     (dialog/vertical-custom-dialog
-      {:title "ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
-       :width-factor 0.8
-       :height-factor 0.35
-       :body 
-       (m/Padding.
-        .padding (m/EdgeInsets.all (tokens/space :l))
-        .child
-        (m/Center.
-         .child (mgl/MongolText. "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
-                                .style (m/TextStyle. .fontSize 16.0))))
-       :actions [(mgl/MongolTextButton.
-                  .onPressed #(m/Navigator.pop dialog-ctx)
-                  .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))
-                 (mgl/MongolElevatedButton.
-                  .style (m/ButtonStyle. .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                  .onPressed (fn [] 
-                               (db/delete-task! id)
-                               (m/Navigator.pop dialog-ctx) ;; Close confirmation dialog
-                               (if editor-ctx
-                                 (m/Navigator.pop editor-ctx) ;; Close editor
-                                 (m/Navigator.pop ctx)))      ;; Navigate back to list from detail page
-                  .child (mgl/MongolText. "ᠤᠰᠠᠳᠬᠠᠬᠤ" .style (m/TextStyle. .color m/Colors.white)))]}))))
+  (confirm/show!
+   ctx
+   {:title "ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
+    :message "ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ ᠎ᠤᠤ?"
+    :on-confirm (fn []
+                  (db/delete-task! id)
+                  (when editor-ctx (m/Navigator.pop editor-ctx))
+                  (when-not editor-ctx (m/Navigator.pop ctx)))}))

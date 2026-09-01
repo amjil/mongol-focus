@@ -3,6 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.logic.db :as db]
+            [minii-focus.logic.stream-util :as stream-util]
             [minii-focus.logic.category-actions :as cat-actions]
             [components.tokens :as tokens]))
 
@@ -10,8 +11,8 @@
   (f/widget
    :context ctx
    :watch [categories (stream
-                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
-                       (map (fn [_] []))
+                       (map stream-util/rows->records)
+                       (map stream-util/empty-on-error)
                        :as-values (db/watch-categories))]
    :get {{{primary .-primary on-surface .-onSurface surface .-surface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
 
@@ -46,9 +47,9 @@
         .itemBuilder
         (fn [_ idx]
           (let [cat (nth categories idx)
-                id (get cat "id")
-                name (get cat "name")
-                icon-code (get cat "icon_code")]
+                id (:id cat)
+                name (:name cat)
+                icon-code (:icon-code cat)]
             (m/Padding.
              .padding (m/EdgeInsets.only .right (tokens/space :m))
              .child

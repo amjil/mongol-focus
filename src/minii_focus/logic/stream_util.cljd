@@ -1,0 +1,7 @@
+(ns minii-focus.logic.stream-util
+  (:require [minii-focus.logic.records :as rec]))
+
+(defn rows->records [rows]
+  (rec/rows->clj rows))
+
+(defn empty-on-error [_] [])

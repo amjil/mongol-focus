@@ -3,6 +3,8 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.logic.db :as db]
+            [minii-focus.logic.stream-util :as stream-util]
+            [minii-focus.route-names :as routes]
             [minii-focus.state.store :as store]
             ;; Modified: Import cat-actions instead of original widgets.category
             [minii-focus.logic.category-actions :as cat-actions] 
@@ -27,15 +29,16 @@
                 ;; Watch category ID and due date in global state for filtering search results
                 {cat-id :selected-category-id
                  due-date :selected-due-date} store/app-ui-state
-                db-items (stream 
-                           (map (fn [rows] (take 10 (map #(.-data %) rows))))
-                           (map (fn [_] []))
-                           :as-values (db/watch-tasks-filtered 
+                db-items (stream
+                           (map (fn [rows] (take 10 (stream-util/rows->records rows))))
+                           (map stream-util/empty-on-error)
+                           :as-values (db/watch-tasks-filtered
                                         {:search-term term 
                                          :category-id cat-id
                                          :due-date due-date}))]
         :get {{{on-surface .-onSurface primary .-primary surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
-        :let [font-family (get-in state [:settings :font-family])
+        :let [kb-state (atom {})
+              font-family (get-in state [:settings :font-family])
               font-size (get-in state [:settings :font-size])
               text-scale (store/text-scale font-size)]
         
@@ -76,6 +79,7 @@
                                  .border (m/Border.all .color (.withOpacity on-surface 0.1))
                                  .borderRadius (m/BorderRadius.circular 12))
                     .child (text-field/text-field
+                            kb-state
                             {:controller controller
                              :hint "ᠪᠢᠴᠢᠬᠦ ᠁"
                              :autofocus true
@@ -147,9 +151,9 @@
                                         .padding (m/EdgeInsets.only .right (tokens/space :s))
                                         .child
                                         (m/GestureDetector.
-                                         .onTap #(do (swap! store/app-ui-state assoc :selected-task (into {} task))
+                                         .onTap #(do (swap! store/app-ui-state assoc :selected-task task)
                                                      (m/Navigator.pop ctx)
-                                                     (m/Navigator.pushNamed ctx "/task-detail")
+                                                     (m/Navigator.pushNamed ctx routes/task-detail)
                                                      nil)
                                          .child
                                          (m/IntrinsicWidth.
@@ -160,15 +164,15 @@
                                                         .color surface-variant
                                                         .borderRadius (m/BorderRadius.circular 12.0)
                                                         .border (m/Border.all .color (.withOpacity on-surface 0.05)))
-                                           .child (let [parent-title (get task "parent_title")
+                                           .child (let [parent-title (:parent-title task)
                                                        max-parent-len 12
                                                        truncated-parent (when (and parent-title (not= parent-title ""))
                                                                           (if (> (count (str parent-title)) max-parent-len)
                                                                             (str (subs (str parent-title) 0 max-parent-len) "…")
                                                                             parent-title))
                                                        display-title (if truncated-parent
-                                                                       (str truncated-parent " › " (get task "title"))
-                                                                       (get task "title"))]
+                                                                       (str truncated-parent " › " (:title task))
+                                                                       (:title task))]
                                                    (mgl/MongolText. display-title
                                                                   .style (m/TextStyle. .fontSize (* 15.0 text-scale) 
                                                                                       .height 1.2 

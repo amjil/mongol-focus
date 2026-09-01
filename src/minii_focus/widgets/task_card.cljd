@@ -98,7 +98,7 @@
                         .decoration (if is-done? m/TextDecoration.lineThrough m/TextDecoration.none)))))
 
              ;; Notes
-             (if (not (empty? notes))
+             (if (seq notes)
                (m/Padding.
                 .padding (m/EdgeInsets.only .left (tokens/space :m))
                 .child

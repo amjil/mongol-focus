@@ -3,7 +3,8 @@
             ["package:flutter/material.dart" :as m]
             ["package:flutter/services.dart" :as s]
             ["package:mongol/mongol.dart" :as mgl]
-            [clojure.string :as str]
+            [minii-focus.route-names :as routes]
+            [minii-focus.logic.stream-util :as stream-util]
             [minii-focus.logic.db :as db]
             [minii-focus.state.store :as store]
             [minii-focus.logic.task-actions :as actions]
@@ -58,32 +59,37 @@
 
 ;; --- 2. Main Page Component ---
 
+(defn- update-selected-task! [k v]
+  (swap! store/app-ui-state
+         (fn [state]
+           (let [current (:selected-task state)
+                 updated (when current (assoc current k v))]
+             (assoc state :selected-task updated)))))
+
 (defn task-detail-page []
   (f/widget
    :context ctx
    :watch [categories (stream
-                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
-                       (map (fn [_] []))
+                       (map stream-util/rows->records)
+                       (map stream-util/empty-on-error)
                        :as-values (db/watch-categories))
            state store/app-ui-state]
-   :let [task      (:selected-task state)
+   :let [task (:selected-task state)
          font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
          text-scale (store/text-scale font-size)
-         task-id   (get task "id")
-         title     (get task "title")
-         notes     (get task "notes")
-         due-date  (db/normalize-datetime (get task "due_date"))
-         reminder-at (db/normalize-datetime (get task "reminder_at"))
-         priority  (get task "priority")
-         ;; Extract and resolve category info
-         cat-id    (get task "category_id")
-         cat       (some #(when (= (get % "id") cat-id) %) categories)
-         cat-name  (or (get cat "name") (get task "category_name"))
-         cat-icon  (or (get cat "icon_code") (get task "category_icon"))
-         subtask-count (get task "subtask_count")
-         subtask-done-count (get task "subtask_done_count")
-         recurrence-mode (or (get task "recurrence_mode") 0)
+         task-id (:id task)
+         title (:title task)
+         notes (:notes task)
+         due-date (db/normalize-datetime (:due-date task))
+         reminder-at (db/normalize-datetime (:reminder-at task))
+         priority (:priority task)
+         cat-id (:category-id task)
+         cat (some #(when (= (:id %) cat-id) %) categories)
+         cat-name (or (:name cat) (:category-name task))
+         cat-icon (or (:icon-code cat) (:category-icon task))
+         subtask-count (:subtask-count task)
+         recurrence-mode (or (:recurrence-mode task) 0)
          recurrence-label (or (some #(when (and (not= (:type %) :header)
                                                 (= (:value %) recurrence-mode))
                                        (:title %))
@@ -131,7 +137,7 @@
          (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
 
          ;; --- B. Notes Content Area ---
-         (if (and notes (not (empty? notes)))
+         (if (seq notes)
            (m/GestureDetector.
             .onTap (fn [] (show-notes-dialog ctx notes font-family text-scale))
             .child
@@ -143,7 +149,7 @@
                                      .overflow m/TextOverflow.ellipsis)))
            (m/SizedBox.shrink))
 
-         (if (and notes (not (empty? notes)))
+         (if (seq notes)
            (m/VerticalDivider. .width 1.0 .indent 40.0 .endIndent 40.0)
            (m/SizedBox.shrink))
 
@@ -152,7 +158,10 @@
          (m/GestureDetector.
           .onTap (fn []
                    (s/HapticFeedback.mediumImpact)
-                   (m/Navigator.pushNamed ctx "/subtasks-list" .arguments {"parentId" task-id "parentTitle" title "parentTask" (into {} task)})
+                   (m/Navigator.pushNamed ctx routes/subtasks-list
+                                          .arguments {"parentId" task-id
+                                                      "parentTitle" title
+                                                      "parentTask" task})
                    nil)
           .child
           (mgl/MongolListTile.
@@ -178,12 +187,7 @@
                                                  (fn [d]
                                                    (when d
                                                      (db/update-task! task-id :due-date d)
-                                                     ;; Sync selected-task in store so detail page shows new date immediately
-                                                     (swap! store/app-ui-state
-                                                            (fn [state]
-                                                              (let [current (:selected-task state)
-                                                                    updated (if current (assoc current "due_date" d) nil)]
-                                                                (assoc state :selected-task updated))))))
+                                                     (update-selected-task! :due-date d)))
                                                  :initial-date (or due-date (dc/DateTime.now))
                                                  :show-time false))
                     .child (mgl/MongolListTile.
@@ -197,11 +201,7 @@
               .icon (m/Icon. m/Icons.clear_rounded .size 20.0 .color m/Colors.grey)
               .onPressed (fn []
                            (db/update-task! task-id :due-date nil)
-                           (swap! store/app-ui-state
-                                  (fn [state]
-                                    (let [current (:selected-task state)
-                                          updated (if current (assoc current "due_date" nil) nil)]
-                                      (assoc state :selected-task updated))))))
+                           (update-selected-task! :due-date nil)))
              (m/SizedBox.shrink))])
 
 
@@ -225,7 +225,7 @@
                                   (swap! store/app-ui-state
                                          (fn [state]
                                            (let [current (:selected-task state)
-                                                 updated (if current (assoc current "reminder_at" d) nil)]
+                                                 updated (when current (assoc current :reminder-at d))]
                                              (assoc state :selected-task updated))))))
                               :initial-date (or reminder-at (dc/DateTime.now))
                               :show-time true))
@@ -244,7 +244,7 @@
                            (swap! store/app-ui-state
                                   (fn [state]
                                     (let [current (:selected-task state)
-                                          updated (if current (assoc current "reminder_at" nil) nil)]
+                                          updated (when current (assoc current :reminder-at nil))]
                                       (assoc state :selected-task updated))))))
              (m/SizedBox.shrink))])
 
@@ -261,12 +261,7 @@
                              (let [new-priority (:value item)]
                                (assoc item :on-tap #(do
                                                       (db/update-task! task-id :priority new-priority)
-                                                      ;; Sync selected-task in store so detail page shows new priority immediately
-                                                      (swap! store/app-ui-state
-                                                             (fn [state]
-                                                               (let [current (:selected-task state)
-                                                                     updated (if current (assoc current "priority" new-priority) nil)]
-                                                                 (assoc state :selected-task updated)))))))))
+                                                      (update-selected-task! :priority new-priority))))))
                          priority-options)
                     :height-factor 0.35))
           .child
@@ -292,11 +287,7 @@
                              (let [new-mode (:value item)]
                                (assoc item :on-tap #(do
                                                       (db/update-task! task-id :recurrence-mode new-mode)
-                                                      (swap! store/app-ui-state
-                                                             (fn [state]
-                                                               (let [current (:selected-task state)
-                                                                     updated (if current (assoc current "recurrence_mode" new-mode) nil)]
-                                                                 (assoc state :selected-task updated)))))))))
+                                                      (update-selected-task! :recurrence-mode new-mode))))))
                          recurrence-options)
                     :height-factor 0.4))
           .child
@@ -315,16 +306,10 @@
                     {:current-id cat-id
                      :on-select (fn [new-id]
                                   (db/update-task! task-id :category-id new-id)
-                                  (swap! store/app-ui-state
-                                         (fn [state]
-                                           (let [current (:selected-task state)
-                                                 updated (if current (assoc current "category_id" new-id) nil)]
-                                             (assoc state :selected-task updated)))))}))
+                                  (update-selected-task! :category-id new-id))}))
           .child
           (mgl/MongolListTile.
            .leading (m/Icon. (m/IconData. (or cat-icon 0xe2a3) .fontFamily "MaterialIcons")
                              .color (if cat-id primary m/Colors.grey))
            .title (mgl/MongolText. (or cat-name "ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠬᠤ ᠦᠭᠡᠢ")
-                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))
-
-         ]))))))
+                                   .style (m/TextStyle. .fontSize (* 16.0 text-scale) .fontFamily font-family))))]))))))

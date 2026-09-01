@@ -18,6 +18,7 @@
       :managed [title-ctrl (m/TextEditingController .text initial-text)
                 notes-ctrl (m/TextEditingController .text initial-notes)
                 focus-node (m/FocusNode)]
+      :let [kb-state (atom {})]
       :get {{{:flds [surfaceVariant onSurface outlineVariant]} .-colorScheme
              {:flds [titleLarge bodyMedium]} .-textTheme} m/Theme}
       (dialog/vertical-custom-dialog
@@ -58,6 +59,7 @@
                     .children
                     [;; --- Title Input Field ---
                      (text-field/text-field
+                      kb-state
                       {:controller title-ctrl
                        :autofocus true
                        :max-lines 1 ;; Titles are usually single line
@@ -74,6 +76,7 @@
 
                      ;; --- Notes Input Field ---
                      (text-field/text-field
+                      kb-state
                       {:controller notes-ctrl
                        :hint "ᠳᠡᠯᠭᠡᠷᠡᠩᠭᠦᠢ ᠁" ;; Hint text
                        :focus-node focus-node

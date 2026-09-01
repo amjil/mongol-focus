@@ -6,6 +6,8 @@
             ["dart:async" :as async]
             [minii-focus.logic.db :as db]
             [minii-focus.logic.task-actions :as actions]
+            [minii-focus.logic.stream-util :as stream-util]
+            [minii-focus.route-names :as routes]
             [minii-focus.state.store :refer [app-ui-state]]
             [minii-focus.widgets.task-card :as task-card]
             [components.tokens :as tokens]))
@@ -85,9 +87,8 @@
    :context ctx
    :get {{{primary .-primary surface .-surface} .-colorScheme} m/Theme}
    :watch [subtasks (stream
-                     (map (fn [tasks]
-                            (map (fn [task] (.-data task)) tasks)))
-                     (map (fn [[_er _st]] []))
+                     (map stream-util/rows->records)
+                     (map stream-util/empty-on-error)
                      :as-values (db/watch-subtasks parent-task-id))]
    (m/Scaffold.
     .backgroundColor surface
@@ -101,7 +102,7 @@
                                    (-> (db/get-task-with-subtask-counts parent-task-id)
                                        (.then (fn [refreshed]
                                                 (when refreshed
-                                                  (swap! app-ui-state assoc :selected-task (into {} refreshed)))
+                                                  (swap! app-ui-state assoc :selected-task refreshed))
                                                 (m/Navigator.pop ctx))))))
              .actions [(m/IconButton.
                        .icon (m/Icon m/Icons.add_circle_outline)
@@ -146,12 +147,10 @@
                  .padding (m/EdgeInsets.only .right 12.0 .top 20.0 .bottom 20.0)
                  .child
                  (task-card/task-item
-                  {:id         (get subtask "id")
-                   :title      (get subtask "title")
-                   :notes      (get subtask "notes")
-                   :is-done?   (if (or (zero? (get subtask "is_done")) (nil? (get subtask "is_done")))
-                                false true)
-                   :on-tap     (fn []
-                                ;; Store subtask in state and navigate to detail page
-                                (swap! app-ui-state assoc :selected-task (into {} subtask))
-                                (m/Navigator.pushNamed ctx "/task-detail"))}))}))))))))))
+                  {:id (:id subtask)
+                   :title (:title subtask)
+                   :notes (:notes subtask)
+                   :is-done? (:is-done? subtask)
+                   :on-tap (fn []
+                             (swap! app-ui-state assoc :selected-task subtask)
+                             (m/Navigator.pushNamed ctx routes/task-detail))}))}))))))))))

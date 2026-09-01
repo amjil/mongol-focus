@@ -1,0 +1,16 @@
+(ns minii-focus.routes
+  (:require
+   [minii-focus.pages.home :as home]
+   [minii-focus.pages.task-detail :as task-detail-page]
+   [minii-focus.pages.subtasks-list :as subtasks-list-page]
+   [minii-focus.pages.category-management :as category-management-page]))
+
+(defn page-for [name args]
+  (case name
+    "/task-detail" (task-detail-page/task-detail-page)
+    "/subtasks-list" (subtasks-list-page/subtasks-list-page
+                      (get args "parentId")
+                      (get args "parentTitle")
+                      (get args "parentTask"))
+    "/category-management" (category-management-page/category-management-page)
+    (home/home-page)))

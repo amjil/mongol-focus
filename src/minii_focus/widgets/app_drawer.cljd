@@ -2,7 +2,7 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
-            [minii-focus.state.store :refer [app-ui-state]]
+            [minii-focus.state.store :as store]
             [components.tokens :as tokens]))
 
 (defn- drawer-item [{:keys [icon label on-tap bg-color fg-color]}]
@@ -65,7 +65,7 @@
             :bg-color primary
             :fg-color on-surface
            :on-tap (fn []
-                     (swap! app-ui-state assoc :selected-nav-id "settings")
+                     (swap! store/app-ui-state assoc :selected-nav-id store/nav-settings)
                      (.pop (m/Navigator.of ctx)))})
           (drawer-item
            {:icon m/Icons.info_outline

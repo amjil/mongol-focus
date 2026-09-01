@@ -1,0 +1,114 @@
+(ns minii-focus.widgets.category-form-dialog
+  (:require [cljd.flutter :as f]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mgl]
+            [clojure.string :as str]
+            [components.tokens :as tokens]
+            [components.text-field :as text-field]
+            [components.text :as text]
+            [components.dialog :as dialog]
+            [virtual-keyboard.keyboard :as keyboard]))
+
+(defn- filter-duplicate-names [text categories]
+  (if (str/blank? text)
+    []
+    (filter #(str/includes? (str/lower-case (or (:name %) ""))
+                           (str/lower-case text))
+            categories)))
+
+(defn category-form-content
+  "Shared add/edit category form body."
+  [{:keys [controller title-label selected-icon-atom open-icon-picker?
+           categories-to-check results-state temp-text-atom on-icon-tap
+           on-cancel on-save]}]
+  (f/widget
+   :let [kb-state (atom {})]
+   :watch [results results-state
+           selected-icon selected-icon-atom]
+   :get {{{on-surface .-onSurface surface-variant .-surfaceVariant primary .-primary} .-colorScheme
+          {:flds [title-large]} .-textTheme} m/Theme}
+   (dialog/vertical-custom-dialog
+    {:height-factor 0.8
+     :width-factor 1
+     :inset-padding m/EdgeInsets.zero
+     :child
+     (m/Column.
+      .mainAxisSize m/MainAxisSize.max
+      .children
+      [(m/Expanded
+        .child
+        (m/Padding.
+         .padding (m/EdgeInsets.all (tokens/space :m))
+         .child
+         (m/Stack.
+          .children
+          [(m/Row.
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .mainAxisAlignment m/MainAxisAlignment.spaceAround
+            .children
+            [(m/Container
+              .alignment m/Alignment.topCenter
+              .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+              .decoration (m/BoxDecoration
+                           .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
+              .child
+              (if open-icon-picker?
+                (m/Column
+                 .mainAxisSize m/MainAxisSize.min
+                 .children
+                 [(m/IconButton.
+                   .icon (m/Icon. (m/IconData. selected-icon .fontFamily "MaterialIcons")
+                                  .size 32.0
+                                  .color primary)
+                   .onPressed on-icon-tap)
+                  (m/SizedBox. .height (tokens/space :s))
+                  (text/text-block
+                   {:text title-label
+                    :style (.copyWith title-large
+                                      .fontWeight m/FontWeight.bold
+                                      .color on-surface)})])
+                (text/text-block
+                 {:text title-label
+                  :style (.copyWith title-large
+                                    .fontWeight m/FontWeight.bold
+                                    .color on-surface)})))
+             (m/Container
+              .alignment m/Alignment.topCenter
+              .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
+              .decoration (m/BoxDecoration
+                           .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
+              .child
+              (text-field/text-field
+               kb-state
+               {:controller controller
+                :hint "ᠨᠡᠷ᠎ᠡ ᠪᠢᠴᠢᠬᠦ ᠁"
+                :max-lines 1
+                :autofocus true
+                :style (.copyWith title-large
+                                  .fontSize 20.0
+                                  .fontWeight m/FontWeight.normal
+                                  .color on-surface)
+                :on-changed (fn [t]
+                              (reset! temp-text-atom t)
+                              (reset! results-state (filter-duplicate-names t categories-to-check)))}))
+             (if (seq results)
+               (m/Padding.
+                .padding (m/EdgeInsets.only .top 8.0)
+                .child (mgl/MongolText. "ᠡᠢᠮᠦ ᠨᠡᠷ᠎ᠡ ᠎ᠲᠡᠢ ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠨ᠎ᠠ "
+                                        .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0)))
+               (m/SizedBox.shrink))
+             (m/Column
+              .mainAxisSize m/MainAxisSize.min
+              .children
+              [(mgl/MongolTextButton.
+                .onPressed on-cancel
+                .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))
+               (mgl/MongolElevatedButton.
+                .onPressed on-save
+                .child (mgl/MongolText. "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ"))])])
+           (keyboard/candidates nil)])))
+       (keyboard/keyboard
+        {:controller controller
+         :on-changed (fn [t]
+                       (reset! temp-text-atom t)
+                       (reset! results-state (filter-duplicate-names t categories-to-check)))})])})))

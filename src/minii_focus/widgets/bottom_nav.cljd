@@ -2,50 +2,43 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:flutter/services.dart" :as s]
-            [minii-focus.state.store :refer [app-ui-state]]))
+            [minii-focus.state.store :as store]))
+
+(def ^:private nav-index->id
+  {0 store/nav-today
+   1 store/nav-logbook
+   2 store/nav-settings})
+
+(def ^:private nav-id->index
+  {store/nav-today 0
+   store/nav-logbook 1
+   store/nav-settings 2})
 
 (defn main-navigation-bar []
   (f/widget
-   :watch [{:keys [selected-nav-id]} app-ui-state]
+   :watch [{:keys [selected-nav-id]} store/app-ui-state]
    :get {{{bg .-surfaceContainer
            indicator .-secondaryContainer
            active-icon .-onSecondaryContainer} .-colorScheme} m/Theme}
-   
+
    (m/NavigationBar.
     .backgroundColor bg
     .indicatorColor indicator
-    ;; Update index mapping logic
-    .selectedIndex (case selected-nav-id 
-                     "today" 0 
-                     "logbook" 1 
-                     "settings" 2 
-                     0)
-    
-    .onDestinationSelected 
+    .selectedIndex (get nav-id->index selected-nav-id 0)
+    .onDestinationSelected
     (fn [i]
       (s/HapticFeedback.mediumImpact)
-      (swap! app-ui-state assoc :selected-nav-id 
-             (case (int i)
-               0 "today"
-               1 "logbook"
-               2 "settings"
-               "today")))
-    
-    .destinations 
+      (swap! store/app-ui-state assoc :selected-nav-id (get nav-index->id (int i) store/nav-today)))
+    .destinations
     [(m/NavigationDestination.
       .icon (m/Icon. m/Icons.wb_sunny_outlined)
       .selectedIcon (m/Icon. m/Icons.wb_sunny .color active-icon)
-      .label ""
-      )
-      
+      .label "")
      (m/NavigationDestination.
       .icon (m/Icon. m/Icons.auto_stories_outlined)
       .selectedIcon (m/Icon. m/Icons.auto_stories .color active-icon)
-      .label ""
-      )
-     
+      .label "")
      (m/NavigationDestination.
       .icon (m/Icon. m/Icons.settings_outlined)
       .selectedIcon (m/Icon. m/Icons.settings .color active-icon)
-      .label ""
-      )]))) ;; Settings
+      .label "")])))

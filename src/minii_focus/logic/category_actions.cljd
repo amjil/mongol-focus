@@ -2,47 +2,22 @@
   (:require [cljd.flutter :as f]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
-            [components.tokens :as tokens]
-            [components.text-field :as text-field]
-            [virtual-keyboard.keyboard :as keyboard]
             [minii-focus.logic.db :as db]
+            [minii-focus.logic.stream-util :as stream-util]
             [minii-focus.state.store :refer [app-ui-state]]
             [minii-focus.widgets.category :as cat-ui]
+            [minii-focus.widgets.category-form-dialog :as form-dialog]
+            [minii-focus.widgets.confirm-dialog :as confirm]
             [components.dialog :as dialog]
-            [components.text :as text]
             [clojure.string :as str]))
 
-;; --- 1. Delete Confirmation Logic ---
-
-(defn- show-confirm-delete [ctx id name]
-  (m/showDialog
-   .context ctx
-   .builder
-   (fn [ctx]
-     (dialog/vertical-custom-dialog
-      {:title "ᠠᠩᠬᠠᠷ"
-       :height-factor 0.35
-       :width-factor 0.8
-       :body (m/Center.
-              .child (mgl/MongolText. (str "'" name "' ᠠᠩᠭᠢᠯᠠᠯ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ᠎ᠤᠤ ?")
-                                     .style (m/TextStyle. .fontSize 16.0)))
-       :actions [(mgl/MongolTextButton.
-                  .onPressed #(m/Navigator.pop ctx)
-                  .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))
-                 (mgl/MongolElevatedButton.
-                  .style (m/ButtonStyle. .backgroundColor (m/MaterialStateProperty.all m/Colors.red))
-                  .onPressed (fn [] 
-                               (db/delete-category! id)
-                               (m/Navigator.pop ctx))
-                  .child (mgl/MongolText. "ᠤᠰᠠᠳᠬᠠᠬᠤ" .style (m/TextStyle. .color m/Colors.white)))]}))))
-
-;; --- 2. Icon Selection Logic ---
+;; --- Icon Selection ---
 
 (defn- open-icon-picker [ctx on-select]
   (m/showDialog
    .context ctx
-   .builder 
-   (fn [c] 
+   .builder
+   (fn [c]
      (dialog/vertical-custom-dialog
       {:title "ᠳᠦᠷᠰᠦ ᠰᠣᠩᠭᠣᠬᠤ"
        :height-factor 0.5
@@ -54,219 +29,70 @@
                   .onPressed #(m/Navigator.pop c)
                   .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))]}))))
 
-;; --- 2.5 Public: Delete and Add (for management page) ---
+;; --- Delete ---
+
+(defn- show-confirm-delete [ctx id name]
+  (confirm/show!
+   ctx
+   {:title "ᠠᠩᠬᠠᠷ"
+    :message (str "'" name "' ᠠᠩᠭᠢᠯᠠᠯ᠎ᠢ ᠤᠰᠠᠳᠬᠠᠬᠤ᠎ᠤᠤ ?")
+    :on-confirm #(db/delete-category! id)}))
 
 (defn confirm-delete-category! [ctx id name]
   (show-confirm-delete ctx id name))
 
-;; --- 3. Search and Add Category Dialog ---
+;; --- Add / Edit Dialogs ---
 
 (defn open-add-category-dialog [ctx categories selected-icon-code-atom]
   (let [results-state (atom [])
-        temp-text-atom (atom "")] ;; Used to synchronize keyboard input content
+        temp-text-atom (atom "")]
     (m/showDialog
      .context ctx
      .builder
      (fn [ctx]
        (f/widget
         :managed [controller (m/TextEditingController .text "")]
-        :watch [results results-state]
-        :get {{{on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme
-               {:flds [titleLarge]} .-textTheme} m/Theme}
-        (dialog/vertical-custom-dialog
-         {:height-factor 0.8
-          :width-factor 1
-          :inset-padding m/EdgeInsets.zero
-          :child
-          (m/Column.
-           .mainAxisSize m/MainAxisSize.max
-           .children
-           [;; 1. Input Display Area
-            (m/Expanded
-             .child
-             (m/Padding.
-              .padding (m/EdgeInsets.all (tokens/space :m))
-              .child
-              (m/Stack.
-               .children
-               [(m/Row.
-                 .crossAxisAlignment m/CrossAxisAlignment.stretch
-                 .mainAxisAlignment m/MainAxisAlignment.spaceAround
-                 .children
-                 [(m/Container
-                   .alignment m/Alignment.topCenter
-                   .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
-                   .decoration (m/BoxDecoration
-                                .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
-                   .child (text/text-block
-                           {:text "ᠰᠢᠨ᠎ᠡ ᠠᠩᠭᠢᠯᠠᠯ"
-                            :style (.copyWith titleLarge
-                                              .fontWeight m/FontWeight.bold
-                                              .color on-surface)}))
-
-                  (m/Container
-                   .alignment m/Alignment.topCenter
-                   .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
-                   .decoration (m/BoxDecoration
-                                .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
-                   .child
-                   (text-field/text-field
-                    {:controller controller
-                     :hint "ᠨᠡᠷ᠎ᠡ ᠪᠢᠴᠢᠬᠦ ᠁"
-                     :max-lines 1
-                     :autofocus true
-                     :style (.copyWith titleLarge
-                                       .fontSize 20.0
-                                       .fontWeight m/FontWeight.normal
-                                       .color on-surface)
-                     :on-changed (fn [t]
-                                   (reset! temp-text-atom t)
-                                   ;; Also keep the function to search existing categories
-                                   (reset! results-state
-                                           (if (str/blank? t) []
-                                               (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t)) categories))))}))
-
-                  ;; If there's a duplicate name hint (optional)
-                  (if (seq results)
-                    (m/Padding.
-                     .padding (m/EdgeInsets.only .top 8.0)
-                     .child (mgl/MongolText. "ᠡᠢᠮᠦ ᠨᠡᠷ᠎ᠡ ᠎ᠲᠡᠢ ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠨ᠎ᠠ "
-                                             .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0)))
-                    (m/SizedBox.shrink))
-
-                  (m/Column
-                   .mainAxisSize m/MainAxisSize.min
-                   .children
-                   [(mgl/MongolTextButton.
-                     .onPressed #(m/Navigator.pop ctx)
-                     .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))
-
-                    (mgl/MongolElevatedButton.
-                     .onPressed (fn []
-                                  (when-not (str/blank? @temp-text-atom)
-                                    (db/add-category! @temp-text-atom @selected-icon-code-atom (count categories))
-                                    (m/Navigator.pop ctx)))
-                     .child (mgl/MongolText. "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ")) ;; Mongolian: Save
-                    ])])
-
-                ;; 2. Candidates Overlay
-                (keyboard/candidates nil)])))
-
-            ;; 3. Custom Keyboard
-            (keyboard/keyboard
-             {:controller controller
-              :on-changed (fn [t]
-                            (reset! temp-text-atom t)
-                            (reset! results-state
-                                    (if (str/blank? t) []
-                                        (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t)) categories))))})])}))))))
-
-;; --- 3.5 Edit Category Dialog ---
+        (form-dialog/category-form-content
+         {:controller controller
+          :title-label "ᠰᠢᠨ᠎ᠡ ᠠᠩᠭᠢᠯᠠᠯ"
+          :selected-icon-atom selected-icon-code-atom
+          :open-icon-picker? false
+          :categories-to-check categories
+          :results-state results-state
+          :temp-text-atom temp-text-atom
+          :on-cancel #(m/Navigator.pop ctx)
+          :on-save (fn []
+                     (when-not (str/blank? @temp-text-atom)
+                       (db/add-category! @temp-text-atom @selected-icon-code-atom (count categories))
+                       (m/Navigator.pop ctx)))}))))))
 
 (defn open-edit-category-dialog [ctx {:keys [id name icon-code]} categories]
   (let [temp-text-atom (atom (or name ""))
         selected-icon-atom (atom (or icon-code 0xe2a3))
         results-state (atom [])
-        other-cats (remove #(= (get % "id") id) categories)]
+        other-cats (remove #(= (:id %) id) categories)]
     (m/showDialog
      .context ctx
      .builder
      (fn [ctx]
        (f/widget
         :managed [controller (m/TextEditingController .text (or name ""))]
-        :watch [selected-icon selected-icon-atom
-                results results-state]
-        :get {{{on-surface .-onSurface surface-variant .-surfaceVariant primary .-primary} .-colorScheme
-               {:flds [titleLarge]} .-textTheme} m/Theme}
-        (dialog/vertical-custom-dialog
-         {:height-factor 0.8
-          :width-factor 1
-          :inset-padding m/EdgeInsets.zero
-          :child
-          (m/Column.
-           .mainAxisSize m/MainAxisSize.max
-           .children
-           [(m/Expanded
-             .child
-             (m/Padding.
-              .padding (m/EdgeInsets.all (tokens/space :m))
-              .child
-              (m/Stack.
-               .children
-               [(m/Row.
-                 .crossAxisAlignment m/CrossAxisAlignment.stretch
-                 .mainAxisAlignment m/MainAxisAlignment.spaceAround
-                 .children
-                 [(m/Container
-                   .alignment m/Alignment.topCenter
-                   .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
-                   .decoration (m/BoxDecoration
-                                .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
-                   .child
-                   (m/Column
-                    .mainAxisSize m/MainAxisSize.min
-                    .children
-                    [(m/IconButton.
-                      .icon (m/Icon. (m/IconData. selected-icon .fontFamily "MaterialIcons")
-                                     .size 32.0
-                                     .color primary)
-                      .onPressed #(open-icon-picker ctx (fn [code] (reset! selected-icon-atom code))))
-                     (m/SizedBox. .height (tokens/space :s))
-                     (text/text-block
-                      {:text "ᠠᠩᠭᠢᠯᠠᠯ ᠵᠠᠰᠠᠬᠤ"
-                       :style (.copyWith titleLarge
-                                         .fontWeight m/FontWeight.bold
-                                         .color on-surface)})]))
-                  (m/Container
-                   .alignment m/Alignment.topCenter
-                   .padding (m/EdgeInsets.only .top (tokens/space :l) .left (tokens/space :m) .right (tokens/space :m))
-                   .decoration (m/BoxDecoration
-                                .border (m/Border .right (m/BorderSide .color surface-variant .width 1.5)))
-                   .child
-                   (text-field/text-field
-                    {:controller controller
-                     :hint "ᠨᠡᠷ᠎ᠡ ᠪᠢᠴᠢᠬᠦ ᠁"
-                     :max-lines 1
-                     :autofocus true
-                     :style (.copyWith titleLarge
-                                       .fontSize 20.0
-                                       .fontWeight m/FontWeight.normal
-                                       .color on-surface)
-                     :on-changed (fn [t]
-                                   (reset! temp-text-atom t)
-                                   (reset! results-state
-                                           (if (str/blank? t) []
-                                               (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
-                                                       other-cats))))}))
-                  (if (seq results)
-                    (m/Padding.
-                     .padding (m/EdgeInsets.only .top 8.0)
-                     .child (mgl/MongolText. "ᠡᠢᠮᠦ ᠨᠡᠷ᠎ᠡ ᠎ᠲᠡᠢ ᠠᠩᠭᠢᠯᠠᠯ ᠪᠠᠢᠨ᠎ᠠ "
-                                             .style (m/TextStyle. .color m/Colors.orange .fontSize 12.0)))
-                    (m/SizedBox.shrink))
-                  (m/Column
-                   .mainAxisSize m/MainAxisSize.min
-                   .children
-                   [(mgl/MongolTextButton.
-                     .onPressed #(m/Navigator.pop ctx)
-                     .child (mgl/MongolText. "ᠪᠣᠯᠢᠬᠤ"))
-                    (mgl/MongolElevatedButton.
-                     .onPressed (fn []
-                                  (when-not (str/blank? @temp-text-atom)
-                                    (db/update-category! id {:name @temp-text-atom :icon-code @selected-icon-atom})
-                                    (m/Navigator.pop ctx)))
-                     .child (mgl/MongolText. "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ"))])])
-                (keyboard/candidates nil)])))
-            (keyboard/keyboard
-             {:controller controller
-              :on-changed (fn [t]
-                            (reset! temp-text-atom t)
-                            (reset! results-state
-                                    (if (str/blank? t) []
-                                        (filter #(str/includes? (str/lower-case (get % "name" "")) (str/lower-case t))
-                                                other-cats))))})])}))))))
+        (form-dialog/category-form-content
+         {:controller controller
+          :title-label "ᠠᠩᠭᠢᠯᠠᠯ ᠵᠠᠰᠠᠬᠤ"
+          :selected-icon-atom selected-icon-atom
+          :open-icon-picker? true
+          :categories-to-check other-cats
+          :results-state results-state
+          :temp-text-atom temp-text-atom
+          :on-icon-tap #(open-icon-picker ctx (fn [code] (reset! selected-icon-atom code)))
+          :on-cancel #(m/Navigator.pop ctx)
+          :on-save (fn []
+                     (when-not (str/blank? @temp-text-atom)
+                       (db/update-category! id {:name @temp-text-atom :icon-code @selected-icon-atom})
+                       (m/Navigator.pop ctx)))}))))))
 
-;; --- 4. Core: Category Selection Dialog (for Detail Page/Search Page) ---
+;; --- Category Picker ---
 
 (defn show-category-picker [ctx {:keys [current-id on-select]}]
   (m/showDialog
@@ -275,8 +101,8 @@
    (fn [ctx]
      (f/widget
       :watch [categories (stream
-                          (map (fn [rows] (map (fn [row] (.-data row)) rows)))
-                          (map (fn [_] []))
+                          (map stream-util/rows->records)
+                          (map stream-util/empty-on-error)
                           :as-values (db/watch-categories))]
       (dialog/vertical-custom-dialog
        {:title "ᠠᠩᠭᠢᠯᠠᠯ ᠰᠣᠩᠭᠣᠬᠤ"
@@ -291,14 +117,14 @@
                    .onPressed #(m/Navigator.pop ctx)
                    .child (mgl/MongolText. "ᠬᠠᠭᠠᠬᠤ"))]})))))
 
-;; --- 5. Core: Main Page Category Scroll View ---
+;; --- Main Page Category Scroll ---
 
 (defn category-scroll-view []
   (f/widget
    :context ctx
    :watch [categories (stream
-                       (map (fn [rows] (map (fn [row] (.-data row)) rows)))
-                       (map (fn [_] []))
+                       (map stream-util/rows->records)
+                       (map stream-util/empty-on-error)
                        :as-values (db/watch-categories))
            {:keys [selected-category-id]} app-ui-state]
    (cat-ui/category-scroll-layout

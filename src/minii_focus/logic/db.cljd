@@ -3,7 +3,8 @@
             ["package:drift/drift.dart" :as d]
             ["dart:core" :as dc]
             ["dart:async" :as async]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [minii-focus.logic.records :as rec]))
 
 ;; =============================================================================
 ;; 1. Database Instance Management
@@ -263,7 +264,7 @@
                       .readsFrom #{(.-tasks database) (.-categories database)})
           rows (await (.get selectable))]
       (when-let [row (first rows)]
-        (.-data row)))
+        (rec/row->clj row)))
     (throw (ex-info "Database not initialized" {}))))
 
 (defn update-task!
@@ -311,25 +312,22 @@
   ;; IMPORTANT: `get-task-by-id` returns Drift's `TasksData` object (not a map),
   ;; but recurrence cloning logic expects map-like access. Use a customSelect map instead.
   (let [task (await (get-task-with-subtask-counts id))
-        mode (get task "recurrence_mode" 0)]
+        mode (or (:recurrence-mode task) 0)]
     (when (and (true? is-done) (> mode 0))
-      ;; --- Handle recurrence task ---
-      (let [current-due (or (normalize-datetime (get task "due_date"))
+      (let [current-due (or (normalize-datetime (:due-date task))
                             (dc/DateTime.now))
             next-due (cond
-                       (= mode 1) (.add current-due (dc/Duration. .days 1))   ; Daily
-                       (= mode 2) (.add current-due (dc/Duration. .days 7))   ; Weekly
-                       (= mode 3) (add-months current-due 1)                   ; Monthly
+                       (= mode 1) (.add current-due (dc/Duration. .days 1))
+                       (= mode 2) (.add current-due (dc/Duration. .days 7))
+                       (= mode 3) (add-months current-due 1)
                        :else nil)]
         (when next-due
-          ;; Clone a new task to the database
-          (await (add-task! {:title (or (get task "title") "")
-                             :notes (get task "notes")
-                             :category-id (get task "category_id")
-                             :priority (get task "priority")
+          (await (add-task! {:title (or (:title task) "")
+                             :notes (:notes task)
+                             :category-id (:category-id task)
+                             :priority (:priority task)
                              :due-date next-due
                              :recurrence-mode mode}))
-          ;; Return mode so UI can decide whether to toast (we only toast daily).
           mode)))))
 
 (defn delete-task!

@@ -117,10 +117,10 @@
         :else
         (let [cat (nth categories (- idx 2))]
           (category-card
-           {:name (get cat "name")
-            :icon-code (get cat "icon_code")
-            :is-selected (= (get cat "id") current-id)
-            :on-tap #(on-select (get cat "id"))})))))))
+           {:name (:name cat)
+            :icon-code (:icon-code cat)
+            :is-selected (= (:id cat) current-id)
+            :on-tap #(on-select (:id cat))})))))))
 
 ;; --- 5. Main Page: Scroll Component Layout ---
 
@@ -149,11 +149,11 @@
       .itemBuilder
       (fn [_ctx idx]
         (let [cat (nth categories idx)
-              id (get cat "id")
-              name (get cat "name")]
+              id (:id cat)
+              name (:name cat)]
           (category-card
            {:name name
-            :icon-code (get cat "icon_code")
+            :icon-code (:icon-code cat)
             :is-selected (= id selected-id)
             :on-tap #(on-item-tap id)
             :on-long-press #(on-item-long-press id name)})))))]))

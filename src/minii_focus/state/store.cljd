@@ -2,6 +2,10 @@
   (:require
    ["package:shared_preferences/shared_preferences.dart" :as sp]))
 
+(def nav-today "today")
+(def nav-logbook "logbook")
+(def nav-settings "settings")
+
 (def ^:private settings-pref-keys
   {:dark-mode? "settings_dark_mode"
    :notifications? "settings_notifications"
@@ -42,7 +46,7 @@
       nil)))
 
 (defonce app-ui-state
-  (atom {:selected-nav-id "today"
+  (atom {:selected-nav-id nav-today
          :is-sidebar-open false
          :selected-task nil
          ;; Add settings-related state
