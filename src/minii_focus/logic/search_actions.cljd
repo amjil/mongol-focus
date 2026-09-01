@@ -37,10 +37,7 @@
         :get {{{on-surface .-onSurface primary .-primary surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
         :let [font-family (get-in state [:settings :font-family])
               font-size (get-in state [:settings :font-size])
-              text-scale (case font-size
-                           "ᠵᠢᠵᠢᠭ" 0.9
-                           "ᠲᠣᠮᠣ" 1.1
-                           1.0)]
+              text-scale (store/text-scale font-size)]
         
         (dialog/vertical-custom-dialog
          {:title "ᠬᠠᠢᠬᠤ" 

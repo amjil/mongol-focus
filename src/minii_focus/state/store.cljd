@@ -62,3 +62,11 @@
   (swap! app-ui-state assoc-in [:settings key] value)
   (let [prefs (await (.getInstance sp/SharedPreferences))]
     (await (persist-setting! prefs key value))))
+
+(defn text-scale
+  "Map Mongolian font-size setting label to Flutter text scale factor."
+  [font-size]
+  (case font-size
+    "ᠵᠢᠵᠢᠭ" 0.9
+    "ᠲᠣᠮᠣ" 1.1
+    1.0))

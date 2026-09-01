@@ -156,6 +156,8 @@
                   :notes      (get task "notes")
                   :is-done?   (if (or (zero? (get task "is_done")) (nil? (get task "is_done")))
                                 false true)
+                  :subtask-count (get task "subtask_count")
+                  :subtask-done-count (get task "subtask_done_count")
                   :on-tap     (fn []
                                 ;; 1. Store current task object in global state
                                 ;; Convert Dart Map to Clojure map

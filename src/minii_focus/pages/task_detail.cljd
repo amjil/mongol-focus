@@ -69,31 +69,12 @@
    :let [task      (:selected-task state)
          font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
-         text-scale (case font-size
-                      "ᠵᠢᠵᠢᠭ" 0.9
-                      "ᠲᠣᠮᠣ" 1.1
-                      1.0)
+         text-scale (store/text-scale font-size)
          task-id   (get task "id")
          title     (get task "title")
          notes     (get task "notes")
-         due-date-raw (get task "due_date")
-         due-date  (cond
-                     (nil? due-date-raw) nil
-                     (instance? dc/DateTime due-date-raw) due-date-raw
-                     (number? due-date-raw) (let [ts (long due-date-raw)]
-                                              ;; SQLite stores DateTime as Unix timestamp in seconds
-                                              ;; If the number is large (> 10^10), assume it's already in milliseconds
-                                              (if (> ts 10000000000)
-                                                (dc/DateTime.fromMillisecondsSinceEpoch ts)
-                                                (dc/DateTime.fromMillisecondsSinceEpoch (* ts 1000))))
-                     :else nil)
-         ;; --- Reminder Time Block ---
-         reminder-at-raw (get task "reminder_at")
-         ;; Handle time format returned from database (same logic as due-date)
-         reminder-at (cond
-                       (nil? reminder-at-raw) nil
-                       (instance? dc/DateTime reminder-at-raw) reminder-at-raw
-                       :else (dc/DateTime.fromMillisecondsSinceEpoch (* (long reminder-at-raw) 1000)))
+         due-date  (db/normalize-datetime (get task "due_date"))
+         reminder-at (db/normalize-datetime (get task "reminder_at"))
          priority  (get task "priority")
          ;; Extract and resolve category info
          cat-id    (get task "category_id")

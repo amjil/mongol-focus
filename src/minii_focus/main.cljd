@@ -1,13 +1,13 @@
 (ns minii-focus.main
   (:require
    ["package:flutter/material.dart" :as m]
+   ["package:flutter/foundation.dart" :refer [kIsWeb]]
    ["package:flutter_dotenv/flutter_dotenv.dart" :as dotenv]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.input-control :as control]
-   [virtual-keyboard.keyboard-candidates :as kc]
-   [virtual-keyboard.zip-utils :as zip-utils]
-   [virtual-keyboard.fst-reader :as fst-reader]
+   [ime-core.fst-engine :as fst-engine]
+   [ime-core.next-word :as next-word]
    [minii-focus.logic.db :as db]
    [minii-focus.logic.notification :as notification]
    [minii-focus.logic.stats :as stats]
@@ -21,10 +21,10 @@
 (defn init-app! []
   ;; Set input control
   (control/set-control)
-  
-  ;; Load keyboard resources
-  (zip-utils/read-json-from-asset-zip kc/next "assets/next.zip")
-  (fst-reader/ensure-loaded)
+
+  (when-not kIsWeb
+    (await (next-word/ensure-loaded))
+    (await (fst-engine/ensure-loaded)))
 
   (await (notification/init!))
 
@@ -48,10 +48,7 @@
     :let [font-size (get-in state [:settings :font-size])
           font-family (get-in state [:settings :font-family])
           dark-mode? (get-in state [:settings :dark-mode?])
-          text-scale (case font-size
-                       "ᠵᠢᠵᠢᠭ" 0.9
-                       "ᠲᠣᠮᠣ" 1.1
-                       1.0)
+          text-scale (store/text-scale font-size)
           info (merge keyboard-options/keyboard-option
                       {:keyboard/key-cap-border-radius 6
                        :keyboard/font-size (* 18.0 text-scale)

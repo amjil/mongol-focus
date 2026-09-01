@@ -18,10 +18,7 @@
      :watch [state store/app-ui-state]
      :let [font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
-         text-scale (case font-size
-                      "ᠵᠢᠵᠢᠭ" 0.9
-                      "ᠲᠣᠮᠣ" 1.1
-                      1.0)]
+         text-scale (store/text-scale font-size)]
    :get {{{surface .-surface
            onSurface .-onSurface
            onSurfaceVariant .-onSurfaceVariant
@@ -73,7 +70,7 @@
                           (when created-mode
                             (toast/success ctx "ᠳᠠᠷᠠᠭ᠎ᠠ᠎ᠶᠢᠨ ᠳᠠᠪᠲᠠᠯᠲᠠ᠎ᠳᠤ ᠵᠣᠷᠢᠭᠤᠯᠵᠤ ᠡᠭᠦᠰᠬᠡᠭᠰᠡᠨ ᠰᠢᠨ᠎ᠡ ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷ
  ᠳᠠᠭᠠᠭᠠᠯᠭᠠᠪᠤᠷᠢ ")))
-                        (db/update-task! id :is-done v))))
+                        (db/toggle-task-status! id v))))
 
          ;; --- B. Content (IgnorePointer so tap goes to outer GestureDetector) ---
          (m/Expanded.

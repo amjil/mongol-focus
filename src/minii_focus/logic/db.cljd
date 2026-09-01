@@ -169,16 +169,18 @@
 
 (defn toggle-task-status!
   "Toggle task status.
-   If is-done is true, automatically record the completion time (completed_at)."
+   If is-done is true, record completed_at; if false, clear completed_at."
   [id is-done]
   (if-let [^drift/AppDatabase database @db]
-    (let [now (dart:core/DateTime.now)
+    (let [now (dc/DateTime.now)
           query (doto (.update database (.-tasks database))
                   (.where (fn [tbl] (.equals (.-id tbl) id))))]
       (.write query
               (drift/TasksCompanion.
                .isDone (d/Value ^bool is-done)
-               .completedAt (if is-done (d/Value ^dc/DateTime? now) (d/Value.absent)))))
+               .completedAt (if is-done
+                              (d/Value ^dc/DateTime? now)
+                              (d/Value nil)))))
     (throw (ex-info "Database not initialized" {}))))
 
 (defn string-value [v]
@@ -229,7 +231,10 @@
    :is-done
    (fn [v]
      (drift/TasksCompanion.
-      .isDone (d/Value ^bool v)))})
+      .isDone (d/Value ^bool v)
+      .completedAt (if v
+                     (d/Value ^dc/DateTime? (dc/DateTime.now))
+                     (d/Value nil))))})
       
 (defn get-task-by-id [id]
   (if-let [^drift/AppDatabase database @db]
@@ -289,7 +294,7 @@
         safe-day (min (.-day dt) last-day-of-month)]
     (dc/DateTime. final-year final-month safe-day (.-hour dt) (.-minute dt))))
 
-(defn- normalize-datetime
+(defn normalize-datetime
   "CustomSelect may return DateTime or a unix timestamp number.
    We accept seconds (common in drift sqlite) or milliseconds (very large numbers)."
   [v]
@@ -387,7 +392,7 @@
   (if-let [^drift/AppDatabase db-inst @db]
     (.go
      (doto (.delete db-inst (.-categories db-inst))
-       (.where (fn [tbl] (.equals (.-id tbl) (d/Variable. id))))))
+       (.where (fn [tbl] (.equals (.-id tbl) id)))))
     (throw (ex-info "Database not initialized" {}))))
 
 

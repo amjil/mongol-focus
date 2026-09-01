@@ -56,10 +56,7 @@
    :watch [state store/app-ui-state]
    :let [font-family (get-in state [:settings :font-family])
          font-size (get-in state [:settings :font-size])
-         text-scale (case font-size
-                      "ᠵᠢᠵᠢᠭ" 0.9
-                      "ᠲᠣᠮᠣ" 1.1
-                      1.0)]
+         text-scale (store/text-scale font-size)]
    :get {{{primary .-primary on-surface .-onSurface surface-variant .-surfaceVariant} .-colorScheme} m/Theme}
    (m/Padding.
     .padding (m/EdgeInsets.only .right 12.0)
