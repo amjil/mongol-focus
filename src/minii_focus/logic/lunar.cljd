@@ -160,32 +160,34 @@
 ;; =============================================================================
 
 (defn solar->mongol-lunar
-  [^dc/DateTime dt]
-  (let [lunar        (l/Lunar.fromDate dt)
-        year-gan     (.getYearGanIndex lunar)
-        year-zhi     (.getYearZhiIndex lunar)
-        day-gan      (.getDayGanIndex lunar)
-        day-zhi      (.getDayZhiIndex lunar)
-        raw-month    (.getMonth lunar)
-        raw-day      (.getDay lunar)
-        jie-qi-cn    (.getJieQi lunar)
-        haircut-info (get-haircut-info raw-day)]
-    {:solar-date       dt
-     :lunar-year       (.getYear lunar)
-     :lunar-month      (if (< raw-month 0) (- raw-month) raw-month)
-     :is-leap-month?   (< raw-month 0)
-     :lunar-day        raw-day
-     :mgl-year-color   (str (format-gan-zhi year-gan year-zhi) " ᠵᠢᠯ")
-     :mgl-year-element (str (format-element-zodiac year-gan year-zhi) " ᠵᠢᠯ")
-     :mgl-zodiac       (nth zodiac-animals year-zhi)
-     :mgl-month-name   (format-lunar-month raw-month)
-     :mgl-day-name     (format-lunar-day raw-day)
-     :mgl-day-gan-zhi  (str (format-gan-zhi day-gan day-zhi) " ᠡᠳᠦᠷ")
-     :mgl-solar-term   (when (not (empty? jie-qi-cn))
-                         (get solar-terms-map jie-qi-cn))
-     :haircut          haircut-info
-     :grid-cell-label  (or (when (not (empty? jie-qi-cn))
-                             (get solar-terms-map jie-qi-cn))
-                           (if (= raw-day 1)
-                             (format-lunar-month raw-month)
-                             (str raw-day)))}))
+  [dt]
+  (when (some? dt)
+    (let [^dc/DateTime dt dt
+          lunar        (l/Lunar.fromDate dt)
+          year-gan     (.getYearGanIndex lunar)
+          year-zhi     (.getYearZhiIndex lunar)
+          day-gan      (.getDayGanIndex lunar)
+          day-zhi      (.getDayZhiIndex lunar)
+          raw-month    (.getMonth lunar)
+          raw-day      (.getDay lunar)
+          jie-qi-cn    (.getJieQi lunar)
+          haircut-info (get-haircut-info raw-day)]
+      {:solar-date       dt
+       :lunar-year       (.getYear lunar)
+       :lunar-month      (if (< raw-month 0) (- raw-month) raw-month)
+       :is-leap-month?   (< raw-month 0)
+       :lunar-day        raw-day
+       :mgl-year-color   (str (format-gan-zhi year-gan year-zhi) " ᠵᠢᠯ")
+       :mgl-year-element (str (format-element-zodiac year-gan year-zhi) " ᠵᠢᠯ")
+       :mgl-zodiac       (nth zodiac-animals year-zhi)
+       :mgl-month-name   (format-lunar-month raw-month)
+       :mgl-day-name     (format-lunar-day raw-day)
+       :mgl-day-gan-zhi  (str (format-gan-zhi day-gan day-zhi) " ᠡᠳᠦᠷ")
+       :mgl-solar-term   (when (not (empty? jie-qi-cn))
+                           (get solar-terms-map jie-qi-cn))
+       :haircut          haircut-info
+       :grid-cell-label  (or (when (not (empty? jie-qi-cn))
+                               (get solar-terms-map jie-qi-cn))
+                             (if (= raw-day 1)
+                               (format-lunar-month raw-month)
+                               (str raw-day)))})))

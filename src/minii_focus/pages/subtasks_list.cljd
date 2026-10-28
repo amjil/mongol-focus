@@ -153,4 +153,5 @@
                    :is-done? (:is-done? subtask)
                    :on-tap (fn []
                              (swap! app-ui-state assoc :selected-task subtask)
-                             (m/Navigator.pushNamed ctx routes/task-detail))}))}))))))))))
+                             (m/Navigator.pushNamed ctx routes/task-detail)
+                             nil)}))}))))))))))

@@ -22,9 +22,10 @@
 
 (defn date->key
   "Convert DateTime to YYYY-MM-DD string key."
-  [^dc/DateTime dt]
-  (when dt
-    (str (.-year dt) "-" (pad2 (.-month dt)) "-" (pad2 (.-day dt)))))
+  [dt]
+  (when (some? dt)
+    (let [^dc/DateTime dt dt]
+      (str (.-year dt) "-" (pad2 (.-month dt)) "-" (pad2 (.-day dt))))))
 
 (defn extract-task-date
   "Extract the primary DateTime from a task map (due date, reminder, or created-at)."

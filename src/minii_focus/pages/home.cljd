@@ -9,12 +9,21 @@
             [minii-focus.widgets.app-drawer :as drawer]
             [minii-focus.widgets.search-button :as search-button]
             [minii-focus.pages.settings :as settings]
+            [minii-focus.pages.calendar-page :as calendar-page]
             [minii-focus.logic.task-actions :as actions]
             [minii-focus.logic.update :as update]
             ["dart:core" :as dc]))
 
+(defn- nav-shows-search? [selected-nav-id]
+  (not (#{store/nav-settings store/nav-calendar} selected-nav-id)))
+
 (defn- page-body [scroll-controller selected-nav-id]
   (case selected-nav-id
+    "calendar"
+    (m/Container.
+     .key (m/ValueKey. "page-calendar")
+     .child (calendar-page/calendar-page {:embedded? true}))
+
     "today"
     (m/Container.
      .key (m/ValueKey. "page-today")
@@ -46,9 +55,8 @@
     .child
     (m/Scaffold.
      .appBar (m/AppBar.
-              .actions (if (not= selected-nav-id store/nav-settings)
-                         [(search-button/filter-aware-search-button)]
-                         []))
+              .actions (when (nav-shows-search? selected-nav-id)
+                         [(search-button/filter-aware-search-button)]))
      .backgroundColor bg
      .drawer (drawer/main-drawer)
      .body
@@ -61,8 +69,17 @@
        .child (page-body scroll-controller selected-nav-id)))
      .bottomNavigationBar (nav/main-navigation-bar)
      .floatingActionButton
-     (if (= selected-nav-id store/nav-today)
+     (cond
+       (= selected-nav-id store/nav-today)
        (fab/task-fab
         {:scroll-controller scroll-controller
          :on-pressed (fn [] (actions/open-task-editor ctx))})
-       (m/SizedBox.shrink))))))
+
+       (= selected-nav-id store/nav-calendar)
+       (f/widget
+        :watch [{:keys [selected-date]} calendar-page/calendar-ui-state]
+        (m/FloatingActionButton.
+         .onPressed #(calendar-page/show-add-task-for-date-dialog! ctx selected-date)
+         .child (m/Icon. m/Icons.add)))
+
+       :else (m/SizedBox.shrink))))))

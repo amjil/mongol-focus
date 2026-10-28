@@ -5,14 +5,16 @@
             [minii-focus.state.store :as store]))
 
 (def ^:private nav-index->id
-  {0 store/nav-today
-   1 store/nav-logbook
-   2 store/nav-settings})
+  {0 store/nav-calendar
+   1 store/nav-today
+   2 store/nav-logbook
+   3 store/nav-settings})
 
 (def ^:private nav-id->index
-  {store/nav-today 0
-   store/nav-logbook 1
-   store/nav-settings 2})
+  {store/nav-calendar 0
+   store/nav-today 1
+   store/nav-logbook 2
+   store/nav-settings 3})
 
 (defn main-navigation-bar []
   (f/widget
@@ -28,9 +30,13 @@
     .onDestinationSelected
     (fn [i]
       (s/HapticFeedback.mediumImpact)
-      (swap! store/app-ui-state assoc :selected-nav-id (get nav-index->id (int i) store/nav-today)))
+      (swap! store/app-ui-state assoc :selected-nav-id (get nav-index->id (int i) store/nav-calendar)))
     .destinations
     [(m/NavigationDestination.
+      .icon (m/Icon. m/Icons.calendar_month_outlined)
+      .selectedIcon (m/Icon. m/Icons.calendar_month .color active-icon)
+      .label "")
+     (m/NavigationDestination.
       .icon (m/Icon. m/Icons.wb_sunny_outlined)
       .selectedIcon (m/Icon. m/Icons.wb_sunny .color active-icon)
       .label "")

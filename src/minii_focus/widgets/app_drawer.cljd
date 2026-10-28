@@ -3,7 +3,6 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.state.store :as store]
-            [minii-focus.route-names :as routes]
             [components.tokens :as tokens]))
 
 (defn- drawer-item [{:keys [icon label on-tap bg-color fg-color]}]
@@ -66,8 +65,8 @@
             :bg-color primary
             :fg-color on-surface
             :on-tap (fn []
-                      (.pop (m/Navigator.of ctx))
-                      (m/Navigator.pushNamed ctx routes/calendar))})
+                      (swap! store/app-ui-state assoc :selected-nav-id store/nav-calendar)
+                      (.pop (m/Navigator.of ctx)))})
           (drawer-item
            {:icon m/Icons.settings_outlined
             :label "ᠲᠣᠬᠢᠷᠠᠭ᠎ᠠ"

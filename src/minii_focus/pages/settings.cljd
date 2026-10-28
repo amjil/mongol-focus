@@ -112,7 +112,7 @@
          [{:title "ᠠᠩᠭᠢᠯᠠᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ"
            :leading m.Icons/folder_special
            :show-arrow? true
-           :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management"))}])
+           :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management") nil)}])
 
         ;; --- Group 2: Interface Preferences ---
         (sett/settings-section

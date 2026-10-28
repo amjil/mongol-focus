@@ -2,6 +2,7 @@
   (:require
    ["package:shared_preferences/shared_preferences.dart" :as sp]))
 
+(def nav-calendar "calendar")
 (def nav-today "today")
 (def nav-logbook "logbook")
 (def nav-settings "settings")

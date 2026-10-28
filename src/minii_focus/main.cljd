@@ -3,7 +3,6 @@
    ["package:flutter/material.dart" :as m]
    ["package:flutter/foundation.dart" :refer [kIsWeb]]
    ["package:flutter_dotenv/flutter_dotenv.dart" :as dotenv]
-   ["package:cljd_mongol_focus/route_generator.dart" :as route-gen]
    [cljd.flutter :as f]
    [virtual-keyboard.options :as keyboard-options]
    [virtual-keyboard.input-control :as control]
@@ -13,6 +12,7 @@
    [minii-focus.logic.notification :as notification]
    [minii-focus.logic.stats :as stats]
    [minii-focus.pages.home :as home]
+   [minii-focus.routes :as routes]
    [minii-focus.state.store :as store]))
 
 (defn- app-theme [font-family dark?]
@@ -69,4 +69,7 @@
                    .data (.copyWith media .textScaleFactor text-scale)
                    .child child)))
      .home (home/home-page)
-     .onGenerateRoute route-gen/appOnGenerateRoute))))
+     .onGenerateRoute (fn [settings]
+                        (m/MaterialPageRoute
+                         .builder (fn [_]
+                                    (routes/page-for (.-name settings) (.-arguments settings)))))))))

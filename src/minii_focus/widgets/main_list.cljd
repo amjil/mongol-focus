@@ -141,4 +141,5 @@
                   :subtask-done-count (:subtask-done-count task)
                   :on-tap (fn []
                             (swap! store/app-ui-state assoc :selected-task task)
-                            (m/Navigator.pushNamed ctx routes/task-detail))}))})))))))))
+                            (m/Navigator.pushNamed ctx routes/task-detail)
+                            nil)}))})))))))))
