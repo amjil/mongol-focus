@@ -1,0 +1,89 @@
+(ns minii-focus.logic.anniversary
+  (:require ["dart:core" :as dc]
+            ["package:lunar/lunar.dart" :as l]))
+
+;; =============================================================================
+;; 1. Anniversary Data Structure Spec & Mock Store
+;; =============================================================================
+
+;; {:id "ann-1"
+;;  :title "ᠡᠵᠢ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+;;  :lunar-month 5
+;;  :lunar-day 15
+;;  :type :birthday | :memorial | :festival}
+
+(defonce mock-anniversaries
+  (atom
+   [{:id "ann-1"
+     :title "ᠡᠵᠢ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+     :lunar-month 5
+     :lunar-day 15
+     :type :birthday}
+    {:id "ann-2"
+     :title "ᠠᠪᠤ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+     :lunar-month 8
+     :lunar-day 9
+     :type :birthday}
+    {:id "ann-3"
+     :title "ᠵᠢᠯ ᠦᠨ ᠣᠢ (ᠳᠤᠷᠠᠰᠬᠠᠯ)"
+     :lunar-month 12
+     :lunar-day 23
+     :type :memorial}]))
+
+;; =============================================================================
+;; 2. Lunar -> Solar Reverse Calculation Engine
+;; =============================================================================
+
+(defn- pad2 [n]
+  (let [s (str n)]
+    (if (< n 10) (str "0" s) s)))
+
+(defn- solar-date-key
+  [^dc/DateTime dt]
+  (str (.-year dt) "-" (pad2 (.-month dt)) "-" (pad2 (.-day dt))))
+
+(defn- days-in-solar-year [solar-year]
+  (if (and (= 0 (mod solar-year 4))
+           (or (not= 0 (mod solar-year 100))
+               (= 0 (mod solar-year 400))))
+    366
+    365))
+
+(defn lunar-date->solar
+  "Given a Gregorian solar year and lunar month/day, return matching DateTime or nil."
+  [solar-year lunar-month lunar-day]
+  (let [start-dt (dc/DateTime. solar-year 1 1)
+        days-in-y (days-in-solar-year solar-year)]
+    (loop [offset 0]
+      (if (>= offset days-in-y)
+        nil
+        (let [dt (.add start-dt (dc/Duration. .days offset))
+              lunar-obj (l/Lunar.fromDate dt)
+              m (.getMonth lunar-obj)
+              abs-m (if (< m 0) (- m) m)
+              d (.getDay lunar-obj)]
+          (if (and (= abs-m lunar-month) (= d lunar-day))
+            dt
+            (recur (inc offset))))))))
+
+(defn get-anniversaries-for-year
+  "Calculate solar dates for all lunar anniversaries in a given solar year."
+  [solar-year anniversary-list]
+  (reduce
+   (fn [acc ann]
+     (if-let [solar-dt (lunar-date->solar solar-year (:lunar-month ann) (:lunar-day ann))]
+       (conj acc (assoc ann :solar-date solar-dt :solar-year solar-year))
+       acc))
+   []
+   anniversary-list))
+
+(defn anniversaries-by-date-key
+  "Build {'YYYY-MM-DD' [anniversary-maps...]} for a solar year."
+  [solar-year anniversary-list]
+  (let [computed (get-anniversaries-for-year solar-year anniversary-list)]
+    (reduce
+     (fn [m ann]
+       (update m (solar-date-key (:solar-date ann))
+               (fn [v] (conj (or v []) ann))))
+     {}
+     computed)))

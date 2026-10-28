@@ -3,6 +3,7 @@
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mgl]
             [minii-focus.state.store :as store]
+            [minii-focus.route-names :as routes]
             [components.tokens :as tokens]))
 
 (defn- drawer-item [{:keys [icon label on-tap bg-color fg-color]}]
@@ -60,6 +61,14 @@
          .crossAxisAlignment m/CrossAxisAlignment.stretch
          .children
          [(drawer-item
+           {:icon m/Icons.calendar_month_outlined
+            :label "ᠮᠤᠩᠭᠤᠯ ᠬᠤᠭᠠᠨᠯᠢ"
+            :bg-color primary
+            :fg-color on-surface
+            :on-tap (fn []
+                      (.pop (m/Navigator.of ctx))
+                      (m/Navigator.pushNamed ctx routes/calendar))})
+          (drawer-item
            {:icon m/Icons.settings_outlined
             :label "ᠲᠣᠬᠢᠷᠠᠭ᠎ᠠ"
             :bg-color primary

@@ -1,9 +1,11 @@
 (ns minii-focus.routes
   (:require
+   [minii-focus.route-names :as r]
    [minii-focus.pages.home :as home]
    [minii-focus.pages.task-detail :as task-detail-page]
    [minii-focus.pages.subtasks-list :as subtasks-list-page]
-   [minii-focus.pages.category-management :as category-management-page]))
+   [minii-focus.pages.category-management :as category-management-page]
+   [minii-focus.pages.calendar-page :as cal-page]))
 
 (defn page-for [name args]
   (case name
@@ -13,4 +15,5 @@
                       (get args "parentTitle")
                       (get args "parentTask"))
     "/category-management" (category-management-page/category-management-page)
+    r/calendar (cal-page/calendar-page)
     (home/home-page)))

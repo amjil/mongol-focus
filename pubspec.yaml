@@ -53,6 +53,7 @@ dependencies:
   package_info_plus: ^9.0.0
   url_launcher: ^6.3.2
   sqlite3_flutter_libs: ^0.5.41
+  lunar: ^1.6.1
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,191 @@
+(ns minii-focus.logic.lunar
+  (:require ["dart:core" :as dc]
+            ["package:lunar/lunar.dart" :as l]))
+
+;; =============================================================================
+;; 1. Traditional Mongolian Calendar Dictionaries
+;; =============================================================================
+
+(def zodiac-animals
+  ["ᠬᠤᠯᠤᠭᠠᠨ᠎ᠠ" ; 0: Rat
+   "ᠦᠬᠡᠷ"     ; 1: Ox
+   "ᠪᠠᠷᠰ"     ; 2: Tiger
+   "ᠲᠠᠤᠯᠠᠢ"   ; 3: Rabbit
+   "ᠯᠤᠤ"      ; 4: Dragon
+   "ᠮᠤᠭᠠᠢ"    ; 5: Snake
+   "ᠮᠤᠷᠢ"     ; 6: Horse
+   "ᠬᠤᠨᠢ"     ; 7: Sheep
+   "ᠪᠡᠴᠢᠨ"    ; 8: Monkey
+   "ᠲᠠᠬᠢᠶ᠎ᠠ"  ; 9: Rooster
+   "ᠨᠤᠬᠠᠢ"    ; 10: Dog
+   "ᠭᠠᠬᠠᠢ"])  ; 11: Pig
+
+(def heavenly-stems-colors
+  ["ᠬᠦᠬᠡ"      ; 0: Jia (Blue)
+   "ᠬᠦᠬᠡᠭᠴᠢᠨ"  ; 1: Yi (Light Blue)
+   "ᠤᠯᠠᠭᠠᠨ"    ; 2: Bing (Red)
+   "ᠤᠯᠠᠭᠠᠭᠴᠢᠨ" ; 3: Ding (Light Red)
+   "ᠰᠢᠷ᠎ᠠ"     ; 4: Wu (Yellow)
+   "ᠰᠢᠷᠠᠭᠴᠢᠨ"  ; 5: Ji (Light Yellow)
+   "ᠴᠠᠭᠠᠨ"     ; 6: Geng (White)
+   "ᠴᠠᠭᠠᠭᠴᠢᠨ"  ; 7: Xin (Light White)
+   "ᠬᠠᠷ᠎ᠠ"     ; 8: Ren (Black)
+   "ᠬᠠᠷᠠᠭᠴᠢᠨ"]) ; 9: Gui (Light Black)
+
+(def five-elements
+  ["ᠮᠤᠳᠤᠨ"  ; Wood
+   "ᠭᠠᠯ"    ; Fire
+   "ᠰᠢᠷᠤᠢ"  ; Earth
+   "ᠲᠡᠮᠦᠷ"  ; Metal
+   "ᠤᠰᠤᠨ"]) ; Water
+
+(def lunar-months
+  {1  "ᠴᠠᠭᠠᠨ ᠰᠠᠷ᠎ᠠ"
+   2  "ᠬᠤᠶᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   3  "ᠭᠤᠷᠪᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   4  "ᠲᠦᠷᠪᠡᠳᠦᠭᠡᠷ ᠰᠠᠷ᠎ᠠ"
+   5  "ᠲᠠᠪᠤᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   6  "ᠵᠢᠷᠭᠤᠭᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   7  "ᠳᠤᠯᠤᠭᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   8  "ᠨᠠᠢᠮᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   9  "ᠶᠢᠰᠦᠳᠦᠭᠡᠷ ᠰᠠᠷ᠎ᠠ"
+   10 "ᠠᠷᠪᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"
+   11 "ᠠᠷᠪᠠᠨ ᠨᠢᠭᠡᠳᠦᠭᠡᠷ ᠰᠠᠷ᠎ᠠ"
+   12 "ᠠᠷᠪᠠᠨ ᠬᠤᠶᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ"})
+
+;; Keys use standard solar term identifiers returned by the Dart lunar package
+(def solar-terms-map
+  {"立春" "ᠬᠠᠪᠤᠷ ᠤᠨ ᠡᠬᠢᠨ"
+   "雨水" "ᠬᠤᠷ᠎ᠠ ᠤᠰᠤ"
+   "惊蛰" "ᠢᠴᠡᠭᠡ ᠬᠦᠳᠡᠯᠬᠦ"
+   "春分" "ᠬᠠᠪᠤᠷ ᠤᠨ ᠬᠠᠭᠠᠰ"
+   "清明" "ᠬᠠᠨᠰᠢ"
+   "谷雨" "ᠲᠠᠷᠢᠶᠠᠨ ᠬᠤᠷ᠎ᠠ"
+   "立夏" "ᠵᠤᠨ ᠤ ᠡᠬᠢᠨ"
+   "小满" "ᠪᠠᠭ᠎ᠠ ᠳᠦᠭᠦᠷᠡᠩ"
+   "芒种" "ᠰᠠᠬᠠᠯᠲᠤ ᠲᠠᠷᠢᠶ᠎ᠠ"
+   "夏至" "ᠵᠤᠨ ᠤ ᠲᠤᠶᠢᠯ"
+   "小暑" "ᠪᠠᠭ᠎ᠠ ᠬᠠᠯᠠᠭᠤᠨ"
+   "大暑" "ᠶᠡᠬᠡ ᠬᠠᠯᠠᠭᠤᠨ"
+   "立秋" "ᠨᠠᠮᠤᠷ ᠤᠨ ᠡᠬᠢᠨ"
+   "处暑" "ᠬᠠᠯᠠᠭᠤᠨ ᠵᠤᠭᠰᠤᠬᠤ"
+   "白露" "ᠴᠠᠭᠠᠨ ᠰᠢᠭᠦᠳᠡᠷᠢ"
+   "秋分" "ᠨᠠᠮᠤᠷ ᠤᠨ ᠬᠠᠭᠠᠰ"
+   "寒露" "ᠬᠦᠢᠲᠡᠨ ᠰᠢᠭᠦᠳᠡᠷᠢ"
+   "霜降" "ᠬᠢᠷᠠᠭᠤ ᠤᠨᠠᠬᠤ"
+   "立冬" "ᠡᠪᠦᠯ ᠦᠨ ᠡᠬᠢᠨ"
+   "小雪" "ᠪᠠᠭ᠎ᠠ ᠴᠠᠰᠤ"
+   "大雪" "ᠶᠡᠬᠡ ᠴᠠᠰᠤ"
+   "冬至" "ᠡᠪᠦᠯ ᠦᠨ ᠲᠤᠶᠢᠯ"
+   "小寒" "ᠪᠠᠭ᠎ᠠ ᠬᠦᠢᠲᠡᠨ"
+   "大寒" "ᠶᠡᠬᠡ ᠬᠦᠢᠲᠡᠨ"})
+
+;; =============================================================================
+;; 2. Haircut Auspiciousness Dictionary (Day 1 to 30)
+;; =============================================================================
+
+(def haircut-days-map
+  {1  {:good? false :desc "ᠨᠠᠰᠤ ᠪᠤᠭᠤᠨᠢᠰᠤᠨ᠎ᠠ"}            ; Shortens life
+   2  {:good? false :desc "ᠬᠡᠯᠡ ᠠᠮᠠ᠂ ᠬᠡᠷᠡᠭᠦᠯ ᠲᠡᠮᠡᠴᠡᠯ ᠢᠷᠡᠨ᠎ᠡ"} ; Invites gossip and disputes
+   3  {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠪᠠᠶᠠᠯᠢᠭ ᠲᠡᠭᠦᠯᠳᠡᠷ ᠪᠤᠯᠤᠨ᠎ᠠ"}  ; Brings wealth and abundance
+   4  {:good? true  :desc "ᠪᠡᠶ᠎ᠡ ᠡᠷᠬᠡᠲᠡᠨ ᠦ ᠬᠦᠴᠦ ᠰᠠᠶᠢᠵᠢᠷᠠᠨ᠎ᠠ"}  ; Improves physical strength
+   5  {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠠᠷᠪᠢᠵᠢᠨ᠎ᠠ"}               ; Multiplies property and livestock
+   6  {:good? true  :desc "ᠦᠩᠭᠡ ᠵᠢᠰᠦ ᠰᠠᠶᠢᠵᠢᠷᠠᠨ᠎ᠠ"}           ; Improves complexion and appearance
+   7  {:good? false :desc "ᠬᠡᠯᠡ ᠠᠮᠠ᠂ ᠬᠡᠷᠡᠭᠦᠯ ᠲᠠᠰᠤᠷᠠᠬᠤ ᠦᠭᠡᠢ"}  ; Endless legal and verbal disputes
+   8  {:good? true  :desc "ᠨᠠᠰᠤ ᠤᠷᠲᠤᠰᠤᠨ᠎ᠠ"}                  ; Promotes longevity
+   9  {:good? true  :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠦᠭᠡᠢ᠂ ᠰᠠᠶᠢᠨ"}         ; Free from illness, auspicious
+   10 {:good? true  :desc "ᠡᠷᠴᠢ ᠬᠦᠴᠦ ᠶᠡᠬᠡᠰᠦᠨ᠎ᠡ"}             ; Increases vitality and energy
+   11 {:good? true  :desc "ᠤᠶᠤᠨ ᠤᠬᠠᠭᠠᠨ ᠬᠤᠷᠴᠠ ᠪᠤᠯᠤᠨ᠎ᠠ"}        ; Sharpens intelligence
+   12 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠢᠷᠡᠨ᠎ᠡ"}             ; Prone to illness
+   13 {:good? true  :desc "ᠵᠢᠷᠭᠠᠯ ᠢᠷᠡᠨ᠎ᠡ᠂ ᠦᠯᠵᠡᠶᠢᠲᠡᠢ"}         ; Brings happiness and good fortune
+   14 {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠠᠷᠪᠢᠵᠢᠨ᠎ᠠ"}               ; Abundant wealth
+   15 {:good? true  :desc "ᠦᠯᠵᠡᠶᠢᠲᠡᠢ ᠰᠠᠶᠢᠨ"}                 ; Greatly auspicious
+   16 {:good? false :desc "ᠰᠠᠭᠠᠳ ᠲᠤᠳᠬᠠᠷ ᠤᠴᠠᠷᠠᠨ᠎ᠠ"}            ; Encounters obstacles
+   17 {:good? false :desc "ᠦᠩᠭᠡ ᠵᠢᠰᠦ ᠳᠤᠷᠤᠶᠢᠲᠠᠨ᠎ᠠ"}            ; Weakens complexion
+   18 {:good? false :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠤᠨ ᠭᠠᠷᠵᠠ ᠲᠠᠢ"}            ; Loss of wealth and property
+   19 {:good? true  :desc "ᠰᠠᠶᠢᠨ ᠨᠦᠬᠦᠷ ᠲᠡᠢ ᠤᠴᠠᠷᠠᠨ᠎ᠠ"}         ; Meets a noble friend
+   20 {:good? false :desc "ᠦᠯᠦᠰᠴᠦ ᠤᠮᠳᠠᠭᠠᠰᠤᠨ᠎ᠠ"}              ; Suffers hunger and thirst
+   21 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠢᠷᠡᠨ᠎ᠡ"}                   ; Invites sickness
+   22 {:good? true  :desc "ᠢᠳᠡᠭᠡ ᠤᠮᠳᠠᠭ᠎ᠠ ᠡᠯᠪᠡᠭ ᠤᠯᠳᠠᠨ᠎ᠠ"}      ; Abundant food and drink
+   23 {:good? true  :desc "ᠡᠳ᠋ ᠡᠳ᠋ᠯᠡᠯ᠂ ᠨᠡᠷ᠎ᠡ ᠬᠦᠨᠳᠦ ᠤᠯᠳᠠᠨ᠎ᠠ"}   ; Gains wealth and reputation
+   24 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠢᠷᠡᠨ᠎ᠡ"}             ; Prone to sickness
+   25 {:good? false :desc "ᠨᠢᠳᠦ ᠪᠦᠷᠦᠯᠵᠡᠨ᠎ᠡ"}                 ; Blurs vision
+   26 {:good? true  :desc "ᠵᠢᠷᠭᠠᠯ ᠦᠷᠭᠦᠯᠵᠢᠳᠡ ᠢᠷᠡᠨ᠎ᠡ"}          ; Continuous joy and blessings
+   27 {:good? true  :desc "ᠦᠯᠵᠡᠶᠢᠲᠡᠢ ᠰᠠᠶᠢᠨ"}                 ; Auspicious and fortunate
+   28 {:good? false :desc "ᠬᠡᠷᠡᠭᠦᠯ ᠲᠡᠮᠡᠴᠡᠯ ᠢᠷᠡᠨ᠎ᠡ"}           ; Causes arguments and conflict
+   29 {:good? false :desc "ᠰᠦᠯᠳᠡ ᠲᠡᠨᠦᠵᠦ ᠤᠳᠤᠨ᠎ᠠ"}             ; Wandering spirit / loss of vitality
+   30 {:good? false :desc "ᠡᠷᠯᠢᠭ ᠯᠤᠭ᠎ᠠ ᠤᠴᠠᠷᠠᠨ᠎ᠠ᠂ ᠮᠠᠰᠢ ᠮᠠᠭᠤ"}}) ; Extremely inauspicious day
+
+;; =============================================================================
+;; 3. Formatting & Helper Functions
+;; =============================================================================
+
+(defn format-gan-zhi
+  [gan-idx zhi-idx]
+  (let [color  (nth heavenly-stems-colors gan-idx "")
+        animal (nth zodiac-animals zhi-idx "")]
+    (str color " " animal)))
+
+(defn format-element-zodiac
+  [gan-idx zhi-idx]
+  (let [element (nth five-elements (quot gan-idx 2) "")
+        animal  (nth zodiac-animals zhi-idx "")]
+    (str element " " animal)))
+
+(defn format-lunar-month
+  [month-int]
+  (let [is-leap (< month-int 0)
+        abs-m   (if is-leap (- month-int) month-int)
+        m-name  (get lunar-months abs-m (str abs-m))]
+    (if is-leap
+      (str "ᠢᠯᠡᠭᠦᠦ " m-name)
+      m-name)))
+
+(defn format-lunar-day
+  [day-int]
+  (if (<= day-int 15)
+    (str "ᠰᠢᠨ᠎ᠡ ᠶᠢᠨ " day-int)
+    (str day-int)))
+
+(defn get-haircut-info
+  [day-int]
+  (let [info (get haircut-days-map day-int {:good? false :desc ""})]
+    (assoc info
+           :status-label (if (:good? info) "ᠰᠠᠶᠢᠨ" "ᠮᠠᠭᠤ")
+           :full-text    (str "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ: " (:desc info)
+                              " (" (if (:good? info) "ᠰᠠᠶᠢᠨ" "ᠮᠠᠭᠤ") ")"))))
+
+;; =============================================================================
+;; 4. Main Public API: DateTime -> Mongolian Calendar Data Map
+;; =============================================================================
+
+(defn solar->mongol-lunar
+  [^dc/DateTime dt]
+  (let [lunar        (l/Lunar.fromDate dt)
+        year-gan     (.getYearGanIndex lunar)
+        year-zhi     (.getYearZhiIndex lunar)
+        day-gan      (.getDayGanIndex lunar)
+        day-zhi      (.getDayZhiIndex lunar)
+        raw-month    (.getMonth lunar)
+        raw-day      (.getDay lunar)
+        jie-qi-cn    (.getJieQi lunar)
+        haircut-info (get-haircut-info raw-day)]
+    {:solar-date       dt
+     :lunar-year       (.getYear lunar)
+     :lunar-month      (if (< raw-month 0) (- raw-month) raw-month)
+     :is-leap-month?   (< raw-month 0)
+     :lunar-day        raw-day
+     :mgl-year-color   (str (format-gan-zhi year-gan year-zhi) " ᠵᠢᠯ")
+     :mgl-year-element (str (format-element-zodiac year-gan year-zhi) " ᠵᠢᠯ")
+     :mgl-zodiac       (nth zodiac-animals year-zhi)
+     :mgl-month-name   (format-lunar-month raw-month)
+     :mgl-day-name     (format-lunar-day raw-day)
+     :mgl-day-gan-zhi  (str (format-gan-zhi day-gan day-zhi) " ᠡᠳᠦᠷ")
+     :mgl-solar-term   (when (not (empty? jie-qi-cn))
+                         (get solar-terms-map jie-qi-cn))
+     :haircut          haircut-info
+     :grid-cell-label  (or (when (not (empty? jie-qi-cn))
+                             (get solar-terms-map jie-qi-cn))
+                           (if (= raw-day 1)
+                             (format-lunar-month raw-month)
+                             (str raw-day)))}))

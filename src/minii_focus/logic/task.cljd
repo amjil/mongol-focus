@@ -1,7 +1,50 @@
 (ns minii-focus.logic.task
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            ["dart:core" :as dc]))
 
 ;; --- Pure Functions: Not dependent on any UI framework ---
+
+(defn- pad2 [n]
+  (let [s (str n)]
+    (if (< n 10) (str "0" s) s)))
+
+(defn- normalize-dt
+  "Normalize Drift/SQLite date values to DateTime (seconds or ms epoch, or DateTime)."
+  [v]
+  (cond
+    (nil? v) nil
+    (instance? dc/DateTime v) v
+    (number? v) (let [ts (long v)]
+                  (if (> ts 10000000000)
+                    (dc/DateTime.fromMillisecondsSinceEpoch ts)
+                    (dc/DateTime.fromMillisecondsSinceEpoch (* ts 1000))))
+    :else nil))
+
+(defn date->key
+  "Convert DateTime to YYYY-MM-DD string key."
+  [^dc/DateTime dt]
+  (when dt
+    (str (.-year dt) "-" (pad2 (.-month dt)) "-" (pad2 (.-day dt)))))
+
+(defn extract-task-date
+  "Extract the primary DateTime from a task map (due date, reminder, or created-at)."
+  [task]
+  (normalize-dt (or (:due-date task)
+                    (:dueDate task)
+                    (:reminder-at task)
+                    (:created-at task))))
+
+(defn group-tasks-by-date-key
+  "Group tasks into {'YYYY-MM-DD' [task1 task2 ...]} for O(1) calendar lookup."
+  [tasks]
+  (reduce
+   (fn [acc task]
+     (if-let [dt (extract-task-date task)]
+       (let [k (date->key dt)]
+         (update acc k (fn [v] (conj (or v []) task))))
+       acc))
+   {}
+   tasks))
 
 (defn mark-done [items id]
   (mapv (fn [item]

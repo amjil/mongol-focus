@@ -1,10 +1,12 @@
 (ns minii-focus.logic.task-actions
   (:require
+   [clojure.string :as str]
    [minii-focus.widgets.input-dialog :as input-dialog]
    [minii-focus.widgets.confirm-dialog :as confirm]
    [minii-focus.logic.db :as db]
    [minii-focus.logic.records :as rec]
    [minii-focus.state.store :as store]
+   ["dart:core" :as dc]
    ["package:flutter/material.dart" :as m]))
 
 (defn open-task-editor
@@ -55,3 +57,16 @@
                   (db/delete-task! id)
                   (when editor-ctx (m/Navigator.pop editor-ctx))
                   (when-not editor-ctx (m/Navigator.pop ctx)))}))
+
+(defn toggle-task!
+  "Toggle completion for a task map from the DB stream."
+  [task]
+  (let [id (:id task)
+        done? (rec/task-done? task)]
+    (db/toggle-task-status! id (not done?))))
+
+(defn add-task!
+  "Create a task with optional due date (used by calendar FAB dialog)."
+  [title ^dc/DateTime due-date]
+  (when-not (str/blank? (.trim title))
+    (db/add-task! {:title (.trim title) :due-date due-date})))
