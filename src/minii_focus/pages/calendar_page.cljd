@@ -96,6 +96,17 @@
                  next-m (dc/DateTime. (.-year cur) (+ (.-month cur) delta) 1)]
              (assoc st :current-month next-m)))))
 
+(defn handle-calendar-vertical-swipe!
+  "Switch month when user swipes vertically on the calendar card.
+   Swipe up (negative velocity) -> next month (+1);
+   Swipe down (positive velocity) -> previous month (-1)."
+  [^m/DragEndDetails details]
+  (let [vy (or (.-primaryVelocity details) 0.0)]
+    (cond
+      (< vy -180.0) (shift-month! 1)
+      (> vy 180.0)  (shift-month! -1)
+      :else         nil)))
+
 (defn jump-to-today!
   []
   (let [now (dc/DateTime.now)
@@ -154,8 +165,14 @@
                 .blurRadius 12.0
                 .offset (m/Offset. 0.0 4.0))]))
 
+(defn- adaptive-dialog-height
+  "Calculate safe dialog height based on screen height to avoid vertical overflow."
+  [ctx]
+  (let [screen-h (.-height (m/MediaQuery.sizeOf ctx))]
+    (.clamp (* screen-h 0.62) 300.0 440.0)))
+
 ;; =============================================================================
-;; 3. Dialogs (Add Task + Elder-Friendly Large-Font Detail Popups)
+;; 3. Dialogs (Add Task + Elder-Friendly Large-Font Detail Popups, Overflow-Safe)
 ;; =============================================================================
 
 (defn show-add-task-for-date-dialog!
@@ -168,9 +185,8 @@
        (mg/MongolAlertDialog.
         .title (mg/MongolText. "ᠰᠢᠨ᠎ᠡ ᠠᠵᠢᠯ ᠨᠡᠮᠡᠬᠦ"
                                .style (m/TextStyle. .fontFamily default-font .fontSize 20.0 .fontWeight m/FontWeight.bold))
-        .content (m/SizedBox.
-                  .height 200.0
-                  .width 90.0
+        .content (m/ConstrainedBox.
+                  .constraints (m/BoxConstraints. .maxHeight 180.0 .maxWidth 90.0)
                   .child (mg/MongolTextField.
                           .controller ctrl
                           .autofocus true
@@ -197,204 +213,225 @@
      .context ctx
      .builder
      (fn [dialog-ctx]
-       (let [p (palette-from-ctx dialog-ctx)]
-       (m/Dialog.
-        .backgroundColor (:card-bg p)
-        .surfaceTintColor m/Colors.transparent
-        .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
-        .child
-        (m/Container.
-         .height 440.0
-         .padding (m/EdgeInsets.all 20.0)
-         .child
-         (m/Row.
-          .crossAxisAlignment m/CrossAxisAlignment.stretch
-          .mainAxisSize m/MainAxisSize.min
-          .children
-          [(m/SingleChildScrollView.
-            .scrollDirection m/Axis.horizontal
-            .child
-            (m/Row.
-             .crossAxisAlignment m/CrossAxisAlignment.stretch
-             .children
-             (vec
-              (concat
-               ;; 1. Solar & Lunar Date Header Banner (Extra-large font)
-               [(m/Container.
-                 .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 14.0)
-                 .decoration (m/BoxDecoration.
-                              .color (.withOpacity (:primary p) 0.06)
-                              .borderRadius (m/BorderRadius.circular 16.0))
-                 .child
-                 (m/Row.
-                  .crossAxisAlignment m/CrossAxisAlignment.start
-                  .children
-                  [(m/Column.
-                    .crossAxisAlignment m/CrossAxisAlignment.center
-                    .children
-                    [(m/Container.
-                      .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 6.0)
-                      .decoration (m/BoxDecoration.
-                                   .color (:primary p)
-                                   .borderRadius (m/BorderRadius.circular 10.0))
-                      .child (m/Text. (str (.-month selected-dt) "/" (.-day selected-dt))
-                                      .style (m/TextStyle.
-                                              .fontSize 18.0
-                                              .fontWeight m/FontWeight.bold
-                                              .color (:on-primary p))))
-                     (m/SizedBox. .height 12.0)
-                     (m/Expanded.
-                      .child
-                      (m/SingleChildScrollView.
-                       .scrollDirection m/Axis.vertical
-                       .child
-                       (vertical-mongol-text
-                        (str (:mgl-month-name info) " • " (:mgl-day-name info))
-                        (m/TextStyle.
-                         .fontFamily default-font
-                         .fontSize 24.0
-                         .fontWeight m/FontWeight.bold
-                         .color (:heading p)))))])
-                   (m/SizedBox. .width 12.0)
-                   (m/Column.
-                    .crossAxisAlignment m/CrossAxisAlignment.start
-                    .children
-                    [(m/Expanded.
-                      .child
-                      (m/SingleChildScrollView.
-                       .scrollDirection m/Axis.vertical
-                       .child
-                       (vertical-mongol-text
-                        (str (:mgl-year-color info) " · " (:mgl-year-element info) "\n" (:mgl-day-gan-zhi info))
-                        (m/TextStyle.
-                         .fontFamily default-font
-                         .fontSize 19.0
-                         .color (:on-body p)))))
-                     (if-let [term (:mgl-solar-term info)]
-                       (m/Container.
-                        .margin (m/EdgeInsets.only .top 8.0)
-                        .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 8.0)
-                        .decoration (m/BoxDecoration.
-                                     .color (.withOpacity m/Colors.deepOrange 0.14)
-                                     .borderRadius (m/BorderRadius.circular 8.0))
-                        .child (vertical-mongol-text
-                                term
-                                (m/TextStyle.
-                                 .fontFamily default-font
-                                 .fontSize 19.0
-                                 .fontWeight m/FontWeight.bold
-                                 .color m/Colors.deepOrange)))
-                       (m/SizedBox.shrink))])]))
-
-                (m/SizedBox. .width 16.0)]
-
-               ;; 2. Anniversaries Columns (if any)
-               (when (not (empty? day-anniversaries))
-                 (conj
-                  (mapv (fn [ann]
-                          (m/Container.
-                           .margin (m/EdgeInsets.only .right 12.0)
-                           .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 14.0)
-                           .decoration (m/BoxDecoration.
-                                        .color (.withOpacity m/Colors.pink 0.06)
-                                        .borderRadius (m/BorderRadius.circular 16.0)
-                                        .border (m/Border.all .color (.withOpacity m/Colors.pink 0.2)))
-                           .child
-                           (m/Column.
-                            .children
-                            [(m/Icon. m/Icons.cake .size 24.0 .color m/Colors.pinkAccent)
-                             (m/SizedBox. .height 10.0)
-                             (m/Expanded.
-                              .child
-                              (m/SingleChildScrollView.
-                               .scrollDirection m/Axis.vertical
-                               .child
-                               (vertical-mongol-text
-                                (:title ann)
-                                (m/TextStyle.
-                                 .fontFamily default-font
-                                 .fontSize 22.0
-                                 .fontWeight m/FontWeight.bold
-                                 .color m/Colors.pink.shade700))))])))
-                        day-anniversaries)
-                  (m/SizedBox. .width 4.0)))
-
-               ;; 3. Haircut Auspiciousness Full Detail Card (Extra-large font)
-               [(m/Container.
-                 .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 14.0)
-                 .decoration (m/BoxDecoration.
-                              .color (if good-hair?
-                                       (.withOpacity m/Colors.teal 0.06)
-                                       (.withOpacity m/Colors.redAccent 0.05))
-                              .borderRadius (m/BorderRadius.circular 16.0)
-                              .border (m/Border.all
-                                       .color (if good-hair?
-                                                (.withOpacity m/Colors.teal 0.2)
-                                                (.withOpacity m/Colors.redAccent 0.2))))
-                 .child
-                 (m/Row.
-                  .crossAxisAlignment m/CrossAxisAlignment.start
-                  .children
-                  [(m/Column.
-                    .children
-                    [(m/Icon. m/Icons.content_cut
-                              .size 22.0
-                              .color (if good-hair? m/Colors.teal m/Colors.redAccent))
-                     (m/SizedBox. .height 8.0)
-                     (vertical-mongol-text
-                      "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ"
-                      (m/TextStyle.
-                       .fontFamily default-font
-                       .fontSize 19.0
-                       .fontWeight m/FontWeight.bold
-                       .color (:on-muted p)))
-                     (m/SizedBox. .height 10.0)
-                     (m/Container.
-                      .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 8.0)
-                      .decoration (m/BoxDecoration.
-                                   .color (if good-hair?
-                                            (.withOpacity m/Colors.teal 0.16)
-                                            (.withOpacity m/Colors.redAccent 0.14))
-                                   .borderRadius (m/BorderRadius.circular 8.0))
-                      .child (vertical-mongol-text
-                              (:status-label haircut)
-                              (m/TextStyle.
-                               .fontFamily default-font
-                               .fontSize 19.0
-                               .fontWeight m/FontWeight.bold
-                               .color (if good-hair?
-                                        m/Colors.teal.shade800
-                                        m/Colors.red.shade800))))])
-                   (m/SizedBox. .width 14.0)
-                   (m/SingleChildScrollView.
-                    .scrollDirection m/Axis.vertical
-                    .child
-                    (vertical-mongol-text
-                     (:desc haircut)
-                     (m/TextStyle.
-                      .fontFamily default-font
-                      .fontSize 22.0
-                      .fontWeight m/FontWeight.w500
-                      .color (:on-body p))))]))]))))
-
-           (m/SizedBox. .width 14.0)
-
-           ;; Close Button Column on the far right
-           (m/Column.
-            .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       (let [p        (palette-from-ctx dialog-ctx)
+             dialog-h (adaptive-dialog-height dialog-ctx)]
+         (m/Dialog.
+          .backgroundColor (:card-bg p)
+          .surfaceTintColor m/Colors.transparent
+          .insetPadding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 24.0)
+          .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+          .child
+          (m/Container.
+           .height dialog-h
+           .padding (m/EdgeInsets.all 16.0)
+           .child
+           (m/Row.
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
             .children
-            [(m/IconButton.filledTonal
-              .icon (m/Icon. m/Icons.close .size 22.0)
-              .onPressed #(m/Navigator.pop dialog-ctx))
-             (m/TextButton.
-              .onPressed #(m/Navigator.pop dialog-ctx)
-              .child (vertical-mongol-text
-                      "ᠬᠠᠭᠠᠬᠤ"
-                      (m/TextStyle.
-                       .fontFamily default-font
-                       .fontSize 18.0
-                       .fontWeight m/FontWeight.bold
-                       .color (:primary p))))])]))))))))
+            [;; FIXED: Wrapped SingleChildScrollView in Expanded so it never overflows the Dialog width!
+             (m/Expanded.
+              .child
+              (m/SingleChildScrollView.
+               .scrollDirection m/Axis.horizontal
+               .child
+               (m/Row.
+                .crossAxisAlignment m/CrossAxisAlignment.stretch
+                .children
+                (vec
+                 (concat
+                  ;; 1. Solar & Lunar Date Header Banner (Extra-large font)
+                  [(m/Container.
+                    .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 12.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (.withOpacity (:primary p) 0.06)
+                                 .borderRadius (m/BorderRadius.circular 16.0))
+                    .child
+                    (m/Row.
+                     .crossAxisAlignment m/CrossAxisAlignment.stretch
+                     .children
+                     [(m/Column.
+                       .crossAxisAlignment m/CrossAxisAlignment.center
+                       .children
+                       [(m/Container.
+                         .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 5.0)
+                         .decoration (m/BoxDecoration.
+                                      .color (:primary p)
+                                      .borderRadius (m/BorderRadius.circular 10.0))
+                         .child (m/Text. (str (.-month selected-dt) "/" (.-day selected-dt))
+                                         .style (m/TextStyle.
+                                                 .fontSize 16.0
+                                                 .fontWeight m/FontWeight.bold
+                                                 .color (:on-primary p))))
+                        (m/SizedBox. .height 10.0)
+                        (m/Expanded.
+                         .child
+                         (m/SingleChildScrollView.
+                          .scrollDirection m/Axis.vertical
+                          .child
+                          (vertical-mongol-text
+                           (str (:mgl-month-name info) " • " (:mgl-day-name info))
+                           (m/TextStyle.
+                            .fontFamily default-font
+                            .fontSize 23.0
+                            .fontWeight m/FontWeight.bold
+                            .color (:heading p)))))])
+                      (m/SizedBox. .width 12.0)
+                      (m/Column.
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .children
+                       [(m/Expanded.
+                         .child
+                         (m/SingleChildScrollView.
+                          .scrollDirection m/Axis.vertical
+                          .child
+                          (vertical-mongol-text
+                           (str (:mgl-year-color info) " · " (:mgl-year-element info) "\n" (:mgl-day-gan-zhi info))
+                           (m/TextStyle.
+                            .fontFamily default-font
+                            .fontSize 18.5
+                            .color (:on-body p)))))
+                        (if-let [term (:mgl-solar-term info)]
+                          (m/Container.
+                           .margin (m/EdgeInsets.only .top 8.0)
+                           .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 6.0)
+                           .decoration (m/BoxDecoration.
+                                        .color (.withOpacity m/Colors.deepOrange 0.14)
+                                        .borderRadius (m/BorderRadius.circular 8.0))
+                           .child (vertical-mongol-text
+                                   term
+                                   (m/TextStyle.
+                                    .fontFamily default-font
+                                    .fontSize 18.0
+                                    .fontWeight m/FontWeight.bold
+                                    .color m/Colors.deepOrange)))
+                          (m/SizedBox.shrink))])]))
+
+                   (m/SizedBox. .width 12.0)]
+
+                  ;; 2. Anniversaries Columns (if any)
+                  (when (not (empty? day-anniversaries))
+                    (conj
+                     (mapv (fn [ann]
+                             (m/Container.
+                              .margin (m/EdgeInsets.only .right 10.0)
+                              .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 12.0)
+                              .decoration (m/BoxDecoration.
+                                           .color (.withOpacity m/Colors.pink 0.06)
+                                           .borderRadius (m/BorderRadius.circular 16.0)
+                                           .border (m/Border.all .color (.withOpacity m/Colors.pink 0.2)))
+                              .child
+                              (m/Column.
+                               .children
+                               [(m/Icon. m/Icons.cake .size 22.0 .color m/Colors.pinkAccent)
+                                (m/SizedBox. .height 8.0)
+                                (m/Expanded.
+                                 .child
+                                 (m/SingleChildScrollView.
+                                  .scrollDirection m/Axis.vertical
+                                  .child
+                                  (vertical-mongol-text
+                                   (:title ann)
+                                   (m/TextStyle.
+                                    .fontFamily default-font
+                                    .fontSize 21.0
+                                    .fontWeight m/FontWeight.bold
+                                    .color m/Colors.pink.shade700))))])))
+                           day-anniversaries)
+                     (m/SizedBox. .width 4.0)))
+
+                  ;; 3. Haircut Auspiciousness Full Detail Card (FIXED: Wrapped inner label in Expanded + FittedBox)
+                  [(m/Container.
+                    .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 12.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (if good-hair?
+                                          (.withOpacity m/Colors.teal 0.06)
+                                          (.withOpacity m/Colors.redAccent 0.05))
+                                 .borderRadius (m/BorderRadius.circular 16.0)
+                                 .border (m/Border.all
+                                          .color (if good-hair?
+                                                   (.withOpacity m/Colors.teal 0.2)
+                                                   (.withOpacity m/Colors.redAccent 0.2))))
+                    .child
+                    (m/Row.
+                     .crossAxisAlignment m/CrossAxisAlignment.stretch
+                     .children
+                     [(m/Column.
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(m/Icon. m/Icons.content_cut
+                                 .size 20.0
+                                 .color (if good-hair? m/Colors.teal m/Colors.redAccent))
+                        (m/SizedBox. .height 6.0)
+                        (m/Expanded.
+                         .child
+                         (m/Center.
+                          .child
+                          (m/FittedBox.
+                           .fit m/BoxFit.scaleDown
+                           .child
+                           (vertical-mongol-text
+                            "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ"
+                            (m/TextStyle.
+                             .fontFamily default-font
+                             .fontSize 18.0
+                             .fontWeight m/FontWeight.bold
+                             .color (:on-muted p))))))
+                        (m/SizedBox. .height 6.0)
+                        (m/Container.
+                         .padding (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 6.0)
+                         .decoration (m/BoxDecoration.
+                                      .color (if good-hair?
+                                               (.withOpacity m/Colors.teal 0.16)
+                                               (.withOpacity m/Colors.redAccent 0.14))
+                                      .borderRadius (m/BorderRadius.circular 8.0))
+                         .child (vertical-mongol-text
+                                 (:status-label haircut)
+                                 (m/TextStyle.
+                                  .fontFamily default-font
+                                  .fontSize 17.5
+                                  .fontWeight m/FontWeight.bold
+                                  .color (if good-hair?
+                                           m/Colors.teal.shade800
+                                           m/Colors.red.shade800))))])
+                      (m/SizedBox. .width 12.0)
+                      (m/SingleChildScrollView.
+                       .scrollDirection m/Axis.vertical
+                       .child
+                       (vertical-mongol-text
+                        (:desc haircut)
+                        (m/TextStyle.
+                         .fontFamily default-font
+                         .fontSize 21.0
+                         .fontWeight m/FontWeight.w500
+                         .color (:on-body p))))]))])))))
+
+             (m/SizedBox. .width 10.0)
+
+             ;; Close Button Column on the far right (Overflow-safe)
+             (m/Column.
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .children
+              [(m/IconButton.filledTonal
+                .icon (m/Icon. m/Icons.close .size 20.0)
+                .onPressed #(m/Navigator.pop dialog-ctx))
+               (m/Expanded.
+                .child
+                (m/Align.
+                 .alignment m/Alignment.bottomCenter
+                 .child
+                 (m/TextButton.
+                  .onPressed #(m/Navigator.pop dialog-ctx)
+                  .child
+                  (m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .child
+                   (vertical-mongol-text
+                    "ᠬᠠᠭᠠᠬᠤ"
+                    (m/TextStyle.
+                     .fontFamily default-font
+                     .fontSize 17.0
+                     .fontWeight m/FontWeight.bold
+                     .color (:primary p)))))))])]))))))))
 
 (defn show-day-tasks-detail-dialog!
   "Popup dialog displaying the selected day's tasks in extra-large font for easy reading & checking off."
@@ -402,7 +439,7 @@
   (m/showDialog
    .context ctx
    .builder
-     (fn [dialog-ctx]
+   (fn [dialog-ctx]
      (f/widget
       :context dialog-ctx
       :watch [all-tasks (stream
@@ -410,24 +447,26 @@
                          (map stream-util/empty-on-error)
                          :as-values (db/watch-calendar-tasks))]
       (let [p         (palette-from-ctx dialog-ctx)
+            dialog-h  (adaptive-dialog-height dialog-ctx)
             tasks-map (task-logic/group-tasks-by-date-key all-tasks)
             sel-key   (task-logic/date->key selected-dt)
             day-tasks (get tasks-map sel-key [])]
         (m/Dialog.
          .backgroundColor (:page-bg p)
          .surfaceTintColor m/Colors.transparent
+         .insetPadding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 24.0)
          .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
          .child
          (m/Container.
-          .height 440.0
-          .padding (m/EdgeInsets.all 18.0)
+          .height dialog-h
+          .padding (m/EdgeInsets.all 16.0)
           .child
           (m/Row.
            .crossAxisAlignment m/CrossAxisAlignment.stretch
            .children
-           [;; Left Header Banner inside dialog
+           [;; Left Header Banner inside dialog (FittedBox prevents vertical overflow)
             (m/Container.
-             .padding (m/EdgeInsets.symmetric .vertical 12.0 .horizontal 10.0)
+             .padding (m/EdgeInsets.symmetric .vertical 10.0 .horizontal 8.0)
              .decoration (m/BoxDecoration.
                           .color (:card-bg p)
                           .borderRadius (m/BorderRadius.circular 16.0)
@@ -437,40 +476,50 @@
               .mainAxisAlignment m/MainAxisAlignment.spaceBetween
               .children
               [(m/Badge.
-                .label (m/Text. (str (count day-tasks)) .style (m/TextStyle. .fontSize 12.0))
+                .label (m/Text. (str (count day-tasks)) .style (m/TextStyle. .fontSize 11.0))
                 .isLabelVisible (pos? (count day-tasks))
                 .backgroundColor (:primary p)
-                .child (m/Icon. m/Icons.fact_check .size 24.0 .color (:primary p)))
+                .child (m/Icon. m/Icons.fact_check .size 22.0 .color (:primary p)))
                (m/Expanded.
                 .child
-                (m/Center.
+                (m/Padding.
+                 .padding (m/EdgeInsets.symmetric .vertical 6.0)
                  .child
-                 (vertical-mongol-text
-                  "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
-                  (m/TextStyle.
-                   .fontFamily default-font
-                   .fontSize 22.0
-                   .fontWeight m/FontWeight.bold
-                   .color (:heading p)))))
+                 (m/Center.
+                  .child
+                  (m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .child
+                   (vertical-mongol-text
+                    "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
+                    (m/TextStyle.
+                     .fontFamily default-font
+                     .fontSize 21.0
+                     .fontWeight m/FontWeight.bold
+                     .color (:heading p)))))))
                ;; Quick Add Task Button inside large dialog
                (m/IconButton.filled
                 .style (m/IconButton.styleFrom .backgroundColor (:primary p))
-                .icon (m/Icon. m/Icons.add .size 24.0 .color (:on-primary p))
+                .icon (m/Icon. m/Icons.add .size 22.0 .color (:on-primary p))
                 .onPressed #(show-add-task-for-date-dialog! ctx selected-dt))]))
 
-            (m/SizedBox. .width 14.0)
+            (m/SizedBox. .width 12.0)
 
             ;; Middle Horizontal Stream of Large Task Cards
             (m/Expanded.
              .child
              (if (empty? day-tasks)
                (m/Center.
-                .child (vertical-mongol-text
-                        "ᠡᠨᠡ ᠡᠳᠦᠷ ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
-                        (m/TextStyle.
-                         .fontFamily default-font
-                         .fontSize 20.0
-                         .color (:on-muted p))))
+                .child
+                (m/FittedBox.
+                 .fit m/BoxFit.scaleDown
+                 .child
+                 (vertical-mongol-text
+                  "ᠡᠨᠡ ᠡᠳᠦᠷ ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
+                  (m/TextStyle.
+                   .fontFamily default-font
+                   .fontSize 20.0
+                   .color (:on-muted p)))))
                (m/ListView.builder
                 .scrollDirection m/Axis.horizontal
                 .itemCount (count day-tasks)
@@ -479,7 +528,7 @@
                   (let [task  (nth day-tasks idx)
                         done? (task-completed? task)]
                     (m/Container.
-                     .margin (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 4.0)
+                     .margin (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 2.0)
                      .decoration (soft-card-decoration (:card-bg p) (:card-border p) 16.0 (:shadow-base p))
                      .child
                      (m/InkWell.
@@ -491,19 +540,19 @@
                                 nil)
                       .child
                       (m/Padding.
-                       .padding (m/EdgeInsets.symmetric .vertical 14.0 .horizontal 12.0)
+                       .padding (m/EdgeInsets.symmetric .vertical 12.0 .horizontal 10.0)
                        .child
                        (m/Column.
                         .children
                         [(m/Transform.scale
-                          .scale 1.3
+                          .scale 1.25
                           .child
                           (m/Checkbox.
                            .value done?
                            .activeColor m/Colors.teal
                            .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 5.0))
                            .onChanged (fn [_] (task-actions/toggle-task! task))))
-                         (m/SizedBox. .height 12.0)
+                         (m/SizedBox. .height 10.0)
                          (m/Expanded.
                           .child
                           (m/SingleChildScrollView.
@@ -519,14 +568,14 @@
                                                                  m/TextDecoration.none)
                                                    .color (if done? (:on-muted p) (:on-body p))))))])))))))))
 
-            (m/SizedBox. .width 8.0)
+            (m/SizedBox. .width 6.0)
 
             ;; Right Close Button
             (m/Column.
              .mainAxisAlignment m/MainAxisAlignment.start
              .children
              [(m/IconButton.filledTonal
-               .icon (m/Icon. m/Icons.close .size 24.0)
+               .icon (m/Icon. m/Icons.close .size 22.0)
                .onPressed #(m/Navigator.pop dialog-ctx))])]))))))))
 
 ;; =============================================================================
@@ -555,81 +604,85 @@
         on-today?    (and (same-day? selected-date today-dt)
                           (= (.-year current-month) (.-year today-dt))
                           (= (.-month current-month) (.-month today-dt)))]
-    (m/Container.
-     .width 60.0
-     .margin (m/EdgeInsets.only .left 8.0 .right 6.0)
-     .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
-     .decoration (soft-card-decoration (:card-bg palette) (:card-border palette) 30.0 (:shadow-base palette))
+    (m/GestureDetector.
+     .behavior m/HitTestBehavior.opaque
+     .onVerticalDragEnd handle-calendar-vertical-swipe!
      .child
-     (m/Column.
-      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-      .children
-      [;; Previous month circular button
-       (pill-nav-button palette m/Icons.keyboard_arrow_up #(shift-month! -1))
+     (m/Container.
+      .width 60.0
+      .margin (m/EdgeInsets.only .left 8.0 .right 6.0)
+      .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
+      .decoration (soft-card-decoration (:card-bg palette) (:card-border palette) 30.0 (:shadow-base palette))
+      .child
+      (m/Column.
+       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       .children
+       [;; Previous month circular button
+        (pill-nav-button palette m/Icons.keyboard_arrow_up #(shift-month! -1))
 
-       ;; Vertical Year/Month & Lunar Year Color placed side-by-side in a Row (prevents vertical squishing!)
-       (m/Expanded.
-        .child
-        (m/Padding.
-         .padding (m/EdgeInsets.symmetric .vertical 6.0)
+        ;; Vertical Year/Month & Lunar Year Color placed side-by-side in a Row
+        (m/Expanded.
          .child
-         (m/Center.
-          .child
-          (m/FittedBox.
-           .fit m/BoxFit.scaleDown
-           .child
-           (m/Row.
-            .mainAxisSize m/MainAxisSize.min
-            .crossAxisAlignment m/CrossAxisAlignment.center
-            .children
-            [(vertical-mongol-text
-              (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
-              (m/TextStyle.
-               .fontFamily default-font
-               .fontSize pill-month-font-size
-               .fontWeight m/FontWeight.bold
-               .color (:heading palette)))
-             (m/SizedBox. .width 4.0)
-             (vertical-mongol-text
-              (:mgl-year-color lunar-sample)
-              (m/TextStyle.
-               .fontFamily default-font
-               .fontSize pill-ganzhi-font-size
-               .fontWeight m/FontWeight.w500
-               .color (:on-muted palette)))])))))
-
-       ;; Next month circular button
-       (pill-nav-button palette m/Icons.keyboard_arrow_down #(shift-month! 1))
-
-       ;; "Today" indicator / action button at bottom of pill
-       (if on-today?
-         (m/Container.
-          .width 8.0
-          .height 8.0
-          .margin (m/EdgeInsets.only .top 4.0 .bottom 4.0)
-          .decoration (m/BoxDecoration.
-                       .color (:primary palette)
-                       .shape m/BoxShape.circle))
          (m/Padding.
-          .padding (m/EdgeInsets.only .top 6.0)
+          .padding (m/EdgeInsets.symmetric .vertical 6.0)
           .child
-          (m/Material.
-           .color (:primary palette)
-           .borderRadius (m/BorderRadius.circular 16.0)
+          (m/Center.
            .child
-           (m/InkWell.
-            .borderRadius (m/BorderRadius.circular 16.0)
-            .onTap jump-to-today!
+           (m/FittedBox.
+            .fit m/BoxFit.scaleDown
             .child
-            (m/Padding.
-             .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
-             .child (vertical-mongol-text
-                     "ᠡᠨᠡ ᠡᠳᠦᠷ"
-                     (m/TextStyle.
-                      .fontFamily default-font
-                      .fontSize pill-today-font-size
-                      .fontWeight m/FontWeight.bold
-                      .color (:on-primary palette))))))))]))))
+            (m/Row.
+             .mainAxisSize m/MainAxisSize.min
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .children
+             [(vertical-mongol-text
+               (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
+               (m/TextStyle.
+                .fontFamily default-font
+                .fontSize pill-month-font-size
+                .fontWeight m/FontWeight.bold
+                .color (:heading palette)))
+              (m/SizedBox. .width 4.0)
+              (vertical-mongol-text
+               (:mgl-year-color lunar-sample)
+               (m/TextStyle.
+                .fontFamily default-font
+                .fontSize pill-ganzhi-font-size
+                .fontWeight m/FontWeight.w500
+                .color (:on-muted palette)))])))))
+
+        ;; Next month circular button
+        (pill-nav-button palette m/Icons.keyboard_arrow_down #(shift-month! 1))
+
+        ;; "Today" indicator / action button at bottom of pill
+        (if on-today?
+          (m/Container.
+           .width 8.0
+           .height 8.0
+           .margin (m/EdgeInsets.only .top 4.0 .bottom 4.0)
+           .decoration (m/BoxDecoration.
+                        .color (:primary palette)
+                        .shape m/BoxShape.circle))
+          (m/Padding.
+           .padding (m/EdgeInsets.only .top 6.0)
+           .child
+           (m/Material.
+            .color (:primary palette)
+            .borderRadius (m/BorderRadius.circular 16.0)
+            .child
+            (m/InkWell.
+             .borderRadius (m/BorderRadius.circular 16.0)
+             .onTap jump-to-today!
+             .child
+             (m/Padding.
+              .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+              .child (vertical-mongol-text
+                      "ᠡᠨᠡ ᠡᠳᠦᠷ"
+                      (m/TextStyle.
+                       .fontFamily default-font
+                       .fontSize pill-today-font-size
+                       .fontWeight m/FontWeight.bold
+                       .color (:on-primary palette))))))))])))))
 
 (defn empty-calendar-cell
   "Subtle placeholder cell in the 7x6 grid."
@@ -952,7 +1005,7 @@
                  .fontSize 13.5
                  .fontWeight m/FontWeight.bold
                  .color (:heading palette)))))))
-           ;; Integrated Add Task button (replaces the floating FAB that covered task cards!)
+           ;; Integrated Add Task button
            (m/Material.
             .color (:primary palette)
             .shape (m/CircleBorder.)
@@ -1063,72 +1116,77 @@
           (month-switcher-pill palette current-month selected-date today)
 
           ;; Right: Elevated white card wrapping Weekday headers + 7x6 grid
+          ;; Wrapped in GestureDetector to support vertical swipe up/down for month switching!
           (m/Expanded.
            .child
-           (m/Container.
-            .padding (m/EdgeInsets.fromLTRB 6.0 8.0 6.0 6.0)
-            .decoration (soft-card-decoration (:card-bg palette) (:card-border palette) 22.0 (:shadow-base palette))
+           (m/GestureDetector.
+            .behavior m/HitTestBehavior.opaque
+            .onVerticalDragEnd handle-calendar-vertical-swipe!
             .child
-            (m/Column.
-             .children
-             [;; Weekday Headers inside a subtle tinted strip (weekends highlighted in coral red)
-              (m/Container.
-               .height 46.0
-               .margin (m/EdgeInsets.only .bottom 4.0)
-               .padding (m/EdgeInsets.symmetric .vertical 4.0)
-               .decoration (m/BoxDecoration.
-                            .color (:page-bg palette)
-                            .borderRadius (m/BorderRadius.circular 12.0))
-               .child
-               (m/Row.
-                .children
-                (vec
-                 (map-indexed
-                  (fn [idx w-label]
-                    (let [is-wknd? (or (= idx 5) (= idx 6))]
-                      (m/Expanded.
-                       .child (m/Center.
-                               .child
-                               (m/FittedBox.
-                                .fit m/BoxFit.scaleDown
+            (m/Container.
+             .padding (m/EdgeInsets.fromLTRB 6.0 8.0 6.0 6.0)
+             .decoration (soft-card-decoration (:card-bg palette) (:card-border palette) 22.0 (:shadow-base palette))
+             .child
+             (m/Column.
+              .children
+              [;; Weekday Headers inside a subtle tinted strip (weekends highlighted in coral red)
+               (m/Container.
+                .height 46.0
+                .margin (m/EdgeInsets.only .bottom 4.0)
+                .padding (m/EdgeInsets.symmetric .vertical 4.0)
+                .decoration (m/BoxDecoration.
+                             .color (:page-bg palette)
+                             .borderRadius (m/BorderRadius.circular 12.0))
+                .child
+                (m/Row.
+                 .children
+                 (vec
+                  (map-indexed
+                   (fn [idx w-label]
+                     (let [is-wknd? (or (= idx 5) (= idx 6))]
+                       (m/Expanded.
+                        .child (m/Center.
                                 .child
-                                (mg/MongolText. w-label
-                                                .style (m/TextStyle.
-                                                        .fontFamily default-font
-                                                        .fontSize grid-weekday-font-size
-                                                        .fontWeight m/FontWeight.bold
-                                                        .color (if is-wknd?
-                                                                 m/Colors.red.shade600
-                                                                 (:heading palette)))))))))
-                  weekday-headers))))
+                                (m/FittedBox.
+                                 .fit m/BoxFit.scaleDown
+                                 .child
+                                 (mg/MongolText. w-label
+                                                 .style (m/TextStyle.
+                                                         .fontFamily default-font
+                                                         .fontSize grid-weekday-font-size
+                                                         .fontWeight m/FontWeight.bold
+                                                         .color (if is-wknd?
+                                                                  m/Colors.red.shade600
+                                                                  (:heading palette)))))))))
+                   weekday-headers))))
 
-              ;; Adaptive 7x6 Grid
-              (m/Expanded.
-               .child
-               (m/LayoutBuilder.
-                .builder
-                (fn [_ constraints]
-                  (let [grid-w (.-maxWidth constraints)
-                        grid-h (.-maxHeight constraints)
-                        cell-w (/ grid-w 7.0)
-                        cell-h (/ grid-h 6.0)
-                        ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)]
-                    (m/GridView.builder
-                     .physics (m/NeverScrollableScrollPhysics.)
-                     .padding m/EdgeInsets.zero
-                     .itemCount 42
-                     .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
-                                    .crossAxisCount 7
-                                    .childAspectRatio ratio)
-                     .itemBuilder (fn [_ idx]
-                                    (let [cell-dt (nth cells idx nil)]
-                                      (if (nil? cell-dt)
-                                        (empty-calendar-cell palette)
-                                        (let [c-key   (task-logic/date->key cell-dt)
-                                              c-tasks (get tasks-map c-key [])
-                                              c-ann   (get ann-by-key c-key [])]
-                                          (calendar-day-cell palette cell-dt selected-date today
-                                                             c-tasks c-ann))))))))))])))])))
+               ;; Adaptive 7x6 Grid
+               (m/Expanded.
+                .child
+                (m/LayoutBuilder.
+                 .builder
+                 (fn [_ constraints]
+                   (let [grid-w (.-maxWidth constraints)
+                         grid-h (.-maxHeight constraints)
+                         cell-w (/ grid-w 7.0)
+                         cell-h (/ grid-h 6.0)
+                         ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)]
+                     (m/GridView.builder
+                      .physics (m/NeverScrollableScrollPhysics.)
+                      .padding m/EdgeInsets.zero
+                      .itemCount 42
+                      .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
+                                     .crossAxisCount 7
+                                     .childAspectRatio ratio)
+                      .itemBuilder (fn [_ idx]
+                                     (let [cell-dt (nth cells idx nil)]
+                                       (if (nil? cell-dt)
+                                         (empty-calendar-cell palette)
+                                         (let [c-key   (task-logic/date->key cell-dt)
+                                               c-tasks (get tasks-map c-key [])
+                                               c-ann   (get ann-by-key c-key [])]
+                                           (calendar-day-cell palette cell-dt selected-date today
+                                                              c-tasks c-ann))))))))))]))))])))
 
       ;; =======================================================================
       ;; BOTTOM SECTION (Flex 6): Bento Split Row (Left Almanac | Right Tasks)
