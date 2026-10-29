@@ -1,0 +1,37 @@
+(ns minii-focus.widgets.calendar.dates
+  (:require ["dart:core" :as dc]
+            [minii-focus.logic.records :as rec]))
+
+(defn same-day?
+  [^dc/DateTime? a ^dc/DateTime? b]
+  (boolean
+   (and a b
+        (= (.-year a) (.-year b))
+        (= (.-month a) (.-month b))
+        (= (.-day a) (.-day b)))))
+
+(defn weekend?
+  [^dc/DateTime dt]
+  (let [w (.-weekday dt)]
+    (or (= w 6) (= w 7))))
+
+(defn days-in-month
+  [year month]
+  (.-day (dc/DateTime. year (inc month) 0)))
+
+(defn build-month-cells
+  [^dc/DateTime month-dt]
+  (let [year        (.-year month-dt)
+        month       (.-month month-dt)
+        first-day   (dc/DateTime. year month 1)
+        lead-offset (dec (.-weekday first-day))
+        total-days  (days-in-month year month)
+        day-dates   (mapv #(dc/DateTime. year month (inc %)) (range total-days))
+        trail-count (- 42 (+ lead-offset total-days))]
+    (vec (concat (repeat lead-offset nil)
+                 day-dates
+                 (repeat (max 0 trail-count) nil)))))
+
+(defn task-completed?
+  [task]
+  (rec/task-done? task))

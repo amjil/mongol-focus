@@ -1,0 +1,81 @@
+(ns minii-focus.widgets.calendar.theme
+  (:require ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mg]
+            [clojure.string :as str]))
+
+(def default-font "OyunQaganTig")
+
+(def grid-solar-font-size 18.0)
+(def grid-lunar-font-size 17.0)
+(def grid-weekday-font-size 17.0)
+(def pill-month-font-size 20.0)
+(def pill-ganzhi-font-size 14.5)
+(def pill-today-font-size 15.5)
+
+(def weekday-headers
+  ["ᠨᠢᠭᠡ" "ᠬᠤᠶᠠᠷ" "ᠭᠤᠷᠪᠠ" "ᠲᠦᠷᠪᠡ" "ᠲᠠᠪᠤ" "ᠵᠢᠷᠭᠤᠭ᠎ᠠ" "ᠡᠳᠦᠷ"])
+
+(defn calendar-theme-palette
+  [^m/ColorScheme cs]
+  (let [primary (.-primary cs)]
+    {:primary primary
+     :on-primary (.-onPrimary cs)
+     :on-body (.-onSurface cs)
+     :on-muted (.-onSurfaceVariant cs)
+     :heading primary
+     :page-bg (or (.-surfaceContainerLow cs) (.-surface cs))
+     :card-bg (.-surface cs)
+     :card-border (.-outlineVariant cs)
+     :shadow-base primary}))
+
+(defn palette-from-ctx
+  [ctx]
+  (calendar-theme-palette (.-colorScheme (m/Theme.of ctx))))
+
+(defn vertical-mongol-text
+  [text style]
+  (mg/MongolText. text .style style))
+
+(defn- grid-label-numeric?
+  [label]
+  (boolean (and label (not (empty? label)) (re-matches #"^\d+$" label))))
+
+(defn- mongol-label-space-parts
+  [label]
+  (vec (remove empty? (str/split (str/trim label) #"\s+"))))
+
+(defn- mongol-label-by-spaces
+  [label]
+  (let [parts (mongol-label-space-parts label)]
+    (cond
+      (empty? parts) label
+      (= 1 (count parts)) (first parts)
+      :else (str/join "\n" parts))))
+
+(defn calendar-grid-lunar-label
+  [label mongol-style numeric-style]
+  (cond
+    (or (nil? label) (empty? label))
+    (m/SizedBox.shrink)
+
+    (grid-label-numeric? label)
+    (m/Text. label .textAlign m/TextAlign.center .style numeric-style)
+
+    :else
+    (mg/MongolText. (mongol-label-by-spaces label) .style mongol-style)))
+
+(defn soft-card-decoration
+  [bg-color border-color radius shadow-base]
+  (m/BoxDecoration.
+   .color bg-color
+   .borderRadius (m/BorderRadius.circular radius)
+   .border (m/Border.all .color border-color .width 1.0)
+   .boxShadow [(m/BoxShadow.
+                .color (.withOpacity shadow-base 0.04)
+                .blurRadius 12.0
+                .offset (m/Offset. 0.0 4.0))]))
+
+(defn adaptive-dialog-height
+  [ctx]
+  (let [screen-h (.-height (m/MediaQuery.sizeOf ctx))]
+    (.clamp (* screen-h 0.62) 300.0 440.0)))

@@ -1,0 +1,227 @@
+(ns minii-focus.widgets.calendar.grid
+  (:require ["dart:core" :as dc]
+            ["package:flutter/material.dart" :as m]
+            [minii-focus.logic.lunar :as lunar]
+            [minii-focus.widgets.calendar.theme :as theme]
+            [minii-focus.widgets.calendar.dates :as dates]
+            [minii-focus.widgets.calendar.state :as state]))
+
+(defn pill-nav-button
+  "Circular subtle button used at the top and bottom of the month switcher pill."
+  [palette icon on-tap]
+  (m/Material.
+   .color (.withOpacity (:primary palette) 0.06)
+   .shape (m/CircleBorder.)
+   .child
+   (m/InkWell.
+    .customBorder (m/CircleBorder.)
+    .onTap on-tap
+    .child
+    (m/Padding.
+     .padding (m/EdgeInsets.all 8.0)
+     .child (m/Icon. icon .size 22.0 .color (:heading palette))))))
+
+(defn month-switcher-pill
+  "Floating vertical capsule next to the calendar grid with side-by-side vertical Year/Month and Ganzhi columns."
+  [palette ^dc/DateTime current-month ^dc/DateTime selected-date ^dc/DateTime today-dt]
+  (let [lunar-sample (lunar/solar->mongol-lunar current-month)
+        on-today?    (and (dates/same-day? selected-date today-dt)
+                          (= (.-year current-month) (.-year today-dt))
+                          (= (.-month current-month) (.-month today-dt)))]
+    (m/Container.
+      .width 60.0
+      .margin (m/EdgeInsets.only .left 8.0 .right 6.0)
+      .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
+      .decoration (theme/soft-card-decoration (:card-bg palette) (:card-border palette) 30.0 (:shadow-base palette))
+      .child
+      (m/Column.
+       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       .children
+       [;; Previous month circular button
+        (pill-nav-button palette m/Icons.keyboard_arrow_up #(state/shift-month! -1))
+
+        ;; Vertical Year/Month & Lunar Year Color placed side-by-side in a Row
+        (m/Expanded.
+         .child
+         (m/Padding.
+          .padding (m/EdgeInsets.symmetric .vertical 6.0)
+          .child
+          (m/Center.
+           .child
+           (m/FittedBox.
+            .fit m/BoxFit.scaleDown
+            .child
+            (m/Row.
+             .mainAxisSize m/MainAxisSize.min
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .children
+             [(theme/vertical-mongol-text
+               (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
+               (m/TextStyle.
+                .fontFamily theme/default-font
+                .fontSize theme/pill-month-font-size
+                .fontWeight m/FontWeight.bold
+                .color (:heading palette)))
+              (m/SizedBox. .width 4.0)
+              (theme/vertical-mongol-text
+               (:mgl-year-color lunar-sample)
+               (m/TextStyle.
+                .fontFamily theme/default-font
+                .fontSize theme/pill-ganzhi-font-size
+                .fontWeight m/FontWeight.w500
+                .color (:on-muted palette)))])))))
+
+        ;; Next month circular button
+        (pill-nav-button palette m/Icons.keyboard_arrow_down #(state/shift-month! 1))
+
+        ;; "Today" indicator / action button at bottom of pill
+        (if on-today?
+          (m/Container.
+           .width 8.0
+           .height 8.0
+           .margin (m/EdgeInsets.only .top 4.0 .bottom 4.0)
+           .decoration (m/BoxDecoration.
+                        .color (:primary palette)
+                        .shape m/BoxShape.circle))
+          (m/Padding.
+           .padding (m/EdgeInsets.only .top 6.0)
+           .child
+           (m/Material.
+            .color (:primary palette)
+            .borderRadius (m/BorderRadius.circular 16.0)
+            .child
+            (m/InkWell.
+             .borderRadius (m/BorderRadius.circular 16.0)
+             .onTap state/jump-to-today!
+             .child
+             (m/Padding.
+              .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+              .child (theme/vertical-mongol-text
+                      "ᠡᠨᠡ ᠡᠳᠦᠷ"
+                      (m/TextStyle.
+                       .fontFamily theme/default-font
+                       .fontSize theme/pill-today-font-size
+                       .fontWeight m/FontWeight.bold
+                       .color (:on-primary palette))))))))]))))
+
+(defn empty-calendar-cell
+  "Subtle placeholder cell in the 7x6 grid."
+  [palette]
+  (m/Container.
+   .margin (m/EdgeInsets.all 1.5)
+   .decoration (m/BoxDecoration.
+                .color (.withOpacity (:on-muted palette) 0.08)
+                .borderRadius (m/BorderRadius.circular 10.0))))
+
+(defn calendar-day-cell
+  "Refined day cell with weekend tinting, elevated selection state, and clear task/haircut badges."
+  [palette ^dc/DateTime dt ^dc/DateTime? selected-dt ^dc/DateTime today-dt day-tasks day-anniversaries]
+  (let [is-selected?  (dates/same-day? dt selected-dt)
+        is-today?     (dates/same-day? dt today-dt)
+        is-weekend?   (dates/weekend? dt)
+        lunar-info    (lunar/solar->mongol-lunar dt)
+        has-solar?    (some? (:mgl-solar-term lunar-info))
+        good-hair?    (get-in lunar-info [:haircut :good?])
+        has-anniv?    (not (empty? day-anniversaries))
+        total-tasks   (count day-tasks)
+        all-done?     (and (pos? total-tasks) (every? dates/task-completed? day-tasks))
+        solar-color   (cond
+                        is-selected? (:on-primary palette)
+                        is-today?    (:heading palette)
+                        is-weekend?  m/Colors.red.shade600
+                        :else        (:on-body palette))
+        label-color   (cond
+                        is-selected? (:on-primary palette)
+                        has-solar?   m/Colors.deepOrange.shade700
+                        :else        (:on-body palette))
+        label-weight  (if (or has-solar? is-selected?)
+                        m/FontWeight.bold
+                        m/FontWeight.w500)
+        mongol-style  (m/TextStyle.
+                       .fontFamily theme/default-font
+                       .fontSize theme/grid-lunar-font-size
+                       .color label-color
+                       .fontWeight label-weight)
+        numeric-style (m/TextStyle.
+                       .fontSize theme/grid-lunar-font-size
+                       .height 1.0
+                       .color label-color
+                       .fontWeight label-weight)]
+    (m/GestureDetector.
+     .onTap #(swap! state/calendar-ui-state assoc :selected-date dt)
+     .child
+     (m/AnimatedContainer.
+      .duration (dc/Duration. .milliseconds 160)
+      .margin (m/EdgeInsets.all 1.5)
+      .padding (m/EdgeInsets.symmetric .vertical 3.0 .horizontal 1.0)
+      .decoration (m/BoxDecoration.
+                   .color (cond
+                            is-selected? (:primary palette)
+                            is-today?    (.withOpacity m/Colors.amber 0.2)
+                            is-weekend?  (.withOpacity m/Colors.red 0.02)
+                            :else        m/Colors.transparent)
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .boxShadow (when is-selected?
+                                [(m/BoxShadow.
+                                  .color (.withOpacity (:shadow-base palette) 0.28)
+                                  .blurRadius 6.0
+                                  .offset (m/Offset. 0.0 2.0))])
+                   .border (cond
+                             is-selected? nil
+                             is-today?    (m/Border.all .color m/Colors.amber.shade800 .width 1.5)
+                             :else        (m/Border.all .color (.withOpacity (:on-muted palette) 0.25) .width 0.8)))
+      .child
+      (m/Column.
+       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       .children
+       [;; Top row: Solar date number + anniversary / haircut dot
+        (m/Row.
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         [(m/Text. (str (.-day dt))
+                   .style (m/TextStyle.
+                           .fontSize theme/grid-solar-font-size
+                           .height 1.0
+                           .fontWeight m/FontWeight.bold
+                           .color solar-color))
+          (if has-anniv?
+            (m/Padding.
+             .padding (m/EdgeInsets.only .left 2.0)
+             .child (m/Icon. m/Icons.cake
+                             .size 13.0
+                             .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent)))
+            (if good-hair?
+              (m/Container.
+               .margin (m/EdgeInsets.only .left 2.5)
+               .width 5.0
+               .height 5.0
+               .decoration (m/BoxDecoration.
+                            .color (if is-selected? m/Colors.tealAccent m/Colors.teal)
+                            .shape m/BoxShape.circle))
+              (m/SizedBox.shrink)))])
+
+        ;; Middle: Lunar day / solar term label
+        (m/Expanded.
+         .child
+         (m/Center.
+          .child
+          (m/FittedBox.
+           .fit m/BoxFit.scaleDown
+           .child
+           (theme/calendar-grid-lunar-label (:grid-cell-label lunar-info)
+                                      mongol-style
+                                      numeric-style))))
+
+        ;; Bottom: Task pill indicator
+        (if (pos? total-tasks)
+          (m/Container.
+           .width 16.0
+           .height 3.5
+           .decoration (m/BoxDecoration.
+                        .color (cond
+                                 is-selected? m/Colors.amberAccent
+                                 all-done?    m/Colors.teal
+                                 :else        (:primary palette))
+                        .borderRadius (m/BorderRadius.circular 2.0)))
+          (m/SizedBox. .height 3.5))])))))

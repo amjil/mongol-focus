@@ -1,0 +1,44 @@
+(ns minii-focus.widgets.calendar.state
+  (:require ["dart:core" :as dc]
+            ["package:flutter/material.dart" :as m]))
+
+(defonce calendar-ui-state
+  (let [now (dc/DateTime.now)]
+    (atom {:current-month (dc/DateTime. (.-year now) (.-month now) 1)
+           :selected-date (dc/DateTime. (.-year now) (.-month now) (.-day now))})))
+
+(defn shift-month!
+  [delta]
+  (swap! calendar-ui-state
+         (fn [st]
+           (let [^dc/DateTime cur (:current-month st)
+                 next-m (dc/DateTime. (.-year cur) (+ (.-month cur) delta) 1)]
+             (assoc st :current-month next-m)))))
+
+(def ^:private swipe-velocity-threshold 180.0)
+
+(defn- abs-velocity
+  [n]
+  (if (neg? n) (- n) n))
+
+(defn handle-calendar-month-swipe!
+  "Horizontal-dominant pan: swipe left -> next month, right -> previous. Ignores vertical swipes."
+  [^m/DragEndDetails details]
+  (let [^m/Offset pps (.-pixelsPerSecond (.-velocity details))
+        vx            (or (.-dx pps) 0.0)
+        vy            (or (.-dy pps) 0.0)
+        ax            (abs-velocity vx)
+        ay            (abs-velocity vy)]
+    (when (> ax ay)
+      (cond
+        (< vx (- swipe-velocity-threshold)) (shift-month! 1)
+        (> vx swipe-velocity-threshold)     (shift-month! -1)
+        :else                               nil))))
+
+(defn jump-to-today!
+  []
+  (let [now (dc/DateTime.now)
+        today (dc/DateTime. (.-year now) (.-month now) (.-day now))]
+    (swap! calendar-ui-state assoc
+           :current-month (dc/DateTime. (.-year now) (.-month now) 1)
+           :selected-date today)))

@@ -1,0 +1,417 @@
+(ns minii-focus.widgets.calendar.dialogs
+  (:require ["dart:core" :as dc]
+            ["package:flutter/material.dart" :as m]
+            ["package:mongol/mongol.dart" :as mg]
+            [cljd.flutter :as f]
+            [minii-focus.route-names :as r]
+            [minii-focus.state.store :as store]
+            [minii-focus.logic.task :as task-logic]
+            [minii-focus.logic.task-actions :as task-actions]
+            [minii-focus.logic.lunar :as lunar]
+            [minii-focus.logic.db :as db]
+            [minii-focus.logic.stream-util :as stream-util]
+            [minii-focus.widgets.calendar.theme :as theme]
+            [minii-focus.widgets.calendar.dates :as dates]))
+
+(defn show-add-task-for-date-dialog!
+  [ctx ^dc/DateTime target-date]
+  (let [ctrl (m/TextEditingController.)]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [dialog-ctx]
+       (mg/MongolAlertDialog.
+        .title (mg/MongolText. "ᠰᠢᠨ᠎ᠡ ᠠᠵᠢᠯ ᠨᠡᠮᠡᠬᠦ"
+                               .style (m/TextStyle. .fontFamily theme/default-font .fontSize 20.0 .fontWeight m/FontWeight.bold))
+        .content (m/ConstrainedBox.
+                  .constraints (m/BoxConstraints. .maxHeight 180.0 .maxWidth 90.0)
+                  .child (mg/MongolTextField.
+                          .controller ctrl
+                          .autofocus true
+                          .style (m/TextStyle. .fontFamily theme/default-font .fontSize 18.0)))
+        .actions
+        [(m/TextButton.
+          .onPressed #(m/Navigator.pop dialog-ctx)
+          .child (mg/MongolText. "ᠪᠤᠯᠢᠬᠤ" .style (m/TextStyle. .fontFamily theme/default-font .fontSize 16.0)))
+         (m/ElevatedButton.
+          .onPressed (fn []
+                       (let [title (.trim (.-text ctrl))]
+                         (when-not (empty? title)
+                           (task-actions/add-task! title target-date)))
+                       (m/Navigator.pop dialog-ctx))
+          .child (mg/MongolText. "ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily theme/default-font .fontSize 16.0)))])))))
+
+(defn show-almanac-detail-dialog!
+  "Popup dialog displaying the selected day's lunar almanac, haircut auspiciousness, and anniversaries in extra-large font."
+  [ctx ^dc/DateTime selected-dt day-anniversaries]
+  (let [info       (lunar/solar->mongol-lunar selected-dt)
+        haircut    (:haircut info)
+        good-hair? (:good? haircut)]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [dialog-ctx]
+       (let [p        (theme/palette-from-ctx dialog-ctx)
+             dialog-h (theme/adaptive-dialog-height dialog-ctx)]
+         (m/Dialog.
+          .backgroundColor (:card-bg p)
+          .surfaceTintColor m/Colors.transparent
+          .insetPadding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 24.0)
+          .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+          .child
+          (m/Container.
+           .height dialog-h
+           .padding (m/EdgeInsets.all 16.0)
+           .child
+           (m/Row.
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .children
+            [;; FIXED: Wrapped SingleChildScrollView in Expanded so it never overflows the Dialog width!
+             (m/Expanded.
+              .child
+              (m/SingleChildScrollView.
+               .scrollDirection m/Axis.horizontal
+               .child
+               (m/Row.
+                .crossAxisAlignment m/CrossAxisAlignment.stretch
+                .children
+                (vec
+                 (concat
+                  ;; 1. Solar & Lunar Date Header Banner (Extra-large font)
+                  [(m/Container.
+                    .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 12.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (.withOpacity (:primary p) 0.06)
+                                 .borderRadius (m/BorderRadius.circular 16.0))
+                    .child
+                    (m/Row.
+                     .crossAxisAlignment m/CrossAxisAlignment.stretch
+                     .children
+                     [(m/Column.
+                       .crossAxisAlignment m/CrossAxisAlignment.center
+                       .children
+                       [(m/Container.
+                         .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 5.0)
+                         .decoration (m/BoxDecoration.
+                                      .color (:primary p)
+                                      .borderRadius (m/BorderRadius.circular 10.0))
+                         .child (m/Text. (str (.-month selected-dt) "/" (.-day selected-dt))
+                                         .style (m/TextStyle.
+                                                 .fontSize 16.0
+                                                 .fontWeight m/FontWeight.bold
+                                                 .color (:on-primary p))))
+                        (m/SizedBox. .height 10.0)
+                        (m/Expanded.
+                         .child
+                         (m/SingleChildScrollView.
+                          .scrollDirection m/Axis.vertical
+                          .child
+                          (theme/vertical-mongol-text
+                           (str (:mgl-month-name info) " • " (:mgl-day-name info))
+                           (m/TextStyle.
+                            .fontFamily theme/default-font
+                            .fontSize 23.0
+                            .fontWeight m/FontWeight.bold
+                            .color (:heading p)))))])
+                      (m/SizedBox. .width 12.0)
+                      (m/Column.
+                       .crossAxisAlignment m/CrossAxisAlignment.start
+                       .children
+                       [(m/Expanded.
+                         .child
+                         (m/SingleChildScrollView.
+                          .scrollDirection m/Axis.vertical
+                          .child
+                          (theme/vertical-mongol-text
+                           (str (:mgl-year-color info) " · " (:mgl-year-element info) "\n" (:mgl-day-gan-zhi info))
+                           (m/TextStyle.
+                            .fontFamily theme/default-font
+                            .fontSize 18.5
+                            .color (:on-body p)))))
+                        (if-let [term (:mgl-solar-term info)]
+                          (m/Container.
+                           .margin (m/EdgeInsets.only .top 8.0)
+                           .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 6.0)
+                           .decoration (m/BoxDecoration.
+                                        .color (.withOpacity m/Colors.deepOrange 0.14)
+                                        .borderRadius (m/BorderRadius.circular 8.0))
+                           .child (theme/vertical-mongol-text
+                                   term
+                                   (m/TextStyle.
+                                    .fontFamily theme/default-font
+                                    .fontSize 18.0
+                                    .fontWeight m/FontWeight.bold
+                                    .color m/Colors.deepOrange)))
+                          (m/SizedBox.shrink))])]))
+
+                   (m/SizedBox. .width 12.0)]
+
+                  ;; 2. Anniversaries Columns (if any)
+                  (when (not (empty? day-anniversaries))
+                    (conj
+                     (mapv (fn [ann]
+                             (m/Container.
+                              .margin (m/EdgeInsets.only .right 10.0)
+                              .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 12.0)
+                              .decoration (m/BoxDecoration.
+                                           .color (.withOpacity m/Colors.pink 0.06)
+                                           .borderRadius (m/BorderRadius.circular 16.0)
+                                           .border (m/Border.all .color (.withOpacity m/Colors.pink 0.2)))
+                              .child
+                              (m/Column.
+                               .children
+                               [(m/Icon. m/Icons.cake .size 22.0 .color m/Colors.pinkAccent)
+                                (m/SizedBox. .height 8.0)
+                                (m/Expanded.
+                                 .child
+                                 (m/SingleChildScrollView.
+                                  .scrollDirection m/Axis.vertical
+                                  .child
+                                  (theme/vertical-mongol-text
+                                   (:title ann)
+                                   (m/TextStyle.
+                                    .fontFamily theme/default-font
+                                    .fontSize 21.0
+                                    .fontWeight m/FontWeight.bold
+                                    .color m/Colors.pink.shade700))))])))
+                           day-anniversaries)
+                     (m/SizedBox. .width 4.0)))
+
+                  ;; 3. Haircut Auspiciousness Full Detail Card (FIXED: Wrapped inner label in Expanded + FittedBox)
+                  [(m/Container.
+                    .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 12.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (if good-hair?
+                                          (.withOpacity m/Colors.teal 0.06)
+                                          (.withOpacity m/Colors.redAccent 0.05))
+                                 .borderRadius (m/BorderRadius.circular 16.0)
+                                 .border (m/Border.all
+                                          .color (if good-hair?
+                                                   (.withOpacity m/Colors.teal 0.2)
+                                                   (.withOpacity m/Colors.redAccent 0.2))))
+                    .child
+                    (m/Row.
+                     .crossAxisAlignment m/CrossAxisAlignment.stretch
+                     .children
+                     [(m/Column.
+                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                       .children
+                       [(m/Icon. m/Icons.content_cut
+                                 .size 20.0
+                                 .color (if good-hair? m/Colors.teal m/Colors.redAccent))
+                        (m/SizedBox. .height 6.0)
+                        (m/Expanded.
+                         .child
+                         (m/Center.
+                          .child
+                          (m/FittedBox.
+                           .fit m/BoxFit.scaleDown
+                           .child
+                           (theme/vertical-mongol-text
+                            "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ"
+                            (m/TextStyle.
+                             .fontFamily theme/default-font
+                             .fontSize 18.0
+                             .fontWeight m/FontWeight.bold
+                             .color (:on-muted p))))))
+                        (m/SizedBox. .height 6.0)
+                        (m/Container.
+                         .padding (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 6.0)
+                         .decoration (m/BoxDecoration.
+                                      .color (if good-hair?
+                                               (.withOpacity m/Colors.teal 0.16)
+                                               (.withOpacity m/Colors.redAccent 0.14))
+                                      .borderRadius (m/BorderRadius.circular 8.0))
+                         .child (theme/vertical-mongol-text
+                                 (:status-label haircut)
+                                 (m/TextStyle.
+                                  .fontFamily theme/default-font
+                                  .fontSize 17.5
+                                  .fontWeight m/FontWeight.bold
+                                  .color (if good-hair?
+                                           m/Colors.teal.shade800
+                                           m/Colors.red.shade800))))])
+                      (m/SizedBox. .width 12.0)
+                      (m/SingleChildScrollView.
+                       .scrollDirection m/Axis.vertical
+                       .child
+                       (theme/vertical-mongol-text
+                        (:desc haircut)
+                        (m/TextStyle.
+                         .fontFamily theme/default-font
+                         .fontSize 21.0
+                         .fontWeight m/FontWeight.w500
+                         .color (:on-body p))))]))])))))
+
+             (m/SizedBox. .width 10.0)
+
+             ;; Close Button Column on the far right (Overflow-safe)
+             (m/Column.
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .children
+              [(m/IconButton.filledTonal
+                .icon (m/Icon. m/Icons.close .size 20.0)
+                .onPressed #(m/Navigator.pop dialog-ctx))
+               (m/Expanded.
+                .child
+                (m/Align.
+                 .alignment m/Alignment.bottomCenter
+                 .child
+                 (m/TextButton.
+                  .onPressed #(m/Navigator.pop dialog-ctx)
+                  .child
+                  (m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .child
+                   (theme/vertical-mongol-text
+                    "ᠬᠠᠭᠠᠬᠤ"
+                    (m/TextStyle.
+                     .fontFamily theme/default-font
+                     .fontSize 17.0
+                     .fontWeight m/FontWeight.bold
+                     .color (:primary p)))))))])]))))))))
+
+(defn show-day-tasks-detail-dialog!
+  "Popup dialog displaying the selected day's tasks in extra-large font for easy reading & checking off."
+  [ctx ^dc/DateTime selected-dt]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [dialog-ctx]
+     (f/widget
+      :context dialog-ctx
+      :watch [all-tasks (stream
+                         (map stream-util/rows->records)
+                         (map stream-util/empty-on-error)
+                         :as-values (db/watch-calendar-tasks))]
+      (let [p         (theme/palette-from-ctx dialog-ctx)
+            dialog-h  (theme/adaptive-dialog-height dialog-ctx)
+            tasks-map (task-logic/group-tasks-by-date-key all-tasks)
+            sel-key   (task-logic/date->key selected-dt)
+            day-tasks (get tasks-map sel-key [])]
+        (m/Dialog.
+         .backgroundColor (:page-bg p)
+         .surfaceTintColor m/Colors.transparent
+         .insetPadding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 24.0)
+         .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+         .child
+         (m/Container.
+          .height dialog-h
+          .padding (m/EdgeInsets.all 16.0)
+          .child
+          (m/Row.
+           .crossAxisAlignment m/CrossAxisAlignment.stretch
+           .children
+           [;; Left Header Banner inside dialog (FittedBox prevents vertical overflow)
+            (m/Container.
+             .padding (m/EdgeInsets.symmetric .vertical 10.0 .horizontal 8.0)
+             .decoration (m/BoxDecoration.
+                          .color (:card-bg p)
+                          .borderRadius (m/BorderRadius.circular 16.0)
+                          .border (m/Border.all .color (:card-border p)))
+             .child
+             (m/Column.
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .children
+              [(m/Badge.
+                .label (m/Text. (str (count day-tasks)) .style (m/TextStyle. .fontSize 11.0))
+                .isLabelVisible (pos? (count day-tasks))
+                .backgroundColor (:primary p)
+                .child (m/Icon. m/Icons.fact_check .size 22.0 .color (:primary p)))
+               (m/Expanded.
+                .child
+                (m/Padding.
+                 .padding (m/EdgeInsets.symmetric .vertical 6.0)
+                 .child
+                 (m/Center.
+                  .child
+                  (m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .child
+                   (theme/vertical-mongol-text
+                    "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
+                    (m/TextStyle.
+                     .fontFamily theme/default-font
+                     .fontSize 21.0
+                     .fontWeight m/FontWeight.bold
+                     .color (:heading p)))))))
+               ;; Quick Add Task Button inside large dialog
+               (m/IconButton.filled
+                .style (m/IconButton.styleFrom .backgroundColor (:primary p))
+                .icon (m/Icon. m/Icons.add .size 22.0 .color (:on-primary p))
+                .onPressed #(show-add-task-for-date-dialog! ctx selected-dt))]))
+
+            (m/SizedBox. .width 12.0)
+
+            ;; Middle Horizontal Stream of Large Task Cards
+            (m/Expanded.
+             .child
+             (if (empty? day-tasks)
+               (m/Center.
+                .child
+                (m/FittedBox.
+                 .fit m/BoxFit.scaleDown
+                 .child
+                 (theme/vertical-mongol-text
+                  "ᠡᠨᠡ ᠡᠳᠦᠷ ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
+                  (m/TextStyle.
+                   .fontFamily theme/default-font
+                   .fontSize 20.0
+                   .color (:on-muted p)))))
+               (m/ListView.builder
+                .scrollDirection m/Axis.horizontal
+                .itemCount (count day-tasks)
+                .itemBuilder
+                (fn [_ idx]
+                  (let [task  (nth day-tasks idx)
+                        done? (dates/task-completed? task)]
+                    (m/Container.
+                     .margin (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 2.0)
+                     .decoration (theme/soft-card-decoration (:card-bg p) (:card-border p) 16.0 (:shadow-base p))
+                     .child
+                     (m/InkWell.
+                      .borderRadius (m/BorderRadius.circular 16.0)
+                      .onTap #(do
+                                (m/Navigator.pop dialog-ctx)
+                                (swap! store/app-ui-state assoc :selected-task task)
+                                (m/Navigator.pushNamed ctx r/task-detail)
+                                nil)
+                      .child
+                      (m/Padding.
+                       .padding (m/EdgeInsets.symmetric .vertical 12.0 .horizontal 10.0)
+                       .child
+                       (m/Column.
+                        .children
+                        [(m/Transform.scale
+                          .scale 1.25
+                          .child
+                          (m/Checkbox.
+                           .value done?
+                           .activeColor m/Colors.teal
+                           .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 5.0))
+                           .onChanged (fn [_] (task-actions/toggle-task! task))))
+                         (m/SizedBox. .height 10.0)
+                         (m/Expanded.
+                          .child
+                          (m/SingleChildScrollView.
+                           .scrollDirection m/Axis.vertical
+                           .child
+                           (mg/MongolText. (or (:title task) "")
+                                           .style (m/TextStyle.
+                                                   .fontFamily theme/default-font
+                                                   .fontSize 21.0
+                                                   .fontWeight m/FontWeight.w500
+                                                   .decoration (if done?
+                                                                 m/TextDecoration.lineThrough
+                                                                 m/TextDecoration.none)
+                                                   .color (if done? (:on-muted p) (:on-body p))))))])))))))))
+
+            (m/SizedBox. .width 6.0)
+
+            ;; Right Close Button
+            (m/Column.
+             .mainAxisAlignment m/MainAxisAlignment.start
+             .children
+             [(m/IconButton.filledTonal
+               .icon (m/Icon. m/Icons.close .size 22.0)
+               .onPressed #(m/Navigator.pop dialog-ctx))])]))))))))
