@@ -11,13 +11,26 @@
             [minii-focus.logic.anniversary :as ann]
             [minii-focus.logic.db :as db]
             [minii-focus.logic.stream-util :as stream-util]
-            [minii-focus.logic.records :as rec]))
+            [minii-focus.logic.records :as rec]
+            [clojure.string :as str]))
 
 ;; =============================================================================
-;; 1. Local UI State (calendar month & selected date only)
+;; 1. Local UI State & Typography / Theme Constants
 ;; =============================================================================
 
 (def default-font "OyunQaganTig")
+
+;; Top calendar area font sizes (kept large for elder-friendly readability)
+(def ^:private grid-solar-font-size 18.0)
+(def ^:private grid-lunar-font-size 17.0)
+(def ^:private grid-weekday-font-size 17.0)
+(def ^:private pill-month-font-size 20.0)
+(def ^:private pill-ganzhi-font-size 14.5)
+(def ^:private pill-today-font-size 15.5)
+
+;; Soft surface palette
+(def ^:private page-bg-color (m/Color. 0xFFF5F7FB))
+(def ^:private card-border-color (m/Color. 0xFFE6EAF2))
 
 (defonce calendar-ui-state
   (let [now (dc/DateTime.now)]
@@ -32,23 +45,25 @@
 ;; =============================================================================
 
 (defn same-day?
-  [a b]
-  (when (and (some? a) (some? b))
-    (let [^dc/DateTime a a
-          ^dc/DateTime b b]
-      (and (= (.-year a) (.-year b))
-           (= (.-month a) (.-month b))
-           (= (.-day a) (.-day b))))))
+  [^dc/DateTime? a ^dc/DateTime? b]
+  (boolean
+   (and a b
+        (= (.-year a) (.-year b))
+        (= (.-month a) (.-month b))
+        (= (.-day a) (.-day b)))))
+
+(defn weekend?
+  [^dc/DateTime dt]
+  (let [w (.-weekday dt)]
+    (or (= w 6) (= w 7))))
 
 (defn days-in-month
   [year month]
   (.-day (dc/DateTime. year (inc month) 0)))
 
 (defn build-month-cells
-  [month-dt]
-  (let [^dc/DateTime month-dt (or month-dt (let [now (dc/DateTime.now)]
-                                             (dc/DateTime. (.-year now) (.-month now) 1)))
-        year        (.-year month-dt)
+  [^dc/DateTime month-dt]
+  (let [year        (.-year month-dt)
         month       (.-month month-dt)
         first-day   (dc/DateTime. year month 1)
         lead-offset (dec (.-weekday first-day))
@@ -63,9 +78,7 @@
   [delta]
   (swap! calendar-ui-state
          (fn [st]
-           (let [st   (ensure-calendar-dates st)
-                 cur  (:current-month st)
-                 ^dc/DateTime cur cur
+           (let [^dc/DateTime cur (:current-month st)
                  next-m (dc/DateTime. (.-year cur) (+ (.-month cur) delta) 1)]
              (assoc st :current-month next-m)))))
 
@@ -77,27 +90,6 @@
            :current-month (dc/DateTime. (.-year now) (.-month now) 1)
            :selected-date today)))
 
-(defn- calendar-today
-  []
-  (let [now (dc/DateTime.now)]
-    (dc/DateTime. (.-year now) (.-month now) (.-day now))))
-
-(defn- ensure-calendar-dates
-  [{:keys [current-month selected-date] :as st}]
-  (let [today (calendar-today)
-        now   (dc/DateTime.now)]
-    (cond-> st
-      (nil? current-month) (assoc :current-month (dc/DateTime. (.-year now) (.-month now) 1))
-      (nil? selected-date) (assoc :selected-date today))))
-
-(defn- sync-calendar-ui-state!
-  "Normalize missing dates and persist back to the atom when needed."
-  [st]
-  (let [fixed (ensure-calendar-dates st)]
-    (when (not= st fixed)
-      (reset! calendar-ui-state fixed))
-    fixed))
-
 (defn task-completed?
   [task]
   (rec/task-done? task))
@@ -106,423 +98,907 @@
   [text style]
   (mg/MongolText. text .style style))
 
-;; =============================================================================
-;; 3. UI Sub-components (Left Vertical Sidebar + Right Calendar Content)
-;; =============================================================================
+(defn- grid-label-numeric?
+  [label]
+  (boolean (and label (not (empty? label)) (re-matches #"^\d+$" label))))
 
-(defn left-date-sidebar
-  "Vertical control bar on the left side: Month switcher, current year/month, lunar year, and Today button."
-  [current-month]
-  (let [^dc/DateTime current-month (or current-month (let [now (dc/DateTime.now)]
-                                                        (dc/DateTime. (.-year now) (.-month now) 1)))
-        lunar-sample (lunar/solar->mongol-lunar current-month)]
-    (m/Container.
-     .width 58.0
-     .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
-     .decoration (m/BoxDecoration.
-                  .color (.withOpacity m/Colors.indigo 0.04)
-                  .border (m/Border.
-                           .right (m/BorderSide.
-                                   .color (.withOpacity m/Colors.indigo 0.12)
-                                   .width 1.0)))
-     .child
-     (m/Column.
-      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-      .crossAxisAlignment m/CrossAxisAlignment.center
-      .children
-      [;; Previous month button at top
-       (m/IconButton.
-        .icon (m/Icon. m/Icons.keyboard_arrow_up .size 22.0)
-        .padding m/EdgeInsets.zero
-        .constraints (m/BoxConstraints. .minWidth 36.0 .minHeight 36.0)
-        .onPressed #(shift-month! -1))
+(defn- mongol-label-space-parts
+  [label]
+  (vec (remove empty? (str/split (str/trim label) #"\s+"))))
 
-       ;; Scrollable middle section for vertical Mongolian year/month & Ganzhi
-       (m/Expanded.
-        .child
-        (m/Center.
-         .child
-         (m/SingleChildScrollView.
-          .scrollDirection m/Axis.vertical
-          .child
-          (m/Row.
-           .mainAxisSize m/MainAxisSize.min
-           .crossAxisAlignment m/CrossAxisAlignment.center
-           .children
-           [(vertical-mongol-text
-             (str (.-year current-month) " ᠤᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
-             (m/TextStyle. .fontFamily default-font .fontSize 16.0 .fontWeight m/FontWeight.bold))
-            (m/SizedBox. .width 4.0)
-            (vertical-mongol-text
-             (:mgl-year-color lunar-sample)
-             (m/TextStyle. .fontFamily default-font .fontSize 11.5 .color m/Colors.grey.shade700))]))))
+(defn- mongol-label-by-spaces
+  "Two or more space-separated words -> newline between them for MongolText."
+  [label]
+  (let [parts (mongol-label-space-parts label)]
+    (cond
+      (empty? parts) label
+      (= 1 (count parts)) (first parts)
+      :else (str/join "\n" parts))))
 
-       ;; Next month button
-       (m/IconButton.
-        .icon (m/Icon. m/Icons.keyboard_arrow_down .size 22.0)
-        .padding m/EdgeInsets.zero
-        .constraints (m/BoxConstraints. .minWidth 36.0 .minHeight 36.0)
-        .onPressed #(shift-month! 1))
-
-       (m/Divider. .height 12.0 .indent 6.0 .endIndent 6.0)
-
-       ;; "Today" button placed vertically in the same left column
-       (m/InkWell.
-        .borderRadius (m/BorderRadius.circular 8.0)
-        .onTap jump-to-today!
-        .child
-        (m/Container.
-         .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
-         .decoration (m/BoxDecoration.
-                      .color (.withOpacity m/Colors.indigo 0.1)
-                      .borderRadius (m/BorderRadius.circular 8.0)
-                      .border (m/Border.all .color (.withOpacity m/Colors.indigo 0.3)))
-         .child (vertical-mongol-text
-                 "ᠡᠨᠡ ᠡᠳᠦᠷ"
-                 (m/TextStyle.
-                  .fontFamily default-font
-                  .fontSize 13.0
-                  .fontWeight m/FontWeight.bold
-                  .color m/Colors.indigo))))]))))
-
-(defn calendar-day-cell
-  [dt selected-dt today-dt day-tasks day-anniversaries]
-  (if (nil? dt)
+(defn- calendar-grid-lunar-label
+  "Lunar grid label: digits horizontal; Mongol via MongolText; 2+ words broken at spaces."
+  [label mongol-style numeric-style]
+  (cond
+    (or (nil? label) (empty? label))
     (m/SizedBox.shrink)
-    (let [^dc/DateTime dt dt
-          selected-dt (or selected-dt (calendar-today))
-          today-dt    (or today-dt (calendar-today))
-          is-selected? (same-day? dt selected-dt)
-          is-today?    (same-day? dt today-dt)
-          lunar-info   (lunar/solar->mongol-lunar dt)
-          has-solar?   (some? (:mgl-solar-term lunar-info))
-          good-hair?   (get-in lunar-info [:haircut :good?])
-          has-anniv?   (not (empty? day-anniversaries))
-          total-tasks  (count day-tasks)
-          all-done?    (and (pos? total-tasks) (every? task-completed? day-tasks))]
-      (m/GestureDetector.
-       .onTap #(swap! calendar-ui-state assoc :selected-date dt)
-       .child
-       (m/Container.
-        .margin (m/EdgeInsets.all 1.5)
-        .padding (m/EdgeInsets.symmetric .vertical 2.0 .horizontal 1.0)
-        .decoration (m/BoxDecoration.
-                     .color (cond
-                              is-selected? (.withOpacity m/Colors.indigo 0.15)
-                              is-today?    (.withOpacity m/Colors.amber 0.12)
-                              :else        m/Colors.transparent)
-                     .borderRadius (m/BorderRadius.circular 8.0)
-                     .border (cond
-                               is-selected? (m/Border.all .color m/Colors.indigo .width 1.5)
-                               is-today?    (m/Border.all .color m/Colors.amber .width 1.0)
-                               :else        nil))
-        .child
-        (m/Column.
-         .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-         .children
-         [;; Top row: Solar day number + small indicator icon/dot
-          (m/Row.
-           .mainAxisAlignment m/MainAxisAlignment.center
-           .mainAxisSize m/MainAxisSize.min
-           .children
-           [(m/Text. (str (.-day dt))
-                     .style (m/TextStyle.
-                             .fontSize 11.5
-                             .height 1.0
-                             .fontWeight (if (or is-selected? is-today?)
-                                           m/FontWeight.bold
-                                           m/FontWeight.w500)
-                             .color (if is-selected? m/Colors.indigo m/Colors.black87)))
-            (if has-anniv?
-              (m/Padding.
-               .padding (m/EdgeInsets.only .left 1.5)
-               .child (m/Icon. m/Icons.cake .size 9.0 .color m/Colors.pinkAccent))
-              (if good-hair?
-                (m/Container.
-                 .margin (m/EdgeInsets.only .left 2.0)
-                 .width 3.5
-                 .height 3.5
-                 .decoration (m/BoxDecoration.
-                              .color m/Colors.teal
-                              .shape m/BoxShape.circle))
-                (m/SizedBox.shrink)))])
 
-          ;; Middle: Vertical lunar day / solar term label (FittedBox prevents vertical overflow)
-          (m/Expanded.
-           .child
-           (m/Center.
-            .child
-            (m/FittedBox.
-             .fit m/BoxFit.scaleDown
-             .child
-             (mg/MongolText. (:grid-cell-label lunar-info)
-                             .style (m/TextStyle.
-                                     .fontFamily default-font
-                                     .fontSize 10.5
-                                     .color (if has-solar? m/Colors.deepOrange m/Colors.grey.shade600)
-                                     .fontWeight (if has-solar? m/FontWeight.bold m/FontWeight.normal))))))
+    (grid-label-numeric? label)
+    (m/Text. label .textAlign m/TextAlign.center .style numeric-style)
 
-          ;; Bottom: Task progress bar indicator
-          (if (pos? total-tasks)
-            (m/Container.
-             .width 10.0
-             .height 2.5
-             .decoration (m/BoxDecoration.
-                          .color (if all-done? m/Colors.green m/Colors.indigoAccent)
-                          .borderRadius (m/BorderRadius.circular 2.0)))
-            (m/SizedBox. .height 2.5))]))))))
+    :else
+    (mg/MongolText. (mongol-label-by-spaces label) .style mongol-style)))
 
-(defn lunar-almanac-card
-  "Horizontal scrolling almanac card where vertical Mongolian columns are placed side-by-side in a Row."
-  [selected-dt day-anniversaries]
-  (let [^dc/DateTime selected-dt (or selected-dt (calendar-today))
-        info        (lunar/solar->mongol-lunar selected-dt)
-        haircut     (:haircut info)
-        good-hair?  (:good? haircut)
-        body-style  (m/TextStyle. .fontFamily default-font .fontSize 13.0 .color m/Colors.black87)
-        label-style (m/TextStyle. .fontFamily default-font .fontSize 12.5 .fontWeight m/FontWeight.w500)]
-    (m/Container.
-     .height 118.0
-     .width dc/double.infinity
-     .margin (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 4.0)
-     .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 8.0)
-     .decoration (m/BoxDecoration.
-                  .color (.withOpacity m/Colors.indigo 0.05)
-                  .borderRadius (m/BorderRadius.circular 10.0)
-                  .border (m/Border.all .color (.withOpacity m/Colors.indigo 0.15)))
-     .child
-     (m/SingleChildScrollView.
-      .scrollDirection m/Axis.horizontal
-      .child
-      (m/Row.
-       .crossAxisAlignment m/CrossAxisAlignment.start
-       .children
-       (vec
-        (concat
-         ;; 1. Anniversaries section (if any)
-         (when (not (empty? day-anniversaries))
-           (conj
-            (mapv (fn [ann]
-                    (m/Padding.
-                     .padding (m/EdgeInsets.only .right 10.0)
-                     .child
-                     (m/Row.
-                      .crossAxisAlignment m/CrossAxisAlignment.start
-                      .children
-                      [(m/Icon. m/Icons.celebration .size 14.0 .color m/Colors.pinkAccent)
-                       (m/SizedBox. .width 4.0)
-                       (vertical-mongol-text (:title ann)
-                                             (m/TextStyle.
-                                              .fontFamily default-font
-                                              .fontSize 13.0
-                                              .fontWeight m/FontWeight.bold
-                                              .color m/Colors.pink.shade700))])))
-                  day-anniversaries)
-            (m/VerticalDivider. .width 16.0)))
+(defn- soft-card-decoration
+  "Unified modern card decoration with subtle shadow and border."
+  [bg-color border-color radius]
+  (m/BoxDecoration.
+   .color bg-color
+   .borderRadius (m/BorderRadius.circular radius)
+   .border (m/Border.all .color border-color .width 1.0)
+   .boxShadow [(m/BoxShadow.
+                .color (.withOpacity m/Colors.indigo 0.04)
+                .blurRadius 12.0
+                .offset (m/Offset. 0.0 4.0))]))
 
-         ;; 2. Lunar date, Ganzhi & Solar term columns (arranged horizontally in a Row!)
-         [(m/Row.
-           .crossAxisAlignment m/CrossAxisAlignment.start
-           .children
-           [(vertical-mongol-text (str (:mgl-month-name info) " • " (:mgl-day-name info))
-                                  (m/TextStyle. .fontFamily default-font .fontSize 14.5 .fontWeight m/FontWeight.bold))
-            (m/SizedBox. .width 8.0)
-            (vertical-mongol-text (:mgl-year-color info)
-                                  (m/TextStyle. .fontFamily default-font .fontSize 12.0 .color m/Colors.black54))
-            (m/SizedBox. .width 4.0)
-            (vertical-mongol-text (:mgl-day-gan-zhi info)
-                                  (m/TextStyle. .fontFamily default-font .fontSize 12.0 .color m/Colors.black54))
-            (if-let [term (:mgl-solar-term info)]
-              (m/Container.
-               .margin (m/EdgeInsets.only .left 6.0)
-               .padding (m/EdgeInsets.symmetric .horizontal 3.0 .vertical 4.0)
-               .decoration (m/BoxDecoration.
-                            .color (.withOpacity m/Colors.deepOrange 0.12)
-                            .borderRadius (m/BorderRadius.circular 6.0))
-               .child (vertical-mongol-text term
-                                            (m/TextStyle.
-                                             .fontFamily default-font
-                                             .fontSize 12.0
-                                             .fontWeight m/FontWeight.bold
-                                             .color m/Colors.deepOrange)))
-              (m/SizedBox.shrink))])
-
-          (m/VerticalDivider. .width 18.0)
-
-          ;; 3. Haircut auspiciousness columns (arranged horizontally in a Row to prevent vertical overflow!)
-          (m/Row.
-           .crossAxisAlignment m/CrossAxisAlignment.start
-           .children
-           [(m/Icon. m/Icons.content_cut
-                     .size 14.0
-                     .color (if good-hair? m/Colors.teal m/Colors.redAccent))
-            (m/SizedBox. .width 4.0)
-            (vertical-mongol-text "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ:" label-style)
-            (m/SizedBox. .width 6.0)
-            (vertical-mongol-text (:desc haircut) body-style)
-            (m/SizedBox. .width 6.0)
-            (m/Container.
-             .padding (m/EdgeInsets.symmetric .horizontal 3.0 .vertical 4.0)
-             .decoration (m/BoxDecoration.
-                          .color (if good-hair?
-                                   (.withOpacity m/Colors.teal 0.15)
-                                   (.withOpacity m/Colors.redAccent 0.12))
-                          .borderRadius (m/BorderRadius.circular 6.0))
-             .child (vertical-mongol-text (:status-label haircut)
-                                          (m/TextStyle.
-                                           .fontFamily default-font
-                                           .fontSize 11.5
-                                           .fontWeight m/FontWeight.bold
-                                           .color (if good-hair?
-                                                    m/Colors.teal.shade700
-                                                    m/Colors.red.shade700))))])])))))))
+;; =============================================================================
+;; 3. Dialogs (Add Task + Elder-Friendly Large-Font Detail Popups)
+;; =============================================================================
 
 (defn show-add-task-for-date-dialog!
-  [ctx target-date]
-  (let [target-date (or target-date (calendar-today))
-        ^dc/DateTime target-date target-date
-        ctrl (m/TextEditingController.)]
+  [ctx ^dc/DateTime target-date]
+  (let [ctrl (m/TextEditingController.)]
     (m/showDialog
      .context ctx
      .builder
      (fn [dialog-ctx]
        (mg/MongolAlertDialog.
-        .title (mg/MongolText. "ᠰᠢᠨ᠎ᠡ ᠠᠵᠢᠯ ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily default-font .fontSize 18.0))
+        .title (mg/MongolText. "ᠰᠢᠨ᠎ᠡ ᠠᠵᠢᠯ ᠨᠡᠮᠡᠬᠦ"
+                               .style (m/TextStyle. .fontFamily default-font .fontSize 20.0 .fontWeight m/FontWeight.bold))
         .content (m/SizedBox.
-                  .height 180.0
-                  .width 80.0
+                  .height 200.0
+                  .width 90.0
                   .child (mg/MongolTextField.
                           .controller ctrl
                           .autofocus true
-                          .style (m/TextStyle. .fontFamily default-font .fontSize 16.0)))
+                          .style (m/TextStyle. .fontFamily default-font .fontSize 18.0)))
         .actions
         [(m/TextButton.
           .onPressed #(m/Navigator.pop dialog-ctx)
-          .child (mg/MongolText. "ᠪᠤᠯᠢᠬᠤ" .style (m/TextStyle. .fontFamily default-font)))
+          .child (mg/MongolText. "ᠪᠤᠯᠢᠬᠤ" .style (m/TextStyle. .fontFamily default-font .fontSize 16.0)))
          (m/ElevatedButton.
           .onPressed (fn []
                        (let [title (.trim (.-text ctrl))]
                          (when-not (empty? title)
                            (task-actions/add-task! title target-date)))
                        (m/Navigator.pop dialog-ctx))
-          .child (mg/MongolText. "ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily default-font)))])))))
+          .child (mg/MongolText. "ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily default-font .fontSize 16.0)))])))))
 
-;; =============================================================================
-;; 4. Main Calendar Body (Left Sidebar + Right Calendar & Tasks)
-;; =============================================================================
-
-(defn- calendar-body
-  [ctx current-month selected-date today cells tasks-map ann-by-key day-tasks sel-annivs]
-  (let [^dc/DateTime current-month (or current-month (let [now (dc/DateTime.now)]
-                                                       (dc/DateTime. (.-year now) (.-month now) 1)))
-        ^dc/DateTime selected-date (or selected-date (calendar-today))
-        ^dc/DateTime today (or today (calendar-today))]
-    (m/SafeArea.
-   .child
-   (m/Row.
-    .crossAxisAlignment m/CrossAxisAlignment.stretch
-    .children
-    [;; Left Column: Date switcher & Today button
-     (left-date-sidebar current-month)
-
-     ;; Right Area: Calendar Grid + Almanac + Day Tasks
-     (m/Expanded.
-      .child
-      (m/Column.
-       .children
-       [;; 1. Weekday header row (Fixed compact height to prevent vertical overflow)
-        (m/SizedBox.
-         .height 42.0
+(defn show-almanac-detail-dialog!
+  "Popup dialog displaying the selected day's lunar almanac, haircut auspiciousness, and anniversaries in extra-large font."
+  [ctx ^dc/DateTime selected-dt day-anniversaries]
+  (let [info       (lunar/solar->mongol-lunar selected-dt)
+        haircut    (:haircut info)
+        good-hair? (:good? haircut)]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [dialog-ctx]
+       (m/Dialog.
+        .backgroundColor m/Colors.white
+        .surfaceTintColor m/Colors.transparent
+        .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+        .child
+        (m/Container.
+         .height 440.0
+         .padding (m/EdgeInsets.all 20.0)
          .child
-         (m/Padding.
-          .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 2.0)
+         (m/Row.
+          .crossAxisAlignment m/CrossAxisAlignment.stretch
+          .mainAxisSize m/MainAxisSize.min
+          .children
+          [(m/SingleChildScrollView.
+            .scrollDirection m/Axis.horizontal
+            .child
+            (m/Row.
+             .crossAxisAlignment m/CrossAxisAlignment.stretch
+             .children
+             (vec
+              (concat
+               ;; 1. Solar & Lunar Date Header Banner (Extra-large font)
+               [(m/Container.
+                 .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 14.0)
+                 .decoration (m/BoxDecoration.
+                              .color (.withOpacity m/Colors.indigo 0.06)
+                              .borderRadius (m/BorderRadius.circular 16.0))
+                 .child
+                 (m/Row.
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [(m/Column.
+                    .crossAxisAlignment m/CrossAxisAlignment.center
+                    .children
+                    [(m/Container.
+                      .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 6.0)
+                      .decoration (m/BoxDecoration.
+                                   .color m/Colors.indigo
+                                   .borderRadius (m/BorderRadius.circular 10.0))
+                      .child (m/Text. (str (.-month selected-dt) "/" (.-day selected-dt))
+                                      .style (m/TextStyle.
+                                              .fontSize 18.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color m/Colors.white)))
+                     (m/SizedBox. .height 12.0)
+                     (m/Expanded.
+                      .child
+                      (m/SingleChildScrollView.
+                       .scrollDirection m/Axis.vertical
+                       .child
+                       (vertical-mongol-text
+                        (str (:mgl-month-name info) " • " (:mgl-day-name info))
+                        (m/TextStyle.
+                         .fontFamily default-font
+                         .fontSize 24.0
+                         .fontWeight m/FontWeight.bold
+                         .color m/Colors.indigo.shade900))))])
+                   (m/SizedBox. .width 12.0)
+                   (m/Column.
+                    .crossAxisAlignment m/CrossAxisAlignment.start
+                    .children
+                    [(m/Expanded.
+                      .child
+                      (m/SingleChildScrollView.
+                       .scrollDirection m/Axis.vertical
+                       .child
+                       (vertical-mongol-text
+                        (str (:mgl-year-color info) " · " (:mgl-year-element info) "\n" (:mgl-day-gan-zhi info))
+                        (m/TextStyle.
+                         .fontFamily default-font
+                         .fontSize 19.0
+                         .color m/Colors.black87))))
+                     (if-let [term (:mgl-solar-term info)]
+                       (m/Container.
+                        .margin (m/EdgeInsets.only .top 8.0)
+                        .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 8.0)
+                        .decoration (m/BoxDecoration.
+                                     .color (.withOpacity m/Colors.deepOrange 0.14)
+                                     .borderRadius (m/BorderRadius.circular 8.0))
+                        .child (vertical-mongol-text
+                                term
+                                (m/TextStyle.
+                                 .fontFamily default-font
+                                 .fontSize 19.0
+                                 .fontWeight m/FontWeight.bold
+                                 .color m/Colors.deepOrange)))
+                       (m/SizedBox.shrink))])]))
+
+                (m/SizedBox. .width 16.0)]
+
+               ;; 2. Anniversaries Columns (if any)
+               (when (not (empty? day-anniversaries))
+                 (conj
+                  (mapv (fn [ann]
+                          (m/Container.
+                           .margin (m/EdgeInsets.only .right 12.0)
+                           .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 14.0)
+                           .decoration (m/BoxDecoration.
+                                        .color (.withOpacity m/Colors.pink 0.06)
+                                        .borderRadius (m/BorderRadius.circular 16.0)
+                                        .border (m/Border.all .color (.withOpacity m/Colors.pink 0.2)))
+                           .child
+                           (m/Column.
+                            .children
+                            [(m/Icon. m/Icons.cake .size 24.0 .color m/Colors.pinkAccent)
+                             (m/SizedBox. .height 10.0)
+                             (m/Expanded.
+                              .child
+                              (m/SingleChildScrollView.
+                               .scrollDirection m/Axis.vertical
+                               .child
+                               (vertical-mongol-text
+                                (:title ann)
+                                (m/TextStyle.
+                                 .fontFamily default-font
+                                 .fontSize 22.0
+                                 .fontWeight m/FontWeight.bold
+                                 .color m/Colors.pink.shade700))))])))
+                        day-anniversaries)
+                  (m/SizedBox. .width 4.0)))
+
+               ;; 3. Haircut Auspiciousness Full Detail Card (Extra-large font)
+               [(m/Container.
+                 .padding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 14.0)
+                 .decoration (m/BoxDecoration.
+                              .color (if good-hair?
+                                       (.withOpacity m/Colors.teal 0.06)
+                                       (.withOpacity m/Colors.redAccent 0.05))
+                              .borderRadius (m/BorderRadius.circular 16.0)
+                              .border (m/Border.all
+                                       .color (if good-hair?
+                                                (.withOpacity m/Colors.teal 0.2)
+                                                (.withOpacity m/Colors.redAccent 0.2))))
+                 .child
+                 (m/Row.
+                  .crossAxisAlignment m/CrossAxisAlignment.start
+                  .children
+                  [(m/Column.
+                    .children
+                    [(m/Icon. m/Icons.content_cut
+                              .size 22.0
+                              .color (if good-hair? m/Colors.teal m/Colors.redAccent))
+                     (m/SizedBox. .height 8.0)
+                     (vertical-mongol-text
+                      "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ"
+                      (m/TextStyle.
+                       .fontFamily default-font
+                       .fontSize 19.0
+                       .fontWeight m/FontWeight.bold
+                       .color m/Colors.black54))
+                     (m/SizedBox. .height 10.0)
+                     (m/Container.
+                      .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 8.0)
+                      .decoration (m/BoxDecoration.
+                                   .color (if good-hair?
+                                            (.withOpacity m/Colors.teal 0.16)
+                                            (.withOpacity m/Colors.redAccent 0.14))
+                                   .borderRadius (m/BorderRadius.circular 8.0))
+                      .child (vertical-mongol-text
+                              (:status-label haircut)
+                              (m/TextStyle.
+                               .fontFamily default-font
+                               .fontSize 19.0
+                               .fontWeight m/FontWeight.bold
+                               .color (if good-hair?
+                                        m/Colors.teal.shade800
+                                        m/Colors.red.shade800))))])
+                   (m/SizedBox. .width 14.0)
+                   (m/SingleChildScrollView.
+                    .scrollDirection m/Axis.vertical
+                    .child
+                    (vertical-mongol-text
+                     (:desc haircut)
+                     (m/TextStyle.
+                      .fontFamily default-font
+                      .fontSize 22.0
+                      .fontWeight m/FontWeight.w500
+                      .color m/Colors.black87)))]))]))))
+
+           (m/SizedBox. .width 14.0)
+
+           ;; Close Button Column on the far right
+           (m/Column.
+            .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+            .children
+            [(m/IconButton.filledTonal
+              .icon (m/Icon. m/Icons.close .size 22.0)
+              .onPressed #(m/Navigator.pop dialog-ctx))
+             (m/TextButton.
+              .onPressed #(m/Navigator.pop dialog-ctx)
+              .child (vertical-mongol-text
+                      "ᠬᠠᠭᠠᠬᠤ"
+                      (m/TextStyle.
+                       .fontFamily default-font
+                       .fontSize 18.0
+                       .fontWeight m/FontWeight.bold
+                       .color m/Colors.indigo)))])])))))))
+
+(defn show-day-tasks-detail-dialog!
+  "Popup dialog displaying the selected day's tasks in extra-large font for easy reading & checking off."
+  [ctx ^dc/DateTime selected-dt]
+  (m/showDialog
+   .context ctx
+   .builder
+   (fn [dialog-ctx]
+     (f/widget
+      :watch [all-tasks (stream
+                         (map stream-util/rows->records)
+                         (map stream-util/empty-on-error)
+                         :as-values (db/watch-calendar-tasks))]
+      (let [tasks-map (task-logic/group-tasks-by-date-key all-tasks)
+            sel-key   (task-logic/date->key selected-dt)
+            day-tasks (get tasks-map sel-key [])]
+        (m/Dialog.
+         .backgroundColor page-bg-color
+         .surfaceTintColor m/Colors.transparent
+         .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+         .child
+         (m/Container.
+          .height 440.0
+          .padding (m/EdgeInsets.all 18.0)
           .child
           (m/Row.
+           .crossAxisAlignment m/CrossAxisAlignment.stretch
            .children
-           (mapv (fn [w-label]
-                   (m/Expanded.
-                    .child (m/Center.
-                            .child
-                            (m/FittedBox.
-                             .fit m/BoxFit.scaleDown
-                             .child
-                             (mg/MongolText. w-label
-                                             .style (m/TextStyle.
-                                                     .fontFamily default-font
-                                                     .fontSize 12.0
-                                                     .fontWeight m/FontWeight.bold
-                                                     .color m/Colors.grey.shade700))))))
-                 weekday-headers))))
+           [;; Left Header Banner inside dialog
+            (m/Container.
+             .padding (m/EdgeInsets.symmetric .vertical 12.0 .horizontal 10.0)
+             .decoration (m/BoxDecoration.
+                          .color m/Colors.white
+                          .borderRadius (m/BorderRadius.circular 16.0)
+                          .border (m/Border.all .color card-border-color))
+             .child
+             (m/Column.
+              .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+              .children
+              [(m/Badge.
+                .label (m/Text. (str (count day-tasks)) .style (m/TextStyle. .fontSize 12.0))
+                .isLabelVisible (pos? (count day-tasks))
+                .backgroundColor m/Colors.indigo
+                .child (m/Icon. m/Icons.fact_check .size 24.0 .color m/Colors.indigo))
+               (m/Expanded.
+                .child
+                (m/Center.
+                 .child
+                 (vertical-mongol-text
+                  "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
+                  (m/TextStyle.
+                   .fontFamily default-font
+                   .fontSize 22.0
+                   .fontWeight m/FontWeight.bold
+                   .color m/Colors.indigo.shade900))))
+               ;; Quick Add Task Button inside large dialog
+               (m/IconButton.filled
+                .style (m/IconButton.styleFrom .backgroundColor m/Colors.indigo)
+                .icon (m/Icon. m/Icons.add .size 24.0 .color m/Colors.white)
+                .onPressed #(show-add-task-for-date-dialog! ctx selected-dt))]))
 
-        ;; 2. Calendar 7x6 Grid (Wrapped in Expanded with flexible aspect ratio)
-        (m/Expanded.
-         .flex 5
+            (m/SizedBox. .width 14.0)
+
+            ;; Middle Horizontal Stream of Large Task Cards
+            (m/Expanded.
+             .child
+             (if (empty? day-tasks)
+               (m/Center.
+                .child (vertical-mongol-text
+                        "ᠡᠨᠡ ᠡᠳᠦᠷ ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
+                        (m/TextStyle.
+                         .fontFamily default-font
+                         .fontSize 20.0
+                         .color m/Colors.grey.shade600)))
+               (m/ListView.builder
+                .scrollDirection m/Axis.horizontal
+                .itemCount (count day-tasks)
+                .itemBuilder
+                (fn [_ idx]
+                  (let [task  (nth day-tasks idx)
+                        done? (task-completed? task)]
+                    (m/Container.
+                     .margin (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 4.0)
+                     .decoration (soft-card-decoration m/Colors.white card-border-color 16.0)
+                     .child
+                     (m/InkWell.
+                      .borderRadius (m/BorderRadius.circular 16.0)
+                      .onTap #(do
+                                (m/Navigator.pop dialog-ctx)
+                                (swap! store/app-ui-state assoc :selected-task task)
+                                (m/Navigator.pushNamed ctx r/task-detail)
+                                nil)
+                      .child
+                      (m/Padding.
+                       .padding (m/EdgeInsets.symmetric .vertical 14.0 .horizontal 12.0)
+                       .child
+                       (m/Column.
+                        .children
+                        [(m/Transform.scale
+                          .scale 1.3
+                          .child
+                          (m/Checkbox.
+                           .value done?
+                           .activeColor m/Colors.teal
+                           .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 5.0))
+                           .onChanged (fn [_] (task-actions/toggle-task! task))))
+                         (m/SizedBox. .height 12.0)
+                         (m/Expanded.
+                          .child
+                          (m/SingleChildScrollView.
+                           .scrollDirection m/Axis.vertical
+                           .child
+                           (mg/MongolText. (or (:title task) "")
+                                           .style (m/TextStyle.
+                                                   .fontFamily default-font
+                                                   .fontSize 21.0
+                                                   .fontWeight m/FontWeight.w500
+                                                   .decoration (if done?
+                                                                 m/TextDecoration.lineThrough
+                                                                 m/TextDecoration.none)
+                                                   .color (if done? m/Colors.grey m/Colors.black87)))))])))))))))
+
+            (m/SizedBox. .width 8.0)
+
+            ;; Right Close Button
+            (m/Column.
+             .mainAxisAlignment m/MainAxisAlignment.start
+             .children
+             [(m/IconButton.filledTonal
+               .icon (m/Icon. m/Icons.close .size 24.0)
+               .onPressed #(m/Navigator.pop dialog-ctx))])]))))))))
+
+;; =============================================================================
+;; 4. UI Sub-components
+;; =============================================================================
+
+(defn- pill-nav-button
+  "Circular subtle button used at the top and bottom of the month switcher pill."
+  [icon on-tap]
+  (m/Material.
+   .color (.withOpacity m/Colors.indigo 0.06)
+   .shape (m/CircleBorder.)
+   .child
+   (m/InkWell.
+    .customBorder (m/CircleBorder.)
+    .onTap on-tap
+    .child
+    (m/Padding.
+     .padding (m/EdgeInsets.all 8.0)
+     .child (m/Icon. icon .size 22.0 .color m/Colors.indigo.shade800)))))
+
+(defn month-switcher-pill
+  "Floating vertical capsule next to the calendar grid with side-by-side vertical Year/Month and Ganzhi columns."
+  [^dc/DateTime current-month ^dc/DateTime selected-date ^dc/DateTime today-dt]
+  (let [lunar-sample (lunar/solar->mongol-lunar current-month)
+        on-today?    (and (same-day? selected-date today-dt)
+                          (= (.-year current-month) (.-year today-dt))
+                          (= (.-month current-month) (.-month today-dt)))]
+    (m/Container.
+     .width 60.0
+     .margin (m/EdgeInsets.only .left 8.0 .right 6.0)
+     .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
+     .decoration (soft-card-decoration m/Colors.white card-border-color 30.0)
+     .child
+     (m/Column.
+      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+      .children
+      [;; Previous month circular button
+       (pill-nav-button m/Icons.keyboard_arrow_up #(shift-month! -1))
+
+       ;; Vertical Year/Month & Lunar Year Color placed side-by-side in a Row (prevents vertical squishing!)
+       (m/Expanded.
+        .child
+        (m/Padding.
+         .padding (m/EdgeInsets.symmetric .vertical 6.0)
          .child
-         (m/Padding.
-          .padding (m/EdgeInsets.symmetric .horizontal 8.0)
+         (m/Center.
           .child
-          (m/LayoutBuilder.
-           .builder
-           (fn [_ constraints]
-             (let [grid-w (.-maxWidth constraints)
-                   grid-h (.-maxHeight constraints)
-                   cell-w (/ grid-w 7.0)
-                   cell-h (/ grid-h 6.0)
-                   ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)]
-               (m/GridView.builder
-                .physics (m/NeverScrollableScrollPhysics.)
-                .padding m/EdgeInsets.zero
-                .itemCount 42
-                .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
-                               .crossAxisCount 7
-                               .childAspectRatio ratio)
-                .itemBuilder (fn [_ idx]
-                               (let [cell-dt (nth cells idx nil)
-                                     c-key   (when cell-dt (task-logic/date->key cell-dt))
-                                     c-tasks (when c-key (get tasks-map c-key []))
-                                     c-ann   (when c-key (get ann-by-key c-key []))]
-                                 (calendar-day-cell cell-dt selected-date today c-tasks c-ann)))))))))
+          (m/FittedBox.
+           .fit m/BoxFit.scaleDown
+           .child
+           (m/Row.
+            .mainAxisSize m/MainAxisSize.min
+            .crossAxisAlignment m/CrossAxisAlignment.center
+            .children
+            [(vertical-mongol-text
+              (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
+              (m/TextStyle.
+               .fontFamily default-font
+               .fontSize pill-month-font-size
+               .fontWeight m/FontWeight.bold
+               .color m/Colors.indigo.shade900))
+             (m/SizedBox. .width 4.0)
+             (vertical-mongol-text
+              (:mgl-year-color lunar-sample)
+              (m/TextStyle.
+               .fontFamily default-font
+               .fontSize pill-ganzhi-font-size
+               .fontWeight m/FontWeight.w500
+               .color m/Colors.grey.shade600))])))))
 
-        ;; 3. Lunar Almanac Card
-        (lunar-almanac-card selected-date sel-annivs)
+       ;; Next month circular button
+       (pill-nav-button m/Icons.keyboard_arrow_down #(shift-month! 1))
 
-        ;; 4. Selected Day Tasks List (Horizontal scrolling vertical cards)
+       ;; "Today" indicator / action button at bottom of pill
+       (if on-today?
+         (m/Container.
+          .width 8.0
+          .height 8.0
+          .margin (m/EdgeInsets.only .top 4.0 .bottom 4.0)
+          .decoration (m/BoxDecoration.
+                       .color m/Colors.indigo
+                       .shape m/BoxShape.circle))
+         (m/Padding.
+          .padding (m/EdgeInsets.only .top 6.0)
+          .child
+          (m/Material.
+           .color m/Colors.indigo
+           .borderRadius (m/BorderRadius.circular 16.0)
+           .child
+           (m/InkWell.
+            .borderRadius (m/BorderRadius.circular 16.0)
+            .onTap jump-to-today!
+            .child
+            (m/Padding.
+             .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+             .child (vertical-mongol-text
+                     "ᠡᠨᠡ ᠡᠳᠦᠷ"
+                     (m/TextStyle.
+                      .fontFamily default-font
+                      .fontSize pill-today-font-size
+                      .fontWeight m/FontWeight.bold
+                      .color m/Colors.white)))))))]))))
+
+(defn empty-calendar-cell
+  "Subtle placeholder cell in the 7x6 grid."
+  []
+  (m/Container.
+   .margin (m/EdgeInsets.all 1.5)
+   .decoration (m/BoxDecoration.
+                .color (.withOpacity m/Colors.grey 0.025)
+                .borderRadius (m/BorderRadius.circular 10.0))))
+
+(defn calendar-day-cell
+  "Refined day cell with weekend tinting, elevated selection state, and clear task/haircut badges."
+  [^dc/DateTime dt ^dc/DateTime? selected-dt ^dc/DateTime today-dt day-tasks day-anniversaries]
+  (let [is-selected?  (same-day? dt selected-dt)
+        is-today?     (same-day? dt today-dt)
+        is-weekend?   (weekend? dt)
+        lunar-info    (lunar/solar->mongol-lunar dt)
+        has-solar?    (some? (:mgl-solar-term lunar-info))
+        good-hair?    (get-in lunar-info [:haircut :good?])
+        has-anniv?    (not (empty? day-anniversaries))
+        total-tasks   (count day-tasks)
+        all-done?     (and (pos? total-tasks) (every? task-completed? day-tasks))
+        solar-color   (cond
+                        is-selected? m/Colors.white
+                        is-today?    m/Colors.indigo.shade900
+                        is-weekend?  m/Colors.red.shade600
+                        :else        m/Colors.black87)
+        label-color   (cond
+                        is-selected? m/Colors.white
+                        has-solar?   m/Colors.deepOrange.shade700
+                        :else        m/Colors.black87)
+        label-weight  (if (or has-solar? is-selected?)
+                        m/FontWeight.bold
+                        m/FontWeight.w500)
+        mongol-style  (m/TextStyle.
+                       .fontFamily default-font
+                       .fontSize grid-lunar-font-size
+                       .color label-color
+                       .fontWeight label-weight)
+        numeric-style (m/TextStyle.
+                       .fontSize grid-lunar-font-size
+                       .height 1.0
+                       .color label-color
+                       .fontWeight label-weight)]
+    (m/GestureDetector.
+     .onTap #(swap! calendar-ui-state assoc :selected-date dt)
+     .child
+     (m/AnimatedContainer.
+      .duration (dc/Duration. .milliseconds 160)
+      .margin (m/EdgeInsets.all 1.5)
+      .padding (m/EdgeInsets.symmetric .vertical 3.0 .horizontal 1.0)
+      .decoration (m/BoxDecoration.
+                   .color (cond
+                            is-selected? m/Colors.indigo
+                            is-today?    (.withOpacity m/Colors.amber 0.2)
+                            is-weekend?  (.withOpacity m/Colors.red 0.02)
+                            :else        m/Colors.transparent)
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .boxShadow (when is-selected?
+                                [(m/BoxShadow.
+                                  .color (.withOpacity m/Colors.indigo 0.28)
+                                  .blurRadius 6.0
+                                  .offset (m/Offset. 0.0 2.0))])
+                   .border (cond
+                             is-selected? nil
+                             is-today?    (m/Border.all .color m/Colors.amber.shade800 .width 1.5)
+                             :else        (m/Border.all .color (.withOpacity m/Colors.grey 0.1) .width 0.8)))
+      .child
+      (m/Column.
+       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+       .children
+       [;; Top row: Solar date number + anniversary / haircut dot
+        (m/Row.
+         .mainAxisAlignment m/MainAxisAlignment.center
+         .mainAxisSize m/MainAxisSize.min
+         .children
+         [(m/Text. (str (.-day dt))
+                   .style (m/TextStyle.
+                           .fontSize grid-solar-font-size
+                           .height 1.0
+                           .fontWeight m/FontWeight.bold
+                           .color solar-color))
+          (if has-anniv?
+            (m/Padding.
+             .padding (m/EdgeInsets.only .left 2.0)
+             .child (m/Icon. m/Icons.cake
+                             .size 13.0
+                             .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent)))
+            (if good-hair?
+              (m/Container.
+               .margin (m/EdgeInsets.only .left 2.5)
+               .width 5.0
+               .height 5.0
+               .decoration (m/BoxDecoration.
+                            .color (if is-selected? m/Colors.tealAccent m/Colors.teal)
+                            .shape m/BoxShape.circle))
+              (m/SizedBox.shrink)))])
+
+        ;; Middle: Lunar day / solar term label
         (m/Expanded.
-         .flex 3
+         .child
+         (m/Center.
+          .child
+          (m/FittedBox.
+           .fit m/BoxFit.scaleDown
+           .child
+           (calendar-grid-lunar-label (:grid-cell-label lunar-info)
+                                      mongol-style
+                                      numeric-style))))
+
+        ;; Bottom: Task pill indicator
+        (if (pos? total-tasks)
+          (m/Container.
+           .width 16.0
+           .height 3.5
+           .decoration (m/BoxDecoration.
+                        .color (cond
+                                 is-selected? m/Colors.amberAccent
+                                 all-done?    m/Colors.teal
+                                 :else        m/Colors.indigoAccent)
+                        .borderRadius (m/BorderRadius.circular 2.0)))
+          (m/SizedBox. .height 3.5))])))))
+
+(defn lunar-almanac-card
+  "Polished bottom-left card: warm almanac surface, tap anywhere to open the 24pt large detail modal."
+  [ctx ^dc/DateTime selected-dt day-anniversaries]
+  (let [info        (lunar/solar->mongol-lunar selected-dt)
+        haircut     (:haircut info)
+        good-hair?  (:good? haircut)
+        body-style  (m/TextStyle. .fontFamily default-font .fontSize 14.0 .color m/Colors.black87)
+        label-style (m/TextStyle. .fontFamily default-font .fontSize 13.0 .fontWeight m/FontWeight.bold .color m/Colors.indigo.shade900)]
+    (m/Container.
+     .decoration (soft-card-decoration m/Colors.white card-border-color 18.0)
+     .child
+     (m/Material.
+      .color m/Colors.transparent
+      .borderRadius (m/BorderRadius.circular 18.0)
+      .child
+      (m/InkWell.
+       .borderRadius (m/BorderRadius.circular 18.0)
+       .onTap #(show-almanac-detail-dialog! ctx selected-dt day-anniversaries)
+       .child
+       (m/Padding.
+        .padding (m/EdgeInsets.fromLTRB 10.0 8.0 8.0 8.0)
+        .child
+        (m/Stack.
+         .children
+         [(m/SingleChildScrollView.
+           .scrollDirection m/Axis.horizontal
+           .child
+           (m/Row.
+            .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .children
+            (vec
+             (concat
+              ;; 1. Anniversaries badge column (if any)
+              (when (not (empty? day-anniversaries))
+                (conj
+                 (mapv (fn [ann]
+                         (m/Container.
+                          .margin (m/EdgeInsets.only .right 8.0)
+                          .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 4.0)
+                          .decoration (m/BoxDecoration.
+                                       .color (.withOpacity m/Colors.pink 0.08)
+                                       .borderRadius (m/BorderRadius.circular 10.0))
+                          .child
+                          (m/Column.
+                           .children
+                           [(m/Icon. m/Icons.cake .size 14.0 .color m/Colors.pinkAccent)
+                            (m/SizedBox. .height 4.0)
+                            (m/Expanded.
+                             .child
+                             (m/FittedBox.
+                              .fit m/BoxFit.scaleDown
+                              .alignment m/Alignment.topCenter
+                              .child
+                              (vertical-mongol-text (:title ann)
+                                                    (m/TextStyle.
+                                                     .fontFamily default-font
+                                                     .fontSize 14.5
+                                                     .fontWeight m/FontWeight.bold
+                                                     .color m/Colors.pink.shade700))))])))
+                       day-anniversaries)
+                 (m/VerticalDivider. .width 12.0 .indent 4.0 .endIndent 4.0)))
+
+              ;; 2. Lunar Month/Day & Ganzhi column
+              [(m/Container.
+                .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 4.0)
+                .decoration (m/BoxDecoration.
+                             .color (.withOpacity m/Colors.indigo 0.04)
+                             .borderRadius (m/BorderRadius.circular 10.0))
+                .child
+                (m/Row.
+                 .crossAxisAlignment m/CrossAxisAlignment.start
+                 .children
+                 [(m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .alignment m/Alignment.topCenter
+                   .child
+                   (vertical-mongol-text (str (:mgl-month-name info) "\n" (:mgl-day-name info))
+                                         (m/TextStyle.
+                                          .fontFamily default-font
+                                          .fontSize 15.5
+                                          .fontWeight m/FontWeight.bold
+                                          .color m/Colors.indigo.shade900)))
+                  (m/SizedBox. .width 5.0)
+                  (m/FittedBox.
+                   .fit m/BoxFit.scaleDown
+                   .alignment m/Alignment.topCenter
+                   .child
+                   (vertical-mongol-text (:mgl-day-gan-zhi info)
+                                         (m/TextStyle.
+                                          .fontFamily default-font
+                                          .fontSize 13.0
+                                          .color m/Colors.black54)))]))
+
+               (m/SizedBox. .width 8.0)
+
+               ;; 3. Haircut Auspiciousness column
+               (m/Row.
+                .crossAxisAlignment m/CrossAxisAlignment.start
+                .children
+                [(m/Column.
+                  .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                  .children
+                  [(m/Icon. m/Icons.content_cut
+                            .size 14.0
+                            .color (if good-hair? m/Colors.teal m/Colors.redAccent))
+                   (m/Expanded.
+                    .child
+                    (m/Center.
+                     .child
+                     (m/FittedBox.
+                      .fit m/BoxFit.scaleDown
+                      .child
+                      (vertical-mongol-text "ᠦᠰᠦ" label-style))))
+                   (m/Container.
+                    .padding (m/EdgeInsets.symmetric .horizontal 3.5 .vertical 4.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (if good-hair?
+                                          (.withOpacity m/Colors.teal 0.15)
+                                          (.withOpacity m/Colors.redAccent 0.12))
+                                 .borderRadius (m/BorderRadius.circular 6.0))
+                    .child (vertical-mongol-text (:status-label haircut)
+                                                 (m/TextStyle.
+                                                  .fontFamily default-font
+                                                  .fontSize 11.5
+                                                  .fontWeight m/FontWeight.bold
+                                                  .color (if good-hair?
+                                                           m/Colors.teal.shade800
+                                                           m/Colors.red.shade800))))])
+                 (m/SizedBox. .width 6.0)
+                 (m/FittedBox.
+                  .fit m/BoxFit.scaleDown
+                  .alignment m/Alignment.topCenter
+                  .child
+                  (vertical-mongol-text (:desc haircut) body-style))])]))))
+
+          ;; Top-right expand pill icon
+          (m/Positioned.
+           .top 0.0
+           .right 0.0
+           .child
+           (m/Container.
+            .padding (m/EdgeInsets.all 3.0)
+            .decoration (m/BoxDecoration.
+                         .color (.withOpacity m/Colors.indigo 0.08)
+                         .shape m/BoxShape.circle)
+            .child (m/Icon. m/Icons.open_in_full .size 11.0 .color m/Colors.indigo)))])))))))
+
+(defn day-tasks-panel
+  "Polished bottom-right card with integrated quick-add button and status-accented task cards."
+  [ctx ^dc/DateTime selected-dt day-tasks]
+  (m/Container.
+   .decoration (soft-card-decoration m/Colors.white card-border-color 18.0)
+   .child
+   (m/Material.
+    .color m/Colors.transparent
+    .borderRadius (m/BorderRadius.circular 18.0)
+    .child
+    (m/InkWell.
+     .borderRadius (m/BorderRadius.circular 18.0)
+     .onTap #(show-day-tasks-detail-dialog! ctx selected-dt)
+     .child
+     (m/Padding.
+      .padding (m/EdgeInsets.all 6.0)
+      .child
+      (m/Row.
+       .crossAxisAlignment m/CrossAxisAlignment.stretch
+       .children
+       [;; Left vertical header capsule with integrated "+" Add button
+        (m/Container.
+         .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 6.0)
+         .decoration (m/BoxDecoration.
+                      .color (.withOpacity m/Colors.indigo 0.05)
+                      .borderRadius (m/BorderRadius.circular 12.0))
+         .child
+         (m/Column.
+          .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+          .children
+          [(m/Badge.
+            .label (m/Text. (str (count day-tasks)) .style (m/TextStyle. .fontSize 10.0))
+            .isLabelVisible (pos? (count day-tasks))
+            .backgroundColor m/Colors.indigo
+            .child (m/Icon. m/Icons.fact_check_outlined .size 16.0 .color m/Colors.indigo))
+           (m/Expanded.
+            .child
+            (m/Padding.
+             .padding (m/EdgeInsets.symmetric .vertical 4.0)
+             .child
+             (m/Center.
+              .child
+              (m/FittedBox.
+               .fit m/BoxFit.scaleDown
+               .child
+               (vertical-mongol-text
+                "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
+                (m/TextStyle.
+                 .fontFamily default-font
+                 .fontSize 13.5
+                 .fontWeight m/FontWeight.bold
+                 .color m/Colors.indigo.shade900))))))
+           ;; Integrated Add Task button (replaces the floating FAB that covered task cards!)
+           (m/Material.
+            .color m/Colors.indigo
+            .shape (m/CircleBorder.)
+            .child
+            (m/InkWell.
+             .customBorder (m/CircleBorder.)
+             .onTap #(show-add-task-for-date-dialog! ctx selected-dt)
+             .child
+             (m/Padding.
+              .padding (m/EdgeInsets.all 5.0)
+              .child (m/Icon. m/Icons.add .size 16.0 .color m/Colors.white))))]))
+
+        (m/SizedBox. .width 6.0)
+
+        ;; Right: Horizontal stream of vertical task cards
+        (m/Expanded.
          .child
          (if (empty? day-tasks)
            (m/Center.
-            .child (mg/MongolText. "ᠡᠨᠡ ᠡᠳᠦᠷ ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
-                                   .style (m/TextStyle. .fontFamily default-font .fontSize 15.0 .color m/Colors.grey)))
+            .child (m/FittedBox.
+                    .fit m/BoxFit.scaleDown
+                    .child
+                    (vertical-mongol-text
+                     "ᠲᠦᠯᠦᠪᠯᠡᠭᠰᠡᠨ ᠠᠵᠢᠯ ᠦᠭᠡᠢ"
+                     (m/TextStyle. .fontFamily default-font .fontSize 14.5 .color m/Colors.grey.shade500))))
            (m/ListView.builder
             .scrollDirection m/Axis.horizontal
-            .padding (m/EdgeInsets.only .left 10.0 .right 80.0 .bottom 8.0)
+            .padding (m/EdgeInsets.symmetric .horizontal 2.0 .vertical 2.0)
             .itemCount (count day-tasks)
             .itemBuilder
             (fn [_ idx]
               (let [task  (nth day-tasks idx)
                     done? (task-completed? task)]
-                (m/Card.
-                 .elevation 0.5
-                 .margin (m/EdgeInsets.symmetric .horizontal 4.0 .vertical 4.0)
+                (m/Container.
+                 .margin (m/EdgeInsets.symmetric .horizontal 3.5)
+                 .decoration (m/BoxDecoration.
+                              .color (if done?
+                                       (.withOpacity m/Colors.grey 0.05)
+                                       (.withOpacity m/Colors.indigo 0.03))
+                              .borderRadius (m/BorderRadius.circular 12.0)
+                              .border (m/Border.all
+                                       .color (if done?
+                                                (.withOpacity m/Colors.grey 0.2)
+                                                (.withOpacity m/Colors.indigo 0.15))))
                  .child
                  (m/InkWell.
-                  .onTap #(do
-                            (swap! store/app-ui-state assoc :selected-task task)
-                            (m/Navigator.pushNamed ctx r/task-detail)
-                            nil)
+                  .borderRadius (m/BorderRadius.circular 12.0)
+                  .onTap #(show-day-tasks-detail-dialog! ctx selected-dt)
                   .child
                   (m/Padding.
-                   .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+                   .padding (m/EdgeInsets.symmetric .vertical 6.0 .horizontal 6.0)
                    .child
                    (m/Column.
                     .children
                     [(m/SizedBox.
-                      .width 28.0
-                      .height 28.0
+                      .width 22.0
+                      .height 22.0
                       .child
                       (m/Checkbox.
                        .value done?
+                       .activeColor m/Colors.teal
+                       .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 4.0))
+                       .visualDensity m/VisualDensity.compact
                        .onChanged (fn [_] (task-actions/toggle-task! task))))
                      (m/SizedBox. .height 4.0)
                      (m/Expanded.
@@ -534,10 +1010,132 @@
                                        .style (m/TextStyle.
                                                .fontFamily default-font
                                                .fontSize 15.0
+                                               .fontWeight m/FontWeight.w500
                                                .decoration (if done?
                                                              m/TextDecoration.lineThrough
                                                              m/TextDecoration.none)
-                                               .color (if done? m/Colors.grey m/Colors.black87)))))])))))))))]))]))))
+                                               .color (if done? m/Colors.grey m/Colors.black87)))))])))))))))]))))))
+
+;; =============================================================================
+;; 5. Main Calendar Page (Top: Flex 15 Card Grid | Bottom: Flex 6 Bento Cards)
+;; =============================================================================
+
+(defn- calendar-body
+  [ctx ^dc/DateTime current-month ^dc/DateTime? selected-date ^dc/DateTime today
+   cells tasks-map ann-by-key day-tasks sel-annivs]
+  (m/Container.
+   .color page-bg-color
+   .child
+   (m/SafeArea.
+    .child
+    (m/Column.
+     .children
+     [;; =======================================================================
+      ;; TOP SECTION (Flex 15): Left Pill + Right Elevated White Calendar Card
+      ;; =======================================================================
+      (m/Expanded.
+       .flex 15
+       .child
+       (m/Padding.
+        .padding (m/EdgeInsets.only .top 8.0 .right 8.0)
+        .child
+        (m/Row.
+         .crossAxisAlignment m/CrossAxisAlignment.stretch
+         .children
+         [;; Left: Floating rounded pill for month switching & "Today"
+          (month-switcher-pill current-month selected-date today)
+
+          ;; Right: Elevated white card wrapping Weekday headers + 7x6 grid
+          (m/Expanded.
+           .child
+           (m/Container.
+            .padding (m/EdgeInsets.fromLTRB 6.0 8.0 6.0 6.0)
+            .decoration (soft-card-decoration m/Colors.white card-border-color 22.0)
+            .child
+            (m/Column.
+             .children
+             [;; Weekday Headers inside a subtle tinted strip (weekends highlighted in coral red)
+              (m/Container.
+               .height 46.0
+               .margin (m/EdgeInsets.only .bottom 4.0)
+               .padding (m/EdgeInsets.symmetric .vertical 4.0)
+               .decoration (m/BoxDecoration.
+                            .color page-bg-color
+                            .borderRadius (m/BorderRadius.circular 12.0))
+               .child
+               (m/Row.
+                .children
+                (vec
+                 (map-indexed
+                  (fn [idx w-label]
+                    (let [is-wknd? (or (= idx 5) (= idx 6))]
+                      (m/Expanded.
+                       .child (m/Center.
+                               .child
+                               (m/FittedBox.
+                                .fit m/BoxFit.scaleDown
+                                .child
+                                (mg/MongolText. w-label
+                                                .style (m/TextStyle.
+                                                        .fontFamily default-font
+                                                        .fontSize grid-weekday-font-size
+                                                        .fontWeight m/FontWeight.bold
+                                                        .color (if is-wknd?
+                                                                 m/Colors.red.shade600
+                                                                 m/Colors.indigo.shade900))))))))
+                  weekday-headers))))
+
+              ;; Adaptive 7x6 Grid
+              (m/Expanded.
+               .child
+               (m/LayoutBuilder.
+                .builder
+                (fn [_ constraints]
+                  (let [grid-w (.-maxWidth constraints)
+                        grid-h (.-maxHeight constraints)
+                        cell-w (/ grid-w 7.0)
+                        cell-h (/ grid-h 6.0)
+                        ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)]
+                    (m/GridView.builder
+                     .physics (m/NeverScrollableScrollPhysics.)
+                     .padding m/EdgeInsets.zero
+                     .itemCount 42
+                     .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
+                                    .crossAxisCount 7
+                                    .childAspectRatio ratio)
+                     .itemBuilder (fn [_ idx]
+                                    (let [cell-dt (nth cells idx nil)]
+                                      (if (nil? cell-dt)
+                                        (empty-calendar-cell)
+                                        (let [c-key   (task-logic/date->key cell-dt)
+                                              c-tasks (get tasks-map c-key [])
+                                              c-ann   (get ann-by-key c-key [])]
+                                          (calendar-day-cell cell-dt selected-date today
+                                                             c-tasks c-ann))))))))))])))])))
+
+      ;; =======================================================================
+      ;; BOTTOM SECTION (Flex 6): Bento Split Row (Left Almanac | Right Tasks)
+      ;; =======================================================================
+      (m/Expanded.
+       .flex 6
+       .child
+       (m/Padding.
+        .padding (m/EdgeInsets.fromLTRB 8.0 8.0 8.0 8.0)
+        .child
+        (m/Row.
+         .crossAxisAlignment m/CrossAxisAlignment.stretch
+         .children
+         [;; Left: Lunar Almanac Card (Tap to pop up 24pt large detail dialog)
+          (m/Expanded.
+           .flex 5
+           .child (lunar-almanac-card ctx selected-date sel-annivs))
+
+          (m/SizedBox. .width 8.0)
+
+          ;; Right: Day Tasks Panel with built-in '+' button (Tap to pop up 21pt large tasks dialog)
+          (m/Expanded.
+           .flex 7
+           .child (day-tasks-panel ctx selected-date day-tasks))])))]))))
 
 (defn calendar-page
   ([] (calendar-page {:embedded? false}))
@@ -550,23 +1148,21 @@
                        (map stream-util/empty-on-error)
                        :as-values (db/watch-calendar-tasks))
             annivs ann/mock-anniversaries]
-    (let [ui-state   (sync-calendar-ui-state! ui-state)
-          {:keys [current-month selected-date]} ui-state
-          tasks-map  (task-logic/group-tasks-by-date-key all-tasks)
-          today      (calendar-today)
-          cells      (build-month-cells current-month)
-          sel-key    (task-logic/date->key selected-date)
-          day-tasks  (get tasks-map sel-key [])
-          view-year  (.-year current-month)
-          ann-by-key (ann/anniversaries-by-date-key view-year annivs)
-          sel-annivs (get ann-by-key sel-key [])
-          body       (calendar-body ctx current-month selected-date today cells
-                                    tasks-map ann-by-key day-tasks sel-annivs)]
+    (let [{:keys [current-month selected-date]} ui-state
+          tasks-map     (task-logic/group-tasks-by-date-key all-tasks)
+          now           (dc/DateTime.now)
+          today         (dc/DateTime. (.-year now) (.-month now) (.-day now))
+          selected-date (or selected-date today)
+          cells         (build-month-cells current-month)
+          sel-key       (task-logic/date->key selected-date)
+          day-tasks     (get tasks-map sel-key [])
+          view-year     (.-year current-month)
+          ann-by-key    (ann/anniversaries-by-date-key view-year annivs)
+          sel-annivs    (get ann-by-key sel-key [])
+          body          (calendar-body ctx current-month selected-date today cells
+                                       tasks-map ann-by-key day-tasks sel-annivs)]
       (if embedded?
         body
         (m/Scaffold.
-         .floatingActionButton
-         (m/FloatingActionButton.
-          .onPressed #(show-add-task-for-date-dialog! ctx selected-date)
-          .child (m/Icon. m/Icons.add))
+         .backgroundColor page-bg-color
          .body body))))))
