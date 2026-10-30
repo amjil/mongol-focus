@@ -28,7 +28,11 @@
         on-today?    (and (dates/same-day? selected-date today-dt)
                           (= (.-year current-month) (.-year today-dt))
                           (= (.-month current-month) (.-month today-dt)))]
-    (m/Container.
+    (m/GestureDetector.
+     .behavior m/HitTestBehavior.opaque
+     .onHorizontalDragEnd state/handle-calendar-horizontal-swipe!
+     .child
+     (m/Container.
       .width 60.0
       .margin (m/EdgeInsets.only .left 8.0 .right 6.0)
       .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
@@ -37,10 +41,10 @@
       (m/Column.
        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
        .children
-       [;; Previous month circular button
-        (pill-nav-button palette m/Icons.keyboard_arrow_up #(state/shift-month! -1))
+       [;; Previous month (left chevron)
+        (pill-nav-button palette m/Icons.chevron_left #(state/shift-month! -1))
 
-        ;; Vertical Year/Month & Lunar Year Color placed side-by-side in a Row
+        ;; Vertical Year/Month & Lunar Year Color with month switch animation
         (m/Expanded.
          .child
          (m/Padding.
@@ -48,31 +52,35 @@
           .child
           (m/Center.
            .child
-           (m/FittedBox.
-            .fit m/BoxFit.scaleDown
+           (m/AnimatedSwitcher.
+            .duration (dc/Duration. .milliseconds 240)
             .child
-            (m/Row.
-             .mainAxisSize m/MainAxisSize.min
-             .crossAxisAlignment m/CrossAxisAlignment.center
-             .children
-             [(theme/vertical-mongol-text
-               (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
-               (m/TextStyle.
-                .fontFamily theme/default-font
-                .fontSize theme/pill-month-font-size
-                .fontWeight m/FontWeight.bold
-                .color (:heading palette)))
-              (m/SizedBox. .width 4.0)
-              (theme/vertical-mongol-text
-               (:mgl-year-color lunar-sample)
-               (m/TextStyle.
-                .fontFamily theme/default-font
-                .fontSize theme/pill-ganzhi-font-size
-                .fontWeight m/FontWeight.w500
-                .color (:on-muted palette)))])))))
+            (m/FittedBox.
+             .key (m/ValueKey. (str (.-year current-month) "-" (.-month current-month)))
+             .fit m/BoxFit.scaleDown
+             .child
+             (m/Row.
+              .mainAxisSize m/MainAxisSize.min
+              .crossAxisAlignment m/CrossAxisAlignment.center
+              .children
+              [(theme/vertical-mongol-text
+                (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
+                (m/TextStyle.
+                 .fontFamily theme/default-font
+                 .fontSize theme/pill-month-font-size
+                 .fontWeight m/FontWeight.bold
+                 .color (:heading palette)))
+               (m/SizedBox. .width 4.0)
+               (theme/vertical-mongol-text
+                (:mgl-year-color lunar-sample)
+                (m/TextStyle.
+                 .fontFamily theme/default-font
+                 .fontSize theme/pill-ganzhi-font-size
+                 .fontWeight m/FontWeight.w500
+                 .color (:on-muted palette)))]))))))
 
-        ;; Next month circular button
-        (pill-nav-button palette m/Icons.keyboard_arrow_down #(state/shift-month! 1))
+        ;; Next month (right chevron)
+        (pill-nav-button palette m/Icons.chevron_right #(state/shift-month! 1))
 
         ;; "Today" indicator / action button at bottom of pill
         (if on-today?
@@ -102,7 +110,7 @@
                        .fontFamily theme/default-font
                        .fontSize theme/pill-today-font-size
                        .fontWeight m/FontWeight.bold
-                       .color (:on-primary palette))))))))]))))
+                       .color (:on-primary palette))))))))])))))
 
 (defn empty-calendar-cell
   "Subtle placeholder cell in the 7x6 grid."

@@ -5,40 +5,44 @@
 (defonce calendar-ui-state
   (let [now (dc/DateTime.now)]
     (atom {:current-month (dc/DateTime. (.-year now) (.-month now) 1)
-           :selected-date (dc/DateTime. (.-year now) (.-month now) (.-day now))})))
+           :selected-date (dc/DateTime. (.-year now) (.-month now) (.-day now))
+           ;; 1 = forward (next month), -1 = backward (previous month)
+           :slide-dir     1})))
 
 (defn shift-month!
+  "Shift current calendar month by delta (+1 or -1) and record slide direction."
   [delta]
   (swap! calendar-ui-state
          (fn [st]
            (let [^dc/DateTime cur (:current-month st)
-                 next-m (dc/DateTime. (.-year cur) (+ (.-month cur) delta) 1)]
-             (assoc st :current-month next-m)))))
-
-(def ^:private swipe-velocity-threshold 180.0)
-
-(defn- abs-velocity
-  [n]
-  (if (neg? n) (- n) n))
-
-(defn handle-calendar-month-swipe!
-  "Horizontal-dominant pan: swipe left -> next month, right -> previous. Ignores vertical swipes."
-  [^m/DragEndDetails details]
-  (let [^m/Offset pps (.-pixelsPerSecond (.-velocity details))
-        vx            (or (.-dx pps) 0.0)
-        vy            (or (.-dy pps) 0.0)
-        ax            (abs-velocity vx)
-        ay            (abs-velocity vy)]
-    (when (> ax ay)
-      (cond
-        (< vx (- swipe-velocity-threshold)) (shift-month! 1)
-        (> vx swipe-velocity-threshold)     (shift-month! -1)
-        :else                               nil))))
+                 next-m (dc/DateTime. (.-year cur) (+ (.-month cur) delta) 1)
+                 dir    (if (pos? delta) 1 -1)]
+             (assoc st
+                    :current-month next-m
+                    :slide-dir dir)))))
 
 (defn jump-to-today!
+  "Jump back to current month & today, setting slide direction automatically."
   []
-  (let [now (dc/DateTime.now)
-        today (dc/DateTime. (.-year now) (.-month now) (.-day now))]
-    (swap! calendar-ui-state assoc
-           :current-month (dc/DateTime. (.-year now) (.-month now) 1)
-           :selected-date today)))
+  (let [now          (dc/DateTime.now)
+        today        (dc/DateTime. (.-year now) (.-month now) (.-day now))
+        target-month (dc/DateTime. (.-year now) (.-month now) 1)]
+    (swap! calendar-ui-state
+           (fn [st]
+             (let [^dc/DateTime cur (:current-month st)
+                   dir (if (.isBefore cur target-month) 1 -1)]
+               (assoc st
+                      :current-month target-month
+                      :selected-date today
+                      :slide-dir dir))))))
+
+(defn handle-calendar-horizontal-swipe!
+  "Switch month on horizontal swipe.
+   Swipe left (negative velocity) -> next month (+1);
+   Swipe right (positive velocity) -> previous month (-1)."
+  [^m/DragEndDetails details]
+  (let [vx (or (.-primaryVelocity details) 0.0)]
+    (cond
+      (< vx -180.0) (shift-month! 1)
+      (> vx 180.0)  (shift-month! -1)
+      :else         nil)))

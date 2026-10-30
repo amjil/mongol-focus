@@ -8,9 +8,32 @@
             [minii-focus.widgets.calendar.grid :as grid]
             [minii-focus.widgets.calendar.panels :as panels]))
 
+(defn- month-grid-transition
+  "Smooth horizontal slide + fade transition when switching months."
+  [^dc/DateTime current-month slide-dir child ^m/Animation animation]
+  (let [month-key    (m/ValueKey. (str (.-year current-month) "-" (.-month current-month)))
+        is-incoming? (= (.-key child) month-key)
+        dir-sign     (if (neg? (or slide-dir 1)) -1.0 1.0)
+        begin-x      (if is-incoming? (* 0.18 dir-sign) (* -0.18 dir-sign))
+        offset-tween (m/Tween.
+                      .begin (m/Offset. begin-x 0.0)
+                      .end m/Offset.zero)]
+    ;; Avoid Animation.drive + untyped Tween — CLJD emits an invalid cast at runtime.
+    (m/FadeTransition.
+     .opacity animation
+     .child
+     (m/AnimatedBuilder.
+      .animation animation
+      .child child
+      .builder (fn [_ctx c]
+                 (m/FractionalTranslation.
+                  .translation (.transform offset-tween (.-value animation))
+                  .child c))))))
+
 (defn calendar-body
   [ctx palette ^dc/DateTime current-month ^dc/DateTime? selected-date ^dc/DateTime today
    cells tasks-map ann-by-key day-tasks sel-annivs]
+  (let [slide-dir (or (:slide-dir @state/calendar-ui-state) 1)]
   (m/Container.
    .color (:page-bg palette)
    .child
@@ -24,21 +47,21 @@
       (m/Expanded.
        .flex 15
        .child
-       (m/Padding.
+        (m/Padding.
         .padding (m/EdgeInsets.only .top 8.0 .right 8.0)
         .child
-        (m/GestureDetector.
-         .behavior m/HitTestBehavior.opaque
-         .onPanEnd state/handle-calendar-month-swipe!
-         .child
-         (m/Row.
-          .crossAxisAlignment m/CrossAxisAlignment.stretch
-          .children
-          [;; Left: Floating rounded pill for month switching & "Today"
-           (grid/month-switcher-pill palette current-month selected-date today)
+        (m/Row.
+         .crossAxisAlignment m/CrossAxisAlignment.stretch
+         .children
+         [;; Left: Floating rounded pill for month switching & "Today"
+          (grid/month-switcher-pill palette current-month selected-date today)
 
-           ;; Right: Elevated white card wrapping Weekday headers + 7x6 grid
-           (m/Expanded.
+          ;; Right: Elevated white card — horizontal swipe + animated month grid
+          (m/Expanded.
+           .child
+           (m/GestureDetector.
+            .behavior m/HitTestBehavior.opaque
+            .onHorizontalDragEnd state/handle-calendar-horizontal-swipe!
             .child
             (m/Container.
              .padding (m/EdgeInsets.fromLTRB 6.0 8.0 6.0 6.0)
@@ -77,38 +100,47 @@
                                                                   (:heading palette)))))))))
                    theme/weekday-headers))))
 
-               ;; Adaptive 7x6 Grid
                (m/Expanded.
                 .child
-                (m/LayoutBuilder.
-                 .builder
-                 (fn [grid-ctx constraints]
-                   (let [grid-w (.-maxWidth constraints)
-                         grid-h (.-maxHeight constraints)
-                         cell-w (/ grid-w 7.0)
-                         cell-h (/ grid-h 6.0)
-                         ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)
-                         no-grid-drag (.copyWith (m/ScrollConfiguration.of grid-ctx)
-                                                 .dragDevices #{})]
-                     (m/ScrollConfiguration.
-                      .behavior no-grid-drag
-                      .child
-                      (m/GridView.builder
-                       .physics (m/NeverScrollableScrollPhysics.)
-                       .padding m/EdgeInsets.zero
-                       .itemCount 42
-                       .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
-                                      .crossAxisCount 7
-                                      .childAspectRatio ratio)
-                       .itemBuilder (fn [_ idx]
-                                      (let [cell-dt (nth cells idx nil)]
-                                        (if (nil? cell-dt)
-                                          (grid/empty-calendar-cell palette)
-                                          (let [c-key   (task-logic/date->key cell-dt)
-                                                c-tasks (get tasks-map c-key [])
-                                                c-ann   (get ann-by-key c-key [])]
-                                            (grid/calendar-day-cell palette cell-dt selected-date today
-                                                                    c-tasks c-ann)))))))))))])))]))))
+                (m/ClipRect.
+                 .child
+                 (m/AnimatedSwitcher.
+                  .duration (dc/Duration. .milliseconds 260)
+                  .switchInCurve m/Curves.easeOutCubic
+                  .switchOutCurve m/Curves.easeInCubic
+                  .transitionBuilder (fn [child animation]
+                                       (month-grid-transition current-month slide-dir child animation))
+                  .child
+                  (m/LayoutBuilder.
+                   .key (m/ValueKey. (str (.-year current-month) "-" (.-month current-month)))
+                   .builder
+                   (fn [grid-ctx constraints]
+                     (let [grid-w (.-maxWidth constraints)
+                           grid-h (.-maxHeight constraints)
+                           cell-w (/ grid-w 7.0)
+                           cell-h (/ grid-h 6.0)
+                           ratio  (if (pos? cell-h) (/ cell-w cell-h) 1.0)
+                           no-grid-drag (.copyWith (m/ScrollConfiguration.of grid-ctx)
+                                                   .dragDevices #{})]
+                       (m/ScrollConfiguration.
+                        .behavior no-grid-drag
+                        .child
+                        (m/GridView.builder
+                         .physics (m/NeverScrollableScrollPhysics.)
+                         .padding m/EdgeInsets.zero
+                         .itemCount 42
+                         .gridDelegate (m/SliverGridDelegateWithFixedCrossAxisCount.
+                                        .crossAxisCount 7
+                                        .childAspectRatio ratio)
+                         .itemBuilder (fn [_ idx]
+                                        (let [cell-dt (nth cells idx nil)]
+                                          (if (nil? cell-dt)
+                                            (grid/empty-calendar-cell palette)
+                                            (let [c-key   (task-logic/date->key cell-dt)
+                                                  c-tasks (get tasks-map c-key [])
+                                                  c-ann   (get ann-by-key c-key [])]
+                                              (grid/calendar-day-cell palette cell-dt selected-date today
+                                                                      c-tasks c-ann)))))))))))))]))))])))
 
       ;; =======================================================================
       ;; BOTTOM SECTION (Flex 6): Bento Split Row (Left Almanac | Right Tasks)
@@ -132,4 +164,4 @@
           ;; Right: Day Tasks Panel with built-in '+' button (Tap to pop up 21pt large tasks dialog)
           (m/Expanded.
            .flex 7
-           .child (panels/day-tasks-panel ctx palette selected-date day-tasks))])))]))))
+           .child (panels/day-tasks-panel ctx palette selected-date day-tasks))])))])))))
