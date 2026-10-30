@@ -5,6 +5,7 @@
             [minii-focus.logic.task :as task-logic]
             [minii-focus.logic.anniversary :as ann]
             [minii-focus.logic.db :as db]
+            [minii-focus.logic.records :as rec]
             [minii-focus.logic.stream-util :as stream-util]
             [minii-focus.widgets.calendar.state :as cal-state]
             [minii-focus.widgets.calendar.theme :as cal-theme]
@@ -30,7 +31,10 @@
                        (map stream-util/rows->records)
                        (map stream-util/empty-on-error)
                        :as-values (db/watch-calendar-tasks))
-            annivs ann/mock-anniversaries]
+            annivs (stream
+                    (map rec/anniversary-rows->maps)
+                    (map stream-util/empty-on-error)
+                    :as-values (db/watch-anniversaries))]
     (let [palette       (cal-theme/calendar-theme-palette color-scheme)
           {:keys [current-month selected-date]} ui-state
           tasks-map     (task-logic/group-tasks-by-date-key all-tasks)

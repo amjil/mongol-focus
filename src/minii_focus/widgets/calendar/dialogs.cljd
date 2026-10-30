@@ -1,5 +1,6 @@
 (ns minii-focus.widgets.calendar.dialogs
   (:require ["dart:core" :as dc]
+            ["package:flutter/cupertino.dart" :as cup]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mg]
             [cljd.flutter :as f]
@@ -12,6 +13,29 @@
             [minii-focus.logic.stream-util :as stream-util]
             [minii-focus.widgets.calendar.theme :as theme]
             [minii-focus.widgets.calendar.dates :as dates]))
+
+(defn- lunar-picker-item
+  [label ^m/TextStyle style]
+  (m/Center.
+   .child
+   (m/FittedBox.
+    .fit m/BoxFit.scaleDown
+    .child
+    (mg/MongolText. label .style style))))
+
+(defn- lunar-wheel-picker
+  [^cup/FixedExtentScrollController scroll-ctrl on-change labels label-fn palette]
+  (let [style (m/TextStyle.
+               .fontFamily theme/default-font
+               .fontSize 17.0
+               .fontWeight m/FontWeight.bold
+               .color (:on-body palette))]
+    (cup/CupertinoPicker.
+     .scrollController scroll-ctrl
+     .itemExtent 44.0
+     .onSelectedItemChanged on-change
+     .children
+     (mapv (fn [n] (lunar-picker-item (label-fn n) style)) labels))))
 
 (defn show-add-task-for-date-dialog!
   [ctx ^dc/DateTime target-date]
@@ -40,6 +64,157 @@
                            (task-actions/add-task! title target-date)))
                        (m/Navigator.pop dialog-ctx))
           .child (mg/MongolText. "ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily theme/default-font .fontSize 16.0)))])))))
+
+(defn show-add-anniversary-dialog!
+  "Elder-friendly vertical Mongolian dialog with Cupertino wheel pickers for lunar month/day."
+  [ctx ^dc/DateTime default-solar-date]
+  (let [init-lunar (lunar/solar->mongol-lunar default-solar-date)
+        form-state (atom {:title       ""
+                          :type        :birthday
+                          :lunar-month (or (:lunar-month init-lunar) 1)
+                          :lunar-day   (or (:lunar-day init-lunar) 1)
+                          :leap?       (boolean (:is-leap-month? init-lunar))})
+        title-ctrl (m/TextEditingController.)
+        month-ctrl (cup/FixedExtentScrollController.
+                    .initialItem (dec (or (:lunar-month init-lunar) 1)))
+        day-ctrl   (cup/FixedExtentScrollController.
+                    .initialItem (dec (or (:lunar-day init-lunar) 1)))]
+    (m/showDialog
+     .context ctx
+     .builder
+     (fn [dialog-ctx]
+       (f/widget
+        :context dialog-ctx
+        :watch [st form-state]
+        (let [p        (theme/palette-from-ctx dialog-ctx)
+              dialog-h (theme/adaptive-dialog-height dialog-ctx)]
+          (m/Dialog.
+           .backgroundColor (:card-bg p)
+           .surfaceTintColor m/Colors.transparent
+           .insetPadding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 20.0)
+           .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
+           .child
+           (m/Container.
+            .height dialog-h
+            .padding (m/EdgeInsets.all 16.0)
+            .child
+            (m/Row.
+             .crossAxisAlignment m/CrossAxisAlignment.stretch
+             .children
+             [(m/Container.
+               .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 10.0)
+               .decoration (m/BoxDecoration.
+                            .color (.withOpacity m/Colors.pink 0.06)
+                            .borderRadius (m/BorderRadius.circular 16.0))
+               .child
+               (m/Column.
+                .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                .children
+                [(m/Icon. m/Icons.cake .size 24.0 .color m/Colors.pinkAccent)
+                 (m/Expanded.
+                  .child
+                  (m/Center.
+                   .child
+                   (m/FittedBox.
+                    .fit m/BoxFit.scaleDown
+                    .child
+                    (theme/vertical-mongol-text
+                     "ᠣᠢ ᠨᠡᠮᠡᠬᠦ"
+                     (m/TextStyle.
+                      .fontFamily theme/default-font
+                      .fontSize 21.0
+                      .fontWeight m/FontWeight.bold
+                      .color m/Colors.pink.shade700)))))
+                 (m/IconButton.filledTonal
+                  .icon (m/Icon. (if (= (:type st) :birthday)
+                                   m/Icons.cake
+                                   m/Icons.favorite)
+                                 .size 20.0
+                                 .color m/Colors.pink.shade700)
+                  .onPressed #(swap! form-state update :type
+                                     (fn [t] (if (= t :birthday) :memorial :birthday))))]))
+
+              (m/SizedBox. .width 12.0)
+
+              (m/Container.
+               .width 76.0
+               .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 10.0)
+               .decoration (m/BoxDecoration.
+                            .color (:page-bg p)
+                            .borderRadius (m/BorderRadius.circular 16.0)
+                            .border (m/Border.all .color (:card-border p)))
+               .child
+               (mg/MongolTextField.
+                .controller title-ctrl
+                .autofocus true
+                .decoration (m/InputDecoration.
+                             .border m/InputBorder.none
+                             .hintText "ᠡᠵᠢ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+                             .hintStyle (m/TextStyle.
+                                         .fontFamily theme/default-font
+                                         .fontSize 16.0
+                                         .color (:on-muted p)))
+                .style (m/TextStyle.
+                        .fontFamily theme/default-font
+                        .fontSize 20.0
+                        .fontWeight m/FontWeight.bold
+                        .color (:on-body p))))
+
+              (m/SizedBox. .width 12.0)
+
+              (m/Expanded.
+               .child
+               (m/Row.
+                .children
+                [(m/Expanded.
+                  .child
+                  (lunar-wheel-picker
+                   month-ctrl
+                   #(swap! form-state assoc :lunar-month (inc %))
+                   (range 1 13)
+                   lunar/format-lunar-month
+                   p))
+                 (m/Expanded.
+                  .child
+                  (lunar-wheel-picker
+                   day-ctrl
+                   #(swap! form-state assoc :lunar-day (inc %))
+                   (range 1 31)
+                   lunar/format-lunar-day
+                   p))]))
+
+              (m/SizedBox. .width 10.0)
+
+              (m/Column.
+               .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+               .children
+               [(m/IconButton.filledTonal
+                 .icon (m/Icon. m/Icons.close .size 22.0)
+                 .onPressed #(m/Navigator.pop dialog-ctx))
+                (m/ElevatedButton.
+                 .style (m/ElevatedButton.styleFrom
+                         .backgroundColor (:primary p)
+                         .foregroundColor (:on-primary p)
+                         .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 14.0)
+                         .shape (m/RoundedRectangleBorder.
+                                 .borderRadius (m/BorderRadius.circular 14.0)))
+                 .onPressed (fn []
+                              (let [title (.trim (.-text title-ctrl))]
+                                (when-not (empty? title)
+                                  (db/add-anniversary!
+                                   {:title          title
+                                    :type           (:type @form-state)
+                                    :lunar-month    (:lunar-month @form-state)
+                                    :lunar-day      (:lunar-day @form-state)
+                                    :is-leap-month? (:leap? @form-state)}))
+                                (m/Navigator.pop dialog-ctx)))
+                 .child (theme/vertical-mongol-text
+                         "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ"
+                         (m/TextStyle.
+                          .fontFamily theme/default-font
+                          .fontSize 18.0
+                          .fontWeight m/FontWeight.bold
+                          .color (:on-primary p))))])])))))))))
 
 (defn show-almanac-detail-dialog!
   "Popup dialog displaying the selected day's lunar almanac, haircut auspiciousness, and anniversaries in extra-large font."
@@ -160,7 +335,11 @@
                               .child
                               (m/Column.
                                .children
-                               [(m/Icon. m/Icons.cake .size 22.0 .color m/Colors.pinkAccent)
+                               [(m/Icon. (if (= (:type ann) :memorial)
+                                          m/Icons.favorite
+                                          m/Icons.cake)
+                                         .size 22.0
+                                         .color m/Colors.pinkAccent)
                                 (m/SizedBox. .height 8.0)
                                 (m/Expanded.
                                  .child
@@ -173,7 +352,13 @@
                                     .fontFamily theme/default-font
                                     .fontSize 21.0
                                     .fontWeight m/FontWeight.bold
-                                    .color m/Colors.pink.shade700))))])))
+                                    .color m/Colors.pink.shade700))))
+                                (m/SizedBox. .height 6.0)
+                                (m/IconButton.
+                                 .icon (m/Icon. m/Icons.delete_outline .size 20.0 .color m/Colors.pink.shade400)
+                                 .padding m/EdgeInsets.zero
+                                 .constraints (m/BoxConstraints.)
+                                 .onPressed #(db/delete-anniversary! (:id ann)))])))
                            day-anniversaries)
                      (m/SizedBox. .width 4.0)))
 
@@ -252,6 +437,11 @@
               [(m/IconButton.filledTonal
                 .icon (m/Icon. m/Icons.close .size 20.0)
                 .onPressed #(m/Navigator.pop dialog-ctx))
+               (m/IconButton.filledTonal
+                .icon (m/Icon. m/Icons.cake .size 22.0 .color m/Colors.pink.shade700)
+                .onPressed #(do
+                              (m/Navigator.pop dialog-ctx)
+                              (show-add-anniversary-dialog! ctx selected-dt)))
                (m/Expanded.
                 .child
                 (m/Align.

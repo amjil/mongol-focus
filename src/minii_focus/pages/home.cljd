@@ -10,12 +10,14 @@
             [minii-focus.widgets.search-button :as search-button]
             [minii-focus.pages.settings :as settings]
             [minii-focus.pages.calendar-page :as calendar-page]
+            [minii-focus.pages.anniversary-management :as anniversary-page]
+            [minii-focus.widgets.calendar.dialogs :as cal-dialogs]
             [minii-focus.logic.task-actions :as actions]
             [minii-focus.logic.update :as update]
             ["dart:core" :as dc]))
 
 (defn- nav-shows-search? [selected-nav-id]
-  (not (#{store/nav-settings store/nav-calendar} selected-nav-id)))
+  (not (#{store/nav-settings store/nav-calendar store/nav-anniversary} selected-nav-id)))
 
 (defn- page-body [scroll-controller selected-nav-id]
   (case selected-nav-id
@@ -23,6 +25,11 @@
     (m/Container.
      .key (m/ValueKey. "page-calendar")
      .child (calendar-page/calendar-page {:embedded? true}))
+
+    "anniversary"
+    (m/Container.
+     .key (m/ValueKey. "page-anniversary")
+     .child (anniversary-page/anniversary-management-page {:embedded? true}))
 
     "today"
     (m/Container.
@@ -81,5 +88,12 @@
         (m/FloatingActionButton.
          .onPressed #(calendar-page/show-add-task-for-date-dialog! ctx selected-date)
          .child (m/Icon. m/Icons.add)))
+
+       (= selected-nav-id store/nav-anniversary)
+       (m/FloatingActionButton.
+        .backgroundColor m/Colors.pinkAccent
+        .foregroundColor m/Colors.white
+        .onPressed #(cal-dialogs/show-add-anniversary-dialog! ctx (dc/DateTime.now))
+        .child (m/Icon. m/Icons.add))
 
        :else (m/SizedBox.shrink))))))

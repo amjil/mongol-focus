@@ -3,5 +3,6 @@
 (def task-detail "/task-detail")
 (def subtasks-list "/subtasks-list")
 (def category-management "/category-management")
+(def anniversary-management "/anniversary-management")
 ;; Route name for Mongolian calendar page
 (def calendar "/calendar")

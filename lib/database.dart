@@ -58,17 +58,32 @@ class Categories extends Table {
   IntColumn get position => integer().withDefault(const Constant(0))();
 }
 
+class Anniversaries extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get type =>
+      text().withDefault(const Constant('birthday'))(); // birthday | memorial | festival
+  IntColumn get lunarYear => integer().nullable()();
+  IntColumn get lunarMonth => integer()();
+  IntColumn get lunarDay => integer()();
+  BoolColumn get isLeapMonth =>
+      boolean().withDefault(const Constant(false))();
+  IntColumn get advanceDays => integer().withDefault(const Constant(3))();
+  DateTimeColumn get createdAt => dateTime()();
 
+  @override
+  Set<Column> get primaryKey => {id};
+}
 
-@DriftDatabase(tables: [Tasks, Categories])
+@DriftDatabase(tables: [Tasks, Categories, Anniversaries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(impl.connect());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
-  MigrationStrategy get migrations {
+  MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
@@ -84,12 +99,10 @@ class AppDatabase extends _$AppDatabase {
           // Version 1 -> 2: Add parent_id column for subtasks support
           await m.addColumn(tasks, tasks.parentId);
         }
-        
-        // Future migrations can be added here:
-        // if (from < 3) {
-        //   // Version 2 -> 3: Add new column or table
-        //   await m.addColumn(tasks, tasks.newColumn);
-        // }
+
+        if (from < 3) {
+          await m.createTable(anniversaries);
+        }
       },
     );
   }

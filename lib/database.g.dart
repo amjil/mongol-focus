@@ -1063,16 +1063,587 @@ class TasksCompanion extends UpdateCompanion<Task> {
   }
 }
 
+class $AnniversariesTable extends Anniversaries
+    with TableInfo<$AnniversariesTable, Anniversary> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AnniversariesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('birthday'),
+  );
+  static const VerificationMeta _lunarYearMeta = const VerificationMeta(
+    'lunarYear',
+  );
+  @override
+  late final GeneratedColumn<int> lunarYear = GeneratedColumn<int>(
+    'lunar_year',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lunarMonthMeta = const VerificationMeta(
+    'lunarMonth',
+  );
+  @override
+  late final GeneratedColumn<int> lunarMonth = GeneratedColumn<int>(
+    'lunar_month',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lunarDayMeta = const VerificationMeta(
+    'lunarDay',
+  );
+  @override
+  late final GeneratedColumn<int> lunarDay = GeneratedColumn<int>(
+    'lunar_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isLeapMonthMeta = const VerificationMeta(
+    'isLeapMonth',
+  );
+  @override
+  late final GeneratedColumn<bool> isLeapMonth = GeneratedColumn<bool>(
+    'is_leap_month',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_leap_month" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _advanceDaysMeta = const VerificationMeta(
+    'advanceDays',
+  );
+  @override
+  late final GeneratedColumn<int> advanceDays = GeneratedColumn<int>(
+    'advance_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(3),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    type,
+    lunarYear,
+    lunarMonth,
+    lunarDay,
+    isLeapMonth,
+    advanceDays,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'anniversaries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Anniversary> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('lunar_year')) {
+      context.handle(
+        _lunarYearMeta,
+        lunarYear.isAcceptableOrUnknown(data['lunar_year']!, _lunarYearMeta),
+      );
+    }
+    if (data.containsKey('lunar_month')) {
+      context.handle(
+        _lunarMonthMeta,
+        lunarMonth.isAcceptableOrUnknown(data['lunar_month']!, _lunarMonthMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lunarMonthMeta);
+    }
+    if (data.containsKey('lunar_day')) {
+      context.handle(
+        _lunarDayMeta,
+        lunarDay.isAcceptableOrUnknown(data['lunar_day']!, _lunarDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lunarDayMeta);
+    }
+    if (data.containsKey('is_leap_month')) {
+      context.handle(
+        _isLeapMonthMeta,
+        isLeapMonth.isAcceptableOrUnknown(
+          data['is_leap_month']!,
+          _isLeapMonthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('advance_days')) {
+      context.handle(
+        _advanceDaysMeta,
+        advanceDays.isAcceptableOrUnknown(
+          data['advance_days']!,
+          _advanceDaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Anniversary map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Anniversary(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      lunarYear: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lunar_year'],
+      ),
+      lunarMonth: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lunar_month'],
+      )!,
+      lunarDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lunar_day'],
+      )!,
+      isLeapMonth: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_leap_month'],
+      )!,
+      advanceDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}advance_days'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AnniversariesTable createAlias(String alias) {
+    return $AnniversariesTable(attachedDatabase, alias);
+  }
+}
+
+class Anniversary extends DataClass implements Insertable<Anniversary> {
+  final String id;
+  final String title;
+  final String type;
+  final int? lunarYear;
+  final int lunarMonth;
+  final int lunarDay;
+  final bool isLeapMonth;
+  final int advanceDays;
+  final DateTime createdAt;
+  const Anniversary({
+    required this.id,
+    required this.title,
+    required this.type,
+    this.lunarYear,
+    required this.lunarMonth,
+    required this.lunarDay,
+    required this.isLeapMonth,
+    required this.advanceDays,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['title'] = Variable<String>(title);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || lunarYear != null) {
+      map['lunar_year'] = Variable<int>(lunarYear);
+    }
+    map['lunar_month'] = Variable<int>(lunarMonth);
+    map['lunar_day'] = Variable<int>(lunarDay);
+    map['is_leap_month'] = Variable<bool>(isLeapMonth);
+    map['advance_days'] = Variable<int>(advanceDays);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  AnniversariesCompanion toCompanion(bool nullToAbsent) {
+    return AnniversariesCompanion(
+      id: Value(id),
+      title: Value(title),
+      type: Value(type),
+      lunarYear: lunarYear == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lunarYear),
+      lunarMonth: Value(lunarMonth),
+      lunarDay: Value(lunarDay),
+      isLeapMonth: Value(isLeapMonth),
+      advanceDays: Value(advanceDays),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Anniversary.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Anniversary(
+      id: serializer.fromJson<String>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      type: serializer.fromJson<String>(json['type']),
+      lunarYear: serializer.fromJson<int?>(json['lunarYear']),
+      lunarMonth: serializer.fromJson<int>(json['lunarMonth']),
+      lunarDay: serializer.fromJson<int>(json['lunarDay']),
+      isLeapMonth: serializer.fromJson<bool>(json['isLeapMonth']),
+      advanceDays: serializer.fromJson<int>(json['advanceDays']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'type': serializer.toJson<String>(type),
+      'lunarYear': serializer.toJson<int?>(lunarYear),
+      'lunarMonth': serializer.toJson<int>(lunarMonth),
+      'lunarDay': serializer.toJson<int>(lunarDay),
+      'isLeapMonth': serializer.toJson<bool>(isLeapMonth),
+      'advanceDays': serializer.toJson<int>(advanceDays),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Anniversary copyWith({
+    String? id,
+    String? title,
+    String? type,
+    Value<int?> lunarYear = const Value.absent(),
+    int? lunarMonth,
+    int? lunarDay,
+    bool? isLeapMonth,
+    int? advanceDays,
+    DateTime? createdAt,
+  }) => Anniversary(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    type: type ?? this.type,
+    lunarYear: lunarYear.present ? lunarYear.value : this.lunarYear,
+    lunarMonth: lunarMonth ?? this.lunarMonth,
+    lunarDay: lunarDay ?? this.lunarDay,
+    isLeapMonth: isLeapMonth ?? this.isLeapMonth,
+    advanceDays: advanceDays ?? this.advanceDays,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Anniversary copyWithCompanion(AnniversariesCompanion data) {
+    return Anniversary(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      type: data.type.present ? data.type.value : this.type,
+      lunarYear: data.lunarYear.present ? data.lunarYear.value : this.lunarYear,
+      lunarMonth: data.lunarMonth.present
+          ? data.lunarMonth.value
+          : this.lunarMonth,
+      lunarDay: data.lunarDay.present ? data.lunarDay.value : this.lunarDay,
+      isLeapMonth: data.isLeapMonth.present
+          ? data.isLeapMonth.value
+          : this.isLeapMonth,
+      advanceDays: data.advanceDays.present
+          ? data.advanceDays.value
+          : this.advanceDays,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Anniversary(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('type: $type, ')
+          ..write('lunarYear: $lunarYear, ')
+          ..write('lunarMonth: $lunarMonth, ')
+          ..write('lunarDay: $lunarDay, ')
+          ..write('isLeapMonth: $isLeapMonth, ')
+          ..write('advanceDays: $advanceDays, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    type,
+    lunarYear,
+    lunarMonth,
+    lunarDay,
+    isLeapMonth,
+    advanceDays,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Anniversary &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.type == this.type &&
+          other.lunarYear == this.lunarYear &&
+          other.lunarMonth == this.lunarMonth &&
+          other.lunarDay == this.lunarDay &&
+          other.isLeapMonth == this.isLeapMonth &&
+          other.advanceDays == this.advanceDays &&
+          other.createdAt == this.createdAt);
+}
+
+class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
+  final Value<String> id;
+  final Value<String> title;
+  final Value<String> type;
+  final Value<int?> lunarYear;
+  final Value<int> lunarMonth;
+  final Value<int> lunarDay;
+  final Value<bool> isLeapMonth;
+  final Value<int> advanceDays;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const AnniversariesCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.type = const Value.absent(),
+    this.lunarYear = const Value.absent(),
+    this.lunarMonth = const Value.absent(),
+    this.lunarDay = const Value.absent(),
+    this.isLeapMonth = const Value.absent(),
+    this.advanceDays = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AnniversariesCompanion.insert({
+    required String id,
+    required String title,
+    this.type = const Value.absent(),
+    this.lunarYear = const Value.absent(),
+    required int lunarMonth,
+    required int lunarDay,
+    this.isLeapMonth = const Value.absent(),
+    this.advanceDays = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title),
+       lunarMonth = Value(lunarMonth),
+       lunarDay = Value(lunarDay),
+       createdAt = Value(createdAt);
+  static Insertable<Anniversary> custom({
+    Expression<String>? id,
+    Expression<String>? title,
+    Expression<String>? type,
+    Expression<int>? lunarYear,
+    Expression<int>? lunarMonth,
+    Expression<int>? lunarDay,
+    Expression<bool>? isLeapMonth,
+    Expression<int>? advanceDays,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (type != null) 'type': type,
+      if (lunarYear != null) 'lunar_year': lunarYear,
+      if (lunarMonth != null) 'lunar_month': lunarMonth,
+      if (lunarDay != null) 'lunar_day': lunarDay,
+      if (isLeapMonth != null) 'is_leap_month': isLeapMonth,
+      if (advanceDays != null) 'advance_days': advanceDays,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AnniversariesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? title,
+    Value<String>? type,
+    Value<int?>? lunarYear,
+    Value<int>? lunarMonth,
+    Value<int>? lunarDay,
+    Value<bool>? isLeapMonth,
+    Value<int>? advanceDays,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return AnniversariesCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      type: type ?? this.type,
+      lunarYear: lunarYear ?? this.lunarYear,
+      lunarMonth: lunarMonth ?? this.lunarMonth,
+      lunarDay: lunarDay ?? this.lunarDay,
+      isLeapMonth: isLeapMonth ?? this.isLeapMonth,
+      advanceDays: advanceDays ?? this.advanceDays,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (lunarYear.present) {
+      map['lunar_year'] = Variable<int>(lunarYear.value);
+    }
+    if (lunarMonth.present) {
+      map['lunar_month'] = Variable<int>(lunarMonth.value);
+    }
+    if (lunarDay.present) {
+      map['lunar_day'] = Variable<int>(lunarDay.value);
+    }
+    if (isLeapMonth.present) {
+      map['is_leap_month'] = Variable<bool>(isLeapMonth.value);
+    }
+    if (advanceDays.present) {
+      map['advance_days'] = Variable<int>(advanceDays.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AnniversariesCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('type: $type, ')
+          ..write('lunarYear: $lunarYear, ')
+          ..write('lunarMonth: $lunarMonth, ')
+          ..write('lunarDay: $lunarDay, ')
+          ..write('isLeapMonth: $isLeapMonth, ')
+          ..write('advanceDays: $advanceDays, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $TasksTable tasks = $TasksTable(this);
+  late final $AnniversariesTable anniversaries = $AnniversariesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [categories, tasks];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    categories,
+    tasks,
+    anniversaries,
+  ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
     WritePropagation(
@@ -1909,6 +2480,288 @@ typedef $$TasksTableProcessedTableManager =
       Task,
       PrefetchHooks Function({bool categoryId, bool parentId})
     >;
+typedef $$AnniversariesTableCreateCompanionBuilder =
+    AnniversariesCompanion Function({
+      required String id,
+      required String title,
+      Value<String> type,
+      Value<int?> lunarYear,
+      required int lunarMonth,
+      required int lunarDay,
+      Value<bool> isLeapMonth,
+      Value<int> advanceDays,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$AnniversariesTableUpdateCompanionBuilder =
+    AnniversariesCompanion Function({
+      Value<String> id,
+      Value<String> title,
+      Value<String> type,
+      Value<int?> lunarYear,
+      Value<int> lunarMonth,
+      Value<int> lunarDay,
+      Value<bool> isLeapMonth,
+      Value<int> advanceDays,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$AnniversariesTableFilterComposer
+    extends Composer<_$AppDatabase, $AnniversariesTable> {
+  $$AnniversariesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lunarYear => $composableBuilder(
+    column: $table.lunarYear,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lunarDay => $composableBuilder(
+    column: $table.lunarDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isLeapMonth => $composableBuilder(
+    column: $table.isLeapMonth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get advanceDays => $composableBuilder(
+    column: $table.advanceDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AnniversariesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AnniversariesTable> {
+  $$AnniversariesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lunarYear => $composableBuilder(
+    column: $table.lunarYear,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lunarDay => $composableBuilder(
+    column: $table.lunarDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isLeapMonth => $composableBuilder(
+    column: $table.isLeapMonth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get advanceDays => $composableBuilder(
+    column: $table.advanceDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AnniversariesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AnniversariesTable> {
+  $$AnniversariesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get lunarYear =>
+      $composableBuilder(column: $table.lunarYear, builder: (column) => column);
+
+  GeneratedColumn<int> get lunarMonth => $composableBuilder(
+    column: $table.lunarMonth,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lunarDay =>
+      $composableBuilder(column: $table.lunarDay, builder: (column) => column);
+
+  GeneratedColumn<bool> get isLeapMonth => $composableBuilder(
+    column: $table.isLeapMonth,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get advanceDays => $composableBuilder(
+    column: $table.advanceDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$AnniversariesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AnniversariesTable,
+          Anniversary,
+          $$AnniversariesTableFilterComposer,
+          $$AnniversariesTableOrderingComposer,
+          $$AnniversariesTableAnnotationComposer,
+          $$AnniversariesTableCreateCompanionBuilder,
+          $$AnniversariesTableUpdateCompanionBuilder,
+          (
+            Anniversary,
+            BaseReferences<_$AppDatabase, $AnniversariesTable, Anniversary>,
+          ),
+          Anniversary,
+          PrefetchHooks Function()
+        > {
+  $$AnniversariesTableTableManager(_$AppDatabase db, $AnniversariesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AnniversariesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AnniversariesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AnniversariesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int?> lunarYear = const Value.absent(),
+                Value<int> lunarMonth = const Value.absent(),
+                Value<int> lunarDay = const Value.absent(),
+                Value<bool> isLeapMonth = const Value.absent(),
+                Value<int> advanceDays = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AnniversariesCompanion(
+                id: id,
+                title: title,
+                type: type,
+                lunarYear: lunarYear,
+                lunarMonth: lunarMonth,
+                lunarDay: lunarDay,
+                isLeapMonth: isLeapMonth,
+                advanceDays: advanceDays,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String title,
+                Value<String> type = const Value.absent(),
+                Value<int?> lunarYear = const Value.absent(),
+                required int lunarMonth,
+                required int lunarDay,
+                Value<bool> isLeapMonth = const Value.absent(),
+                Value<int> advanceDays = const Value.absent(),
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => AnniversariesCompanion.insert(
+                id: id,
+                title: title,
+                type: type,
+                lunarYear: lunarYear,
+                lunarMonth: lunarMonth,
+                lunarDay: lunarDay,
+                isLeapMonth: isLeapMonth,
+                advanceDays: advanceDays,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AnniversariesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AnniversariesTable,
+      Anniversary,
+      $$AnniversariesTableFilterComposer,
+      $$AnniversariesTableOrderingComposer,
+      $$AnniversariesTableAnnotationComposer,
+      $$AnniversariesTableCreateCompanionBuilder,
+      $$AnniversariesTableUpdateCompanionBuilder,
+      (
+        Anniversary,
+        BaseReferences<_$AppDatabase, $AnniversariesTable, Anniversary>,
+      ),
+      Anniversary,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1917,4 +2770,6 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$TasksTableTableManager get tasks =>
       $$TasksTableTableManager(_db, _db.tasks);
+  $$AnniversariesTableTableManager get anniversaries =>
+      $$AnniversariesTableTableManager(_db, _db.anniversaries);
 }

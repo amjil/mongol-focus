@@ -425,3 +425,40 @@
       "SELECT * FROM categories ORDER BY position ASC, id ASC"
       .readsFrom #{(.-categories database)}))
     (async/Stream.empty)))
+
+(defn watch-anniversaries
+  "Watch all lunar anniversaries from SQLite."
+  []
+  (if-let [^drift/AppDatabase database @db]
+    (.watch (.select database (.-anniversaries database)))
+    (async/Stream.empty)))
+
+(defn add-anniversary!
+  "Insert a new lunar anniversary into SQLite."
+  [{:keys [title type lunar-year lunar-month lunar-day is-leap-month? advance-days]}]
+  (if-let [^drift/AppDatabase database @db]
+    (let [id  (str (.-millisecondsSinceEpoch (dc/DateTime.now)))
+          row (drift/AnniversariesCompanion.insert
+               .id id
+               .title title
+               .type (d/Value ^String (name (or type :birthday)))
+               ;; Nullable int: typed Value when set, bare nil Value otherwise (see add-task! :categoryId)
+               .lunarYear (if lunar-year
+                            (d/Value ^int (int lunar-year))
+                            (d/Value nil))
+               .lunarMonth (int lunar-month)
+               .lunarDay (int lunar-day)
+               .isLeapMonth (d/Value ^bool (boolean is-leap-month?))
+               .advanceDays (d/Value ^int (int (or advance-days 3)))
+               .createdAt (dc/DateTime.now))]
+      (.insert (.into database (.-anniversaries database)) row))
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn delete-anniversary!
+  "Delete an anniversary by id."
+  [ann-id]
+  (if-let [^drift/AppDatabase database @db]
+    (.go
+     (doto (.delete database (.-anniversaries database))
+       (.where (fn [^drift/Anniversaries t] (.equals (.-id t) ann-id)))))
+    (throw (ex-info "Database not initialized" {}))))

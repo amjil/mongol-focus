@@ -55,3 +55,18 @@
 
 (defn task-done? [task]
   (:is-done? (->clj task)))
+
+(defn row->anniversary
+  "Convert Drift Anniversary row into Clojure map."
+  [row]
+  {:id             (.-id row)
+   :title          (.-title row)
+   :type           (keyword (or (.-type row) "birthday"))
+   :lunar-year     (.-lunarYear row)
+   :lunar-month    (.-lunarMonth row)
+   :lunar-day      (.-lunarDay row)
+   :is-leap-month? (boolean (.-isLeapMonth row))
+   :advance-days   (or (.-advanceDays row) 3)})
+
+(defn anniversary-rows->maps [rows]
+  (mapv row->anniversary rows))
