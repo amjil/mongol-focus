@@ -2,6 +2,55 @@
   (:require ["dart:core" :as dc]
             ["package:lunar/lunar.dart" :as l]))
 
+;; =============================================================================
+;; 1. Built-in Traditional Festivals & Switch State
+;; =============================================================================
+
+(defonce show-traditional-festivals? (atom true))
+
+(def traditional-festivals
+  [{:id "fest-tsagaan-sar"
+    :title "ᠴᠠᠭᠠᠨ ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ ᠰᠢᠨ᠎ᠡ ᠶᠢᠨ ᠨᠢᠭᠡᠨ"
+    :calendar-type :lunar
+    :is-solar? false
+    :month 1
+    :day 1
+    :lunar-month 1
+    :lunar-day 1
+    :type :festival
+    :built-in? true}
+   {:id "fest-mid-autumn"
+    :title "ᠨᠠᠢᠮᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ ᠠᠷᠪᠠᠨ ᠲᠠᠪᠤᠨ"
+    :calendar-type :lunar
+    :is-solar? false
+    :month 8
+    :day 15
+    :lunar-month 8
+    :lunar-day 15
+    :type :festival
+    :built-in? true}
+   {:id "fest-gal-tahih"
+    :title "ᠭᠠᠯ ᠲᠠᠬᠢᠬᠤ ᠡᠳᠦᠷ"
+    :calendar-type :lunar
+    :is-solar? false
+    :month 12
+    :day 23
+    :lunar-month 12
+    :lunar-day 23
+    :type :festival
+    :built-in? true}])
+
+(defn merge-with-festivals
+  "Merge user anniversaries from DB with built-in festivals when enabled."
+  [user-anniversaries]
+  (if @show-traditional-festivals?
+    (vec (concat user-anniversaries traditional-festivals))
+    (vec user-anniversaries)))
+
+;; =============================================================================
+;; 2. Dual Calendar (Solar & Lunar) -> Solar Date Calculation Engine
+;; =============================================================================
+
 (defn- pad2 [n]
   (let [s (str n)]
     (if (< n 10) (str "0" s) s)))
@@ -11,12 +60,24 @@
   [^dc/DateTime dt]
   (str (.-year dt) "-" (pad2 (.-month dt)) "-" (pad2 (.-day dt))))
 
+(defn- days-in-solar-month
+  "Return max days in a given Gregorian solar year and month."
+  [solar-year solar-month]
+  (.-day (dc/DateTime. solar-year (inc solar-month) 0)))
+
+(defn solar-anniversary->date
+  "Resolve a solar anniversary in a target solar year (handles Feb 29 -> Feb 28 in non-leap years)."
+  [target-solar-year solar-month solar-day]
+  (let [max-d  (days-in-solar-month target-solar-year solar-month)
+        safe-d (min solar-day max-d)]
+    (dc/DateTime. target-solar-year solar-month safe-d)))
+
 (defn lunar->solar-in-lunar-year
-  "Directly convert a lunar month/day in a given lunar year to solar DateTime.
-   Handles leap-month fallback and 30->29 small-month fallback in O(1) time."
+  "Directly convert a lunar month/day in a given lunar year to solar DateTime in O(1) time.
+   Handles leap-month fallback and 30 -> 29 small-month fallback."
   [target-lunar-year lunar-month lunar-day is-leap?]
-  (let [leap-m    (l/LunarYear.fromYear target-lunar-year)
-        has-leap? (= (.getLeapMonth leap-m) lunar-month)
+  (let [leap-y    (l/LunarYear.fromYear target-lunar-year)
+        has-leap? (= (.getLeapMonth leap-y) lunar-month)
         eff-month (if (and is-leap? has-leap?) (- lunar-month) lunar-month)
         l-month   (l/LunarMonth.fromYm target-lunar-year eff-month)]
     (when l-month
@@ -26,33 +87,46 @@
             solar    (.getSolar l-date)]
         (dc/DateTime. (.getYear solar) (.getMonth solar) (.getDay solar))))))
 
-(defn get-anniversaries-for-solar-year
-  "Resolve all lunar anniversaries that fall within a given Gregorian solar year."
+(defn- extract-month [ann]
+  (or (:month ann) (:lunar-month ann) 1))
+
+(defn- extract-day [ann]
+  (or (:day ann) (:lunar-day ann) 1))
+
+(defn- solar-anniv? [ann]
+  (or (:is-solar? ann) (= (:calendar-type ann) :solar)))
+
+(defn get-anniversaries-for-year
+  "Resolve all solar and lunar anniversaries that fall within a given Gregorian solar year."
   [solar-year anniversary-list]
-  (reduce
-   (fn [acc ann]
-     (let [m     (:lunar-month ann)
-           d     (:lunar-day ann)
-           leap? (boolean (:is-leap-month? ann))
-           candidates (keep #(lunar->solar-in-lunar-year % m d leap?)
-                            [(dec solar-year) solar-year])
-           matched    (filter #(= (.-year ^dc/DateTime %) solar-year) candidates)]
-       (into acc
-             (map (fn [^dc/DateTime s-dt]
-                    (let [age (when-let [by (:lunar-year ann)]
-                                (- (.-year s-dt) by))]
-                      (assoc ann
-                             :solar-date s-dt
-                             :solar-year solar-year
-                             :years-count age)))
-                  matched))))
-   []
-   anniversary-list))
+  (let [all-items (merge-with-festivals anniversary-list)]
+    (reduce
+     (fn [acc ann]
+       (let [m (extract-month ann)
+             d (extract-day ann)]
+         (if (solar-anniv? ann)
+           (let [s-dt (solar-anniversary->date solar-year m d)]
+             (conj acc (assoc ann :solar-date s-dt :solar-year solar-year)))
+           (let [leap?      (boolean (:is-leap-month? ann))
+                 candidates (keep #(lunar->solar-in-lunar-year % m d leap?)
+                                  [(dec solar-year) solar-year])
+                 matched    (filter #(= (.-year ^dc/DateTime %) solar-year) candidates)]
+             (into acc
+                   (map (fn [^dc/DateTime s-dt]
+                          (assoc ann :solar-date s-dt :solar-year solar-year))
+                        matched))))))
+     []
+     all-items)))
+
+(defn get-anniversaries-for-solar-year
+  "Alias for calendar callers expecting the previous name."
+  [solar-year anniversary-list]
+  (get-anniversaries-for-year solar-year anniversary-list))
 
 (defn anniversaries-by-date-key
   "Build {'YYYY-MM-DD' [anniversary-maps...]} for a solar year."
   [solar-year anniversary-list]
-  (let [computed (get-anniversaries-for-solar-year solar-year anniversary-list)]
+  (let [computed (get-anniversaries-for-year solar-year anniversary-list)]
     (reduce
      (fn [m ann]
        (update m (solar-date-key (:solar-date ann))
@@ -65,27 +139,32 @@
   [ann ^dc/DateTime today]
   (let [base-today (dc/DateTime. (.-year today) (.-month today) (.-day today))
         cur-year   (.-year base-today)
-        m          (:lunar-month ann)
-        d          (:lunar-day ann)
-        leap?      (boolean (:is-leap-month? ann))
-        dates      (keep #(lunar->solar-in-lunar-year % m d leap?)
-                         [(dec cur-year) cur-year (inc cur-year)])
+        m          (extract-month ann)
+        d          (extract-day ann)
+        dates      (if (solar-anniv? ann)
+                     [(solar-anniversary->date cur-year m d)
+                      (solar-anniversary->date (inc cur-year) m d)]
+                     (let [leap? (boolean (:is-leap-month? ann))]
+                       (keep #(lunar->solar-in-lunar-year % m d leap?)
+                             [(dec cur-year) cur-year (inc cur-year)])))
         upcoming   (first (filter #(not (.isBefore ^dc/DateTime % base-today))
                                   (sort #(compare %1 %2) dates)))]
     (when upcoming
-      (let [days-left (.-inDays (.difference ^dc/DateTime upcoming base-today))
-            age       (when-let [by (:lunar-year ann)]
-                        (- (.-year upcoming) by))]
+      (let [days-left (.-inDays (.difference ^dc/DateTime upcoming base-today))]
         (assoc ann
                :next-solar-date upcoming
-               :days-left days-left
-               :years-count age)))))
+               :days-left days-left)))))
 
 (defn upcoming-anniversaries
-  "Return anniversaries sorted by days-left (e.g., within next 30 days)."
-  [anniversary-list ^dc/DateTime today max-days]
-  (->> anniversary-list
-       (keep #(next-occurrence % today))
-       (filter #(<= (:days-left %) max-days))
-       (sort-by :days-left)
-       vec))
+  "Return all anniversaries (including enabled festivals) sorted by days-left."
+  ([anniversary-list ^dc/DateTime today]
+   (upcoming-anniversaries anniversary-list today nil))
+  ([anniversary-list ^dc/DateTime today max-days]
+   (let [all-items (merge-with-festivals anniversary-list)
+         sorted    (->> all-items
+                        (keep #(next-occurrence % today))
+                        (sort-by :days-left)
+                        vec)]
+     (if max-days
+       (filterv #(<= (:days-left %) max-days) sorted)
+       sorted))))

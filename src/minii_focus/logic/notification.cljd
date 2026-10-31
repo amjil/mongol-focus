@@ -88,3 +88,36 @@
   "Cancel a task reminder"
   [id]
   (await (.cancel plugin id)))
+
+(defn- anniversary-notif-ids
+  "Generate deterministic notification IDs for an anniversary: [advance-notif-id on-day-notif-id]."
+  [ann-id]
+  (let [h (hash (str ann-id))
+        base (mod (if (neg? h) (- h) h) 1000000000)]
+    [base (inc base)]))
+
+(defn cancel-anniversary-reminder!
+  "Cancel both advance and on-day notifications for an anniversary."
+  [ann-id]
+  (when ann-id
+    (let [[adv-id day-id] (anniversary-notif-ids ann-id)]
+      (await (.cancel plugin adv-id))
+      (await (.cancel plugin day-id)))))
+
+(defn schedule-anniversary-reminder!
+  "Schedule local reminders at 09:00 AM on the anniversary day and `advance-days` before."
+  [{:keys [id title next-solar-date advance-days] :or {advance-days 3}}]
+  (when (and id next-solar-date)
+    (let [[adv-id day-id] (anniversary-notif-ids id)
+          now             (dc/DateTime.now)
+          on-day-9am      (dc/DateTime. (.-year ^dc/DateTime next-solar-date)
+                                        (.-month ^dc/DateTime next-solar-date)
+                                        (.-day ^dc/DateTime next-solar-date)
+                                        9 0 0)
+          adv-date        (.subtract on-day-9am (dc/Duration. .days (int (or advance-days 3))))]
+      (await (cancel-anniversary-reminder! id))
+      (when (and (pos? (int (or advance-days 0)))
+                 (.isAfter adv-date now))
+        (await (schedule-task-reminder! adv-id (str title) adv-date)))
+      (when (.isAfter on-day-9am now)
+        (await (schedule-task-reminder! day-id (str title) on-day-9am))))))

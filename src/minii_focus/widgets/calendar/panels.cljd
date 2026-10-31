@@ -2,6 +2,7 @@
   (:require ["dart:core" :as dc]
             ["package:flutter/material.dart" :as m]
             ["package:mongol/mongol.dart" :as mg]
+            [minii-focus.route-names :as r]
             [minii-focus.logic.lunar :as lunar]
             [minii-focus.logic.task-actions :as task-actions]
             [minii-focus.widgets.calendar.theme :as theme]
@@ -153,7 +154,25 @@
             .decoration (m/BoxDecoration.
                          .color (.withOpacity (:primary palette) 0.08)
                          .shape m/BoxShape.circle)
-            .child (m/Icon. m/Icons.open_in_full .size 11.0 .color (:primary palette))))])))))))
+            .child (m/Icon. m/Icons.open_in_full .size 11.0 .color (:primary palette))))
+
+          (m/Positioned.
+           .bottom 0.0
+           .left 0.0
+           .child
+           (m/Material.
+            .color m/Colors.transparent
+            .child
+            (m/InkWell.
+             .customBorder (m/CircleBorder.)
+             .onTap #(do (m/Navigator.pushNamed ctx r/anniversary-management) nil)
+             .child
+             (m/Container.
+              .padding (m/EdgeInsets.all 4.0)
+              .decoration (m/BoxDecoration.
+                           .color (.withOpacity m/Colors.pink 0.12)
+                           .shape m/BoxShape.circle)
+              .child (m/Icon. m/Icons.cake .size 16.0 .color m/Colors.pinkAccent)))))])))))))
 
 (defn day-tasks-panel
   "Polished bottom-right card with integrated quick-add button and status-accented task cards."

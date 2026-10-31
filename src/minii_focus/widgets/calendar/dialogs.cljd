@@ -65,156 +65,299 @@
                        (m/Navigator.pop dialog-ctx))
           .child (mg/MongolText. "ᠨᠡᠮᠡᠬᠦ" .style (m/TextStyle. .fontFamily theme/default-font .fontSize 16.0)))])))))
 
+(defn- wheel-column-with-header
+  "Fixed Mongolian title at top and scrolling number wheel below."
+  [palette header-mgl-text item-count initial-index on-changed]
+  (m/Container.
+   .margin (m/EdgeInsets.symmetric .horizontal 4.0)
+   .decoration (m/BoxDecoration.
+                .color (:page-bg palette)
+                .borderRadius (m/BorderRadius.circular 16.0)
+                .border (m/Border.all .color (:card-border palette)))
+   .child
+   (m/Column.
+    .children
+    [(m/Container.
+      .height 58.0
+      .width dc/double.infinity
+      .padding (m/EdgeInsets.symmetric .vertical 6.0)
+      .decoration (m/BoxDecoration.
+                   .color (.withOpacity (:primary palette) 0.08)
+                   .borderRadius (m/BorderRadius.vertical .top (m/Radius.circular 15.0)))
+      .child
+      (m/Center.
+       .child
+       (m/FittedBox.
+        .fit m/BoxFit.scaleDown
+        .child
+        (mg/MongolText. header-mgl-text
+                        .style (m/TextStyle.
+                                .fontFamily theme/default-font
+                                .fontSize 18.0
+                                .fontWeight m/FontWeight.bold
+                                .color (:heading palette))))))
+     (m/Expanded.
+      .child
+      (cup/CupertinoPicker.
+       .scrollController (cup/FixedExtentScrollController. .initialItem initial-index)
+       .itemExtent 44.0
+       .onSelectedItemChanged on-changed
+       .children
+       (mapv (fn [num]
+               (m/Center.
+                .child
+                (m/Text. (str num)
+                         .style (m/TextStyle.
+                                 .fontSize 22.0
+                                 .fontWeight m/FontWeight.bold
+                                 .color (:on-body palette)))))
+             (range 1 (inc item-count)))))])))
+
 (defn show-add-anniversary-dialog!
-  "Elder-friendly vertical Mongolian dialog with Cupertino wheel pickers for lunar month/day."
-  [ctx ^dc/DateTime default-solar-date]
-  (let [init-lunar (lunar/solar->mongol-lunar default-solar-date)
-        form-state (atom {:title       ""
-                          :type        :birthday
-                          :lunar-month (or (:lunar-month init-lunar) 1)
-                          :lunar-day   (or (:lunar-day init-lunar) 1)
-                          :leap?       (boolean (:is-leap-month? init-lunar))})
-        title-ctrl (m/TextEditingController.)
-        month-ctrl (cup/FixedExtentScrollController.
-                    .initialItem (dec (or (:lunar-month init-lunar) 1)))
-        day-ctrl   (cup/FixedExtentScrollController.
-                    .initialItem (dec (or (:lunar-day init-lunar) 1)))]
-    (m/showDialog
-     .context ctx
-     .builder
-     (fn [dialog-ctx]
-       (f/widget
-        :context dialog-ctx
-        :watch [st form-state]
-        (let [p        (theme/palette-from-ctx dialog-ctx)
-              dialog-h (theme/adaptive-dialog-height dialog-ctx)]
-          (m/Dialog.
-           .backgroundColor (:card-bg p)
-           .surfaceTintColor m/Colors.transparent
-           .insetPadding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 20.0)
-           .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
-           .child
-           (m/Container.
-            .height dialog-h
-            .padding (m/EdgeInsets.all 16.0)
+  "Dialog to create or edit a Birthday/Memorial with Solar/Lunar toggle, Mongol input, and titled number wheels."
+  ([ctx ^dc/DateTime default-solar-date on-save!]
+   (show-add-anniversary-dialog! ctx default-solar-date nil on-save!))
+  ([ctx ^dc/DateTime default-solar-date existing-ann on-save!]
+   (let [init-lunar (lunar/solar->mongol-lunar default-solar-date)
+         init-solar? (if existing-ann
+                       (or (:is-solar? existing-ann) (= (:calendar-type existing-ann) :solar))
+                       false)
+         init-m      (or (:month existing-ann)
+                         (:lunar-month existing-ann)
+                         (if init-solar? (.-month default-solar-date) (:lunar-month init-lunar))
+                         1)
+         init-d      (or (:day existing-ann)
+                         (:lunar-day existing-ann)
+                         (if init-solar? (.-day default-solar-date) (:lunar-day init-lunar))
+                         1)
+         form-state (atom {:title     (or (:title existing-ann) "")
+                           :is-solar? init-solar?
+                           :type      (or (:type existing-ann) :birthday)
+                           :month     init-m
+                           :day       init-d})
+         title-ctrl (m/TextEditingController. .text (or (:title existing-ann) ""))]
+     (m/showDialog
+      .context ctx
+      .builder
+      (fn [dialog-ctx]
+        (f/widget
+         :context dialog-ctx
+         :watch [st form-state]
+         (let [p         (theme/palette-from-ctx dialog-ctx)
+               screen-h  (.-height (m/MediaQuery.sizeOf dialog-ctx))
+               dialog-h  (.clamp (* screen-h 0.65) 320.0 450.0)
+               is-solar? (:is-solar? st)
+               max-days  (if is-solar? 31 30)
+               cur-month (:month st)
+               cur-day   (min (:day st) max-days)]
+           (m/Dialog.
+            .backgroundColor (:card-bg p)
+            .surfaceTintColor m/Colors.transparent
+            .insetPadding (m/EdgeInsets.symmetric .horizontal 14.0 .vertical 20.0)
+            .shape (m/RoundedRectangleBorder. .borderRadius (m/BorderRadius.circular 24.0))
             .child
-            (m/Row.
-             .crossAxisAlignment m/CrossAxisAlignment.stretch
-             .children
-             [(m/Container.
-               .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 10.0)
-               .decoration (m/BoxDecoration.
-                            .color (.withOpacity m/Colors.pink 0.06)
-                            .borderRadius (m/BorderRadius.circular 16.0))
-               .child
+            (m/Container.
+             .height dialog-h
+             .padding (m/EdgeInsets.all 16.0)
+             .child
+             (m/Row.
+              .crossAxisAlignment m/CrossAxisAlignment.stretch
+              .children
+              [(m/Container.
+                .width 64.0
+                .padding (m/EdgeInsets.symmetric .vertical 10.0 .horizontal 6.0)
+                .decoration (m/BoxDecoration.
+                             .color (:page-bg p)
+                             .borderRadius (m/BorderRadius.circular 16.0)
+                             .border (m/Border.all .color (:card-border p)))
+                .child
+                (m/Column.
+                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+                 .children
+                 [(m/InkWell.
+                   .borderRadius (m/BorderRadius.circular 12.0)
+                   .onTap #(swap! form-state update :type
+                                  (fn [t] (if (= t :birthday) :memorial :birthday)))
+                   .child
+                   (m/Container.
+                    .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 4.0)
+                    .decoration (m/BoxDecoration.
+                                 .color (.withOpacity m/Colors.pink 0.12)
+                                 .borderRadius (m/BorderRadius.circular 12.0))
+                    .child
+                    (m/Column.
+                     .children
+                     [(m/Icon. (if (= (:type st) :birthday) m/Icons.cake m/Icons.favorite)
+                               .size 20.0
+                               .color m/Colors.pinkAccent)
+                      (m/SizedBox. .height 6.0)
+                      (mg/MongolText. (if (= (:type st) :birthday)
+                                        "ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+                                        "ᠳᠤᠷᠠᠰᠬᠠᠯ")
+                                      .style (m/TextStyle.
+                                              .fontFamily theme/default-font
+                                              .fontSize 15.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color m/Colors.pink.shade700))])))
+                  (m/Divider. .height 12.0)
+                  (m/Expanded.
+                   .child
+                   (m/Column.
+                    .mainAxisAlignment m/MainAxisAlignment.spaceEvenly
+                    .children
+                    [(m/Expanded.
+                      .child
+                      (m/GestureDetector.
+                       .onTap #(swap! form-state assoc :is-solar? false)
+                       .child
+                       (m/Container.
+                        .width dc/double.infinity
+                        .margin (m/EdgeInsets.only .bottom 4.0)
+                        .decoration (m/BoxDecoration.
+                                     .color (if (not is-solar?) (:primary p) m/Colors.transparent)
+                                     .borderRadius (m/BorderRadius.circular 10.0)
+                                     .border (m/Border.all .color (:card-border p)))
+                        .child
+                        (m/Center.
+                         .child
+                         (m/FittedBox.
+                          .fit m/BoxFit.scaleDown
+                          .child
+                          (mg/MongolText. "ᠪᠢᠯᠢᠭ"
+                                          .style (m/TextStyle.
+                                                  .fontFamily theme/default-font
+                                                  .fontSize 16.0
+                                                  .fontWeight m/FontWeight.bold
+                                                  .color (if (not is-solar?) (:on-primary p) (:on-muted p)))))))))
+                     (m/Expanded.
+                      .child
+                      (m/GestureDetector.
+                       .onTap #(swap! form-state assoc :is-solar? true)
+                       .child
+                       (m/Container.
+                        .width dc/double.infinity
+                        .margin (m/EdgeInsets.only .top 4.0)
+                        .decoration (m/BoxDecoration.
+                                     .color (if is-solar? (:primary p) m/Colors.transparent)
+                                     .borderRadius (m/BorderRadius.circular 10.0)
+                                     .border (m/Border.all .color (:card-border p)))
+                        .child
+                        (m/Center.
+                         .child
+                         (m/FittedBox.
+                          .fit m/BoxFit.scaleDown
+                          .child
+                          (mg/MongolText. "ᠠᠷᠭ᠎ᠠ"
+                                          .style (m/TextStyle.
+                                                  .fontFamily theme/default-font
+                                                  .fontSize 16.0
+                                                  .fontWeight m/FontWeight.bold
+                                                  .color (if is-solar? (:on-primary p) (:on-muted p)))))))))]))]))
+
+               (m/SizedBox. .width 10.0)
+
+               (m/Container.
+                .width 76.0
+                .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 10.0)
+                .decoration (m/BoxDecoration.
+                             .color (:page-bg p)
+                             .borderRadius (m/BorderRadius.circular 16.0)
+                             .border (m/Border.all .color (:card-border p)))
+                .child
+                (mg/MongolTextField.
+                 .controller title-ctrl
+                 .autofocus true
+                 .decoration (m/InputDecoration.
+                              .border m/InputBorder.none
+                              .hintText "ᠡᠵᠢ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
+                              .hintStyle (m/TextStyle.
+                                          .fontFamily theme/default-font
+                                          .fontSize 16.0
+                                          .color (:on-muted p)))
+                 .style (m/TextStyle.
+                         .fontFamily theme/default-font
+                         .fontSize 20.0
+                         .fontWeight m/FontWeight.bold
+                         .color (:on-body p))))
+
+               (m/SizedBox. .width 8.0)
+
+               (m/Expanded.
+                .child
+                (m/Row.
+                 .crossAxisAlignment m/CrossAxisAlignment.stretch
+                 .children
+                 [(m/Expanded.
+                   .child
+                   (wheel-column-with-header
+                    p
+                    "ᠰᠠᠷ᠎ᠠ"
+                    12
+                    (dec cur-month)
+                    (fn [idx] (swap! form-state assoc :month (inc idx)))))
+                  (m/Expanded.
+                   .child
+                   (wheel-column-with-header
+                    p
+                    "ᠡᠳᠦᠷ"
+                    max-days
+                    (dec cur-day)
+                    (fn [idx] (swap! form-state assoc :day (inc idx)))))]))
+
+               (m/SizedBox. .width 8.0)
+
                (m/Column.
                 .mainAxisAlignment m/MainAxisAlignment.spaceBetween
                 .children
-                [(m/Icon. m/Icons.cake .size 24.0 .color m/Colors.pinkAccent)
+                [(m/IconButton.filledTonal
+                  .icon (m/Icon. m/Icons.close .size 22.0)
+                  .onPressed #(m/Navigator.pop dialog-ctx))
                  (m/Expanded.
                   .child
-                  (m/Center.
+                  (m/Padding.
+                   .padding (m/EdgeInsets.symmetric .vertical 8.0)
                    .child
-                   (m/FittedBox.
-                    .fit m/BoxFit.scaleDown
+                   (m/Center.
                     .child
-                    (theme/vertical-mongol-text
-                     "ᠣᠢ ᠨᠡᠮᠡᠬᠦ"
-                     (m/TextStyle.
-                      .fontFamily theme/default-font
-                      .fontSize 21.0
-                      .fontWeight m/FontWeight.bold
-                      .color m/Colors.pink.shade700)))))
-                 (m/IconButton.filledTonal
-                  .icon (m/Icon. (if (= (:type st) :birthday)
-                                   m/Icons.cake
-                                   m/Icons.favorite)
-                                 .size 20.0
-                                 .color m/Colors.pink.shade700)
-                  .onPressed #(swap! form-state update :type
-                                     (fn [t] (if (= t :birthday) :memorial :birthday))))]))
-
-              (m/SizedBox. .width 12.0)
-
-              (m/Container.
-               .width 76.0
-               .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 10.0)
-               .decoration (m/BoxDecoration.
-                            .color (:page-bg p)
-                            .borderRadius (m/BorderRadius.circular 16.0)
-                            .border (m/Border.all .color (:card-border p)))
-               .child
-               (mg/MongolTextField.
-                .controller title-ctrl
-                .autofocus true
-                .decoration (m/InputDecoration.
-                             .border m/InputBorder.none
-                             .hintText "ᠡᠵᠢ ᠶᠢᠨ ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"
-                             .hintStyle (m/TextStyle.
-                                         .fontFamily theme/default-font
-                                         .fontSize 16.0
-                                         .color (:on-muted p)))
-                .style (m/TextStyle.
-                        .fontFamily theme/default-font
-                        .fontSize 20.0
-                        .fontWeight m/FontWeight.bold
-                        .color (:on-body p))))
-
-              (m/SizedBox. .width 12.0)
-
-              (m/Expanded.
-               .child
-               (m/Row.
-                .children
-                [(m/Expanded.
-                  .child
-                  (lunar-wheel-picker
-                   month-ctrl
-                   #(swap! form-state assoc :lunar-month (inc %))
-                   (range 1 13)
-                   lunar/format-lunar-month
-                   p))
-                 (m/Expanded.
-                  .child
-                  (lunar-wheel-picker
-                   day-ctrl
-                   #(swap! form-state assoc :lunar-day (inc %))
-                   (range 1 31)
-                   lunar/format-lunar-day
-                   p))]))
-
-              (m/SizedBox. .width 10.0)
-
-              (m/Column.
-               .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-               .children
-               [(m/IconButton.filledTonal
-                 .icon (m/Icon. m/Icons.close .size 22.0)
-                 .onPressed #(m/Navigator.pop dialog-ctx))
-                (m/ElevatedButton.
-                 .style (m/ElevatedButton.styleFrom
-                         .backgroundColor (:primary p)
-                         .foregroundColor (:on-primary p)
-                         .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 14.0)
-                         .shape (m/RoundedRectangleBorder.
-                                 .borderRadius (m/BorderRadius.circular 14.0)))
-                 .onPressed (fn []
-                              (let [title (.trim (.-text title-ctrl))]
-                                (when-not (empty? title)
-                                  (db/add-anniversary!
-                                   {:title          title
-                                    :type           (:type @form-state)
-                                    :lunar-month    (:lunar-month @form-state)
-                                    :lunar-day      (:lunar-day @form-state)
-                                    :is-leap-month? (:leap? @form-state)}))
-                                (m/Navigator.pop dialog-ctx)))
-                 .child (theme/vertical-mongol-text
-                         "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ"
-                         (m/TextStyle.
-                          .fontFamily theme/default-font
-                          .fontSize 18.0
-                          .fontWeight m/FontWeight.bold
-                          .color (:on-primary p))))])])))))))))
+                    (m/FittedBox.
+                     .fit m/BoxFit.scaleDown
+                     .child
+                     (mg/MongolText.
+                      (if is-solar?
+                        (str cur-month " ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ " cur-day)
+                        (str (lunar/format-lunar-month cur-month) "\n"
+                             (lunar/format-lunar-day cur-day)))
+                      .style (m/TextStyle.
+                              .fontFamily theme/default-font
+                              .fontSize 15.0
+                              .fontWeight m/FontWeight.bold
+                              .color (:heading p)))))))
+                 (m/ElevatedButton.
+                  .style (m/ElevatedButton.styleFrom
+                          .backgroundColor (:primary p)
+                          .foregroundColor (:on-primary p)
+                          .padding (m/EdgeInsets.symmetric .horizontal 8.0 .vertical 12.0)
+                          .shape (m/RoundedRectangleBorder.
+                                  .borderRadius (m/BorderRadius.circular 14.0)))
+                  .onPressed (fn []
+                               (let [title (.trim (.-text title-ctrl))]
+                                 (when-not (empty? title)
+                                   (on-save! {:id            (:id existing-ann)
+                                              :title         title
+                                              :type          (:type st)
+                                              :is-solar?     is-solar?
+                                              :calendar-type (if is-solar? :solar :lunar)
+                                              :month         cur-month
+                                              :day           cur-day
+                                              :lunar-month   cur-month
+                                              :lunar-day     cur-day}))
+                                 (m/Navigator.pop dialog-ctx)))
+                  .child (mg/MongolText. "ᠬᠠᠳᠠᠭᠠᠯᠠᠬᠤ"
+                                         .style (m/TextStyle.
+                                                 .fontFamily theme/default-font
+                                                 .fontSize 17.0
+                                                 .fontWeight m/FontWeight.bold
+                                                 .color (:on-primary p))))])]))))))))))
 
 (defn show-almanac-detail-dialog!
   "Popup dialog displaying the selected day's lunar almanac, haircut auspiciousness, and anniversaries in extra-large font."
@@ -441,7 +584,16 @@
                 .icon (m/Icon. m/Icons.cake .size 22.0 .color m/Colors.pink.shade700)
                 .onPressed #(do
                               (m/Navigator.pop dialog-ctx)
-                              (show-add-anniversary-dialog! ctx selected-dt)))
+                              (show-add-anniversary-dialog!
+                               ctx
+                               selected-dt
+                               (fn [m] (db/add-anniversary! m)))))
+               (m/IconButton.filledTonal
+                .icon (m/Icon. m/Icons.list_alt .size 20.0 .color m/Colors.pink.shade700)
+                .onPressed #(do
+                              (m/Navigator.pop dialog-ctx)
+                              (m/Navigator.pushNamed ctx r/anniversary-management)
+                              nil))
                (m/Expanded.
                 .child
                 (m/Align.

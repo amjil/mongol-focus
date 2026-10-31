@@ -426,32 +426,96 @@
       .readsFrom #{(.-categories database)}))
     (async/Stream.empty)))
 
+;; =============================================================================
+;; 5. Anniversary Operations (Solar & Lunar Birthdays / Memorials)
+;; =============================================================================
+
 (defn watch-anniversaries
-  "Watch all lunar anniversaries from SQLite."
+  "Watch all solar and lunar anniversaries from SQLite, ordered by created_at DESC."
   []
   (if-let [^drift/AppDatabase database @db]
     (.watch (.select database (.-anniversaries database)))
     (async/Stream.empty)))
 
 (defn add-anniversary!
-  "Insert a new lunar anniversary into SQLite."
-  [{:keys [title type lunar-year lunar-month lunar-day is-leap-month? advance-days]}]
+  "Insert a new solar or lunar anniversary into SQLite and return the saved map with :id."
+  [{:keys [id title type is-solar? lunar-year month day lunar-month lunar-day
+           is-leap-month? advance-days]}]
   (if-let [^drift/AppDatabase database @db]
-    (let [id  (str (.-millisecondsSinceEpoch (dc/DateTime.now)))
-          row (drift/AnniversariesCompanion.insert
-               .id id
-               .title title
-               .type (d/Value ^String (name (or type :birthday)))
-               ;; Nullable int: typed Value when set, bare nil Value otherwise (see add-task! :categoryId)
-               .lunarYear (if lunar-year
-                            (d/Value ^int (int lunar-year))
-                            (d/Value nil))
-               .lunarMonth (int lunar-month)
-               .lunarDay (int lunar-day)
-               .isLeapMonth (d/Value ^bool (boolean is-leap-month?))
-               .advanceDays (d/Value ^int (int (or advance-days 3)))
-               .createdAt (dc/DateTime.now))]
-      (.insert (.into database (.-anniversaries database)) row))
+    (let [ann-id  (or id (str (.-millisecondsSinceEpoch (dc/DateTime.now))))
+          m       (int (or month lunar-month 1))
+          d       (int (or day lunar-day 1))
+          solar?  (boolean is-solar?)
+          adv     (int (or advance-days 3))
+          t-kw    (or type :birthday)
+          row     (drift/AnniversariesCompanion.insert
+                   .id ann-id
+                   .title title
+                   .type (d/Value ^String (name t-kw))
+                   .isSolar (d/Value ^bool solar?)
+                   .month (d/Value ^int m)
+                   .day (d/Value ^int d)
+                   .lunarYear (if lunar-year
+                                (d/Value ^int (int lunar-year))
+                                (d/Value nil))
+                   .lunarMonth m
+                   .lunarDay d
+                   .isLeapMonth (d/Value ^bool (boolean is-leap-month?))
+                   .advanceDays (d/Value ^int adv)
+                   .createdAt (dc/DateTime.now))]
+      (await (.insert (.into database (.-anniversaries database)) row))
+      {:id             ann-id
+       :title          title
+       :type           t-kw
+       :is-solar?      solar?
+       :calendar-type  (if solar? :solar :lunar)
+       :month          m
+       :day            d
+       :lunar-month    m
+       :lunar-day      d
+       :lunar-year     lunar-year
+       :is-leap-month? (boolean is-leap-month?)
+       :advance-days   adv})
+    (throw (ex-info "Database not initialized" {}))))
+
+(defn update-anniversary!
+  "Update an existing anniversary by id and return the updated map."
+  [ann-id {:keys [title type is-solar? lunar-year month day lunar-month lunar-day
+                  is-leap-month? advance-days]}]
+  (if-let [^drift/AppDatabase database @db]
+    (let [m       (int (or month lunar-month 1))
+          d       (int (or day lunar-day 1))
+          solar?  (boolean is-solar?)
+          adv     (int (or advance-days 3))
+          t-kw    (or type :birthday)
+          query   (doto (.update database (.-anniversaries database))
+                    (.where (fn [^drift/Anniversaries t] (.equals (.-id t) ann-id))))
+          comp    (drift/AnniversariesCompanion.
+                   .title (d/Value ^String title)
+                   .type (d/Value ^String (name t-kw))
+                   .isSolar (d/Value ^bool solar?)
+                   .month (d/Value ^int m)
+                   .day (d/Value ^int d)
+                   .lunarYear (if lunar-year
+                                (d/Value ^int (int lunar-year))
+                                (d/Value nil))
+                   .lunarMonth (d/Value ^int m)
+                   .lunarDay (d/Value ^int d)
+                   .isLeapMonth (d/Value ^bool (boolean is-leap-month?))
+                   .advanceDays (d/Value ^int adv))]
+      (await (.write query comp))
+      {:id             ann-id
+       :title          title
+       :type           t-kw
+       :is-solar?      solar?
+       :calendar-type  (if solar? :solar :lunar)
+       :month          m
+       :day            d
+       :lunar-month    m
+       :lunar-day      d
+       :lunar-year     lunar-year
+       :is-leap-month? (boolean is-leap-month?)
+       :advance-days   adv})
     (throw (ex-info "Database not initialized" {}))))
 
 (defn delete-anniversary!

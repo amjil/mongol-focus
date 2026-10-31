@@ -63,6 +63,12 @@ class Anniversaries extends Table {
   TextColumn get title => text()();
   TextColumn get type =>
       text().withDefault(const Constant('birthday'))(); // birthday | memorial | festival
+  BoolColumn get isSolar =>
+      boolean().withDefault(const Constant(false))(); // false = Lunar, true = Solar
+  IntColumn get month =>
+      integer().withDefault(const Constant(1))(); // 1..12 (lunar or solar)
+  IntColumn get day =>
+      integer().withDefault(const Constant(1))(); // 1..30 (lunar) or 1..31 (solar)
   IntColumn get lunarYear => integer().nullable()();
   IntColumn get lunarMonth => integer()();
   IntColumn get lunarDay => integer()();
@@ -75,12 +81,23 @@ class Anniversaries extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+Future<bool> _anniversaryColumnExists(
+  GeneratedDatabase db,
+  String column,
+) async {
+  final rows = await db.customSelect(
+    "SELECT 1 FROM pragma_table_info('anniversaries') WHERE name = ?",
+    variables: [Variable.withString(column)],
+  ).get();
+  return rows.isNotEmpty;
+}
+
 @DriftDatabase(tables: [Tasks, Categories, Anniversaries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(impl.connect());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -102,6 +119,28 @@ class AppDatabase extends _$AppDatabase {
 
         if (from < 3) {
           await m.createTable(anniversaries);
+        }
+
+        if (from < 4) {
+          final db = m.database;
+          var backfillMonthDay = false;
+
+          if (!await _anniversaryColumnExists(db, 'is_solar')) {
+            await m.addColumn(anniversaries, anniversaries.isSolar);
+          }
+          if (!await _anniversaryColumnExists(db, 'month')) {
+            await m.addColumn(anniversaries, anniversaries.month);
+            backfillMonthDay = true;
+          }
+          if (!await _anniversaryColumnExists(db, 'day')) {
+            await m.addColumn(anniversaries, anniversaries.day);
+            backfillMonthDay = true;
+          }
+          if (backfillMonthDay) {
+            await db.customStatement(
+              'UPDATE anniversaries SET month = lunar_month, day = lunar_day',
+            );
+          }
         }
       },
     );

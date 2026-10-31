@@ -1097,6 +1097,41 @@ class $AnniversariesTable extends Anniversaries
     requiredDuringInsert: false,
     defaultValue: const Constant('birthday'),
   );
+  static const VerificationMeta _isSolarMeta = const VerificationMeta(
+    'isSolar',
+  );
+  @override
+  late final GeneratedColumn<bool> isSolar = GeneratedColumn<bool>(
+    'is_solar',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_solar" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _monthMeta = const VerificationMeta('month');
+  @override
+  late final GeneratedColumn<int> month = GeneratedColumn<int>(
+    'month',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<int> day = GeneratedColumn<int>(
+    'day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   static const VerificationMeta _lunarYearMeta = const VerificationMeta(
     'lunarYear',
   );
@@ -1173,6 +1208,9 @@ class $AnniversariesTable extends Anniversaries
     id,
     title,
     type,
+    isSolar,
+    month,
+    day,
     lunarYear,
     lunarMonth,
     lunarDay,
@@ -1209,6 +1247,24 @@ class $AnniversariesTable extends Anniversaries
       context.handle(
         _typeMeta,
         type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('is_solar')) {
+      context.handle(
+        _isSolarMeta,
+        isSolar.isAcceptableOrUnknown(data['is_solar']!, _isSolarMeta),
+      );
+    }
+    if (data.containsKey('month')) {
+      context.handle(
+        _monthMeta,
+        month.isAcceptableOrUnknown(data['month']!, _monthMeta),
+      );
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+        _dayMeta,
+        day.isAcceptableOrUnknown(data['day']!, _dayMeta),
       );
     }
     if (data.containsKey('lunar_year')) {
@@ -1280,6 +1336,18 @@ class $AnniversariesTable extends Anniversaries
         DriftSqlType.string,
         data['${effectivePrefix}type'],
       )!,
+      isSolar: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_solar'],
+      )!,
+      month: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}month'],
+      )!,
+      day: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}day'],
+      )!,
       lunarYear: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}lunar_year'],
@@ -1317,6 +1385,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
   final String id;
   final String title;
   final String type;
+  final bool isSolar;
+  final int month;
+  final int day;
   final int? lunarYear;
   final int lunarMonth;
   final int lunarDay;
@@ -1327,6 +1398,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
     required this.id,
     required this.title,
     required this.type,
+    required this.isSolar,
+    required this.month,
+    required this.day,
     this.lunarYear,
     required this.lunarMonth,
     required this.lunarDay,
@@ -1340,6 +1414,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
     map['id'] = Variable<String>(id);
     map['title'] = Variable<String>(title);
     map['type'] = Variable<String>(type);
+    map['is_solar'] = Variable<bool>(isSolar);
+    map['month'] = Variable<int>(month);
+    map['day'] = Variable<int>(day);
     if (!nullToAbsent || lunarYear != null) {
       map['lunar_year'] = Variable<int>(lunarYear);
     }
@@ -1356,6 +1433,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
       id: Value(id),
       title: Value(title),
       type: Value(type),
+      isSolar: Value(isSolar),
+      month: Value(month),
+      day: Value(day),
       lunarYear: lunarYear == null && nullToAbsent
           ? const Value.absent()
           : Value(lunarYear),
@@ -1376,6 +1456,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
       id: serializer.fromJson<String>(json['id']),
       title: serializer.fromJson<String>(json['title']),
       type: serializer.fromJson<String>(json['type']),
+      isSolar: serializer.fromJson<bool>(json['isSolar']),
+      month: serializer.fromJson<int>(json['month']),
+      day: serializer.fromJson<int>(json['day']),
       lunarYear: serializer.fromJson<int?>(json['lunarYear']),
       lunarMonth: serializer.fromJson<int>(json['lunarMonth']),
       lunarDay: serializer.fromJson<int>(json['lunarDay']),
@@ -1391,6 +1474,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
       'id': serializer.toJson<String>(id),
       'title': serializer.toJson<String>(title),
       'type': serializer.toJson<String>(type),
+      'isSolar': serializer.toJson<bool>(isSolar),
+      'month': serializer.toJson<int>(month),
+      'day': serializer.toJson<int>(day),
       'lunarYear': serializer.toJson<int?>(lunarYear),
       'lunarMonth': serializer.toJson<int>(lunarMonth),
       'lunarDay': serializer.toJson<int>(lunarDay),
@@ -1404,6 +1490,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
     String? id,
     String? title,
     String? type,
+    bool? isSolar,
+    int? month,
+    int? day,
     Value<int?> lunarYear = const Value.absent(),
     int? lunarMonth,
     int? lunarDay,
@@ -1414,6 +1503,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
     id: id ?? this.id,
     title: title ?? this.title,
     type: type ?? this.type,
+    isSolar: isSolar ?? this.isSolar,
+    month: month ?? this.month,
+    day: day ?? this.day,
     lunarYear: lunarYear.present ? lunarYear.value : this.lunarYear,
     lunarMonth: lunarMonth ?? this.lunarMonth,
     lunarDay: lunarDay ?? this.lunarDay,
@@ -1426,6 +1518,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
       id: data.id.present ? data.id.value : this.id,
       title: data.title.present ? data.title.value : this.title,
       type: data.type.present ? data.type.value : this.type,
+      isSolar: data.isSolar.present ? data.isSolar.value : this.isSolar,
+      month: data.month.present ? data.month.value : this.month,
+      day: data.day.present ? data.day.value : this.day,
       lunarYear: data.lunarYear.present ? data.lunarYear.value : this.lunarYear,
       lunarMonth: data.lunarMonth.present
           ? data.lunarMonth.value
@@ -1447,6 +1542,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('type: $type, ')
+          ..write('isSolar: $isSolar, ')
+          ..write('month: $month, ')
+          ..write('day: $day, ')
           ..write('lunarYear: $lunarYear, ')
           ..write('lunarMonth: $lunarMonth, ')
           ..write('lunarDay: $lunarDay, ')
@@ -1462,6 +1560,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
     id,
     title,
     type,
+    isSolar,
+    month,
+    day,
     lunarYear,
     lunarMonth,
     lunarDay,
@@ -1476,6 +1577,9 @@ class Anniversary extends DataClass implements Insertable<Anniversary> {
           other.id == this.id &&
           other.title == this.title &&
           other.type == this.type &&
+          other.isSolar == this.isSolar &&
+          other.month == this.month &&
+          other.day == this.day &&
           other.lunarYear == this.lunarYear &&
           other.lunarMonth == this.lunarMonth &&
           other.lunarDay == this.lunarDay &&
@@ -1488,6 +1592,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
   final Value<String> id;
   final Value<String> title;
   final Value<String> type;
+  final Value<bool> isSolar;
+  final Value<int> month;
+  final Value<int> day;
   final Value<int?> lunarYear;
   final Value<int> lunarMonth;
   final Value<int> lunarDay;
@@ -1499,6 +1606,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
     this.id = const Value.absent(),
     this.title = const Value.absent(),
     this.type = const Value.absent(),
+    this.isSolar = const Value.absent(),
+    this.month = const Value.absent(),
+    this.day = const Value.absent(),
     this.lunarYear = const Value.absent(),
     this.lunarMonth = const Value.absent(),
     this.lunarDay = const Value.absent(),
@@ -1511,6 +1621,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
     required String id,
     required String title,
     this.type = const Value.absent(),
+    this.isSolar = const Value.absent(),
+    this.month = const Value.absent(),
+    this.day = const Value.absent(),
     this.lunarYear = const Value.absent(),
     required int lunarMonth,
     required int lunarDay,
@@ -1527,6 +1640,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
     Expression<String>? id,
     Expression<String>? title,
     Expression<String>? type,
+    Expression<bool>? isSolar,
+    Expression<int>? month,
+    Expression<int>? day,
     Expression<int>? lunarYear,
     Expression<int>? lunarMonth,
     Expression<int>? lunarDay,
@@ -1539,6 +1655,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
       if (id != null) 'id': id,
       if (title != null) 'title': title,
       if (type != null) 'type': type,
+      if (isSolar != null) 'is_solar': isSolar,
+      if (month != null) 'month': month,
+      if (day != null) 'day': day,
       if (lunarYear != null) 'lunar_year': lunarYear,
       if (lunarMonth != null) 'lunar_month': lunarMonth,
       if (lunarDay != null) 'lunar_day': lunarDay,
@@ -1553,6 +1672,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
     Value<String>? id,
     Value<String>? title,
     Value<String>? type,
+    Value<bool>? isSolar,
+    Value<int>? month,
+    Value<int>? day,
     Value<int?>? lunarYear,
     Value<int>? lunarMonth,
     Value<int>? lunarDay,
@@ -1565,6 +1687,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
       id: id ?? this.id,
       title: title ?? this.title,
       type: type ?? this.type,
+      isSolar: isSolar ?? this.isSolar,
+      month: month ?? this.month,
+      day: day ?? this.day,
       lunarYear: lunarYear ?? this.lunarYear,
       lunarMonth: lunarMonth ?? this.lunarMonth,
       lunarDay: lunarDay ?? this.lunarDay,
@@ -1586,6 +1711,15 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
     }
     if (type.present) {
       map['type'] = Variable<String>(type.value);
+    }
+    if (isSolar.present) {
+      map['is_solar'] = Variable<bool>(isSolar.value);
+    }
+    if (month.present) {
+      map['month'] = Variable<int>(month.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<int>(day.value);
     }
     if (lunarYear.present) {
       map['lunar_year'] = Variable<int>(lunarYear.value);
@@ -1617,6 +1751,9 @@ class AnniversariesCompanion extends UpdateCompanion<Anniversary> {
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('type: $type, ')
+          ..write('isSolar: $isSolar, ')
+          ..write('month: $month, ')
+          ..write('day: $day, ')
           ..write('lunarYear: $lunarYear, ')
           ..write('lunarMonth: $lunarMonth, ')
           ..write('lunarDay: $lunarDay, ')
@@ -2485,6 +2622,9 @@ typedef $$AnniversariesTableCreateCompanionBuilder =
       required String id,
       required String title,
       Value<String> type,
+      Value<bool> isSolar,
+      Value<int> month,
+      Value<int> day,
       Value<int?> lunarYear,
       required int lunarMonth,
       required int lunarDay,
@@ -2498,6 +2638,9 @@ typedef $$AnniversariesTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> title,
       Value<String> type,
+      Value<bool> isSolar,
+      Value<int> month,
+      Value<int> day,
       Value<int?> lunarYear,
       Value<int> lunarMonth,
       Value<int> lunarDay,
@@ -2528,6 +2671,21 @@ class $$AnniversariesTableFilterComposer
 
   ColumnFilters<String> get type => $composableBuilder(
     column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSolar => $composableBuilder(
+    column: $table.isSolar,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get month => $composableBuilder(
+    column: $table.month,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get day => $composableBuilder(
+    column: $table.day,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2586,6 +2744,21 @@ class $$AnniversariesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isSolar => $composableBuilder(
+    column: $table.isSolar,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get month => $composableBuilder(
+    column: $table.month,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get day => $composableBuilder(
+    column: $table.day,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get lunarYear => $composableBuilder(
     column: $table.lunarYear,
     builder: (column) => ColumnOrderings(column),
@@ -2634,6 +2807,15 @@ class $$AnniversariesTableAnnotationComposer
 
   GeneratedColumn<String> get type =>
       $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSolar =>
+      $composableBuilder(column: $table.isSolar, builder: (column) => column);
+
+  GeneratedColumn<int> get month =>
+      $composableBuilder(column: $table.month, builder: (column) => column);
+
+  GeneratedColumn<int> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
 
   GeneratedColumn<int> get lunarYear =>
       $composableBuilder(column: $table.lunarYear, builder: (column) => column);
@@ -2694,6 +2876,9 @@ class $$AnniversariesTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String> type = const Value.absent(),
+                Value<bool> isSolar = const Value.absent(),
+                Value<int> month = const Value.absent(),
+                Value<int> day = const Value.absent(),
                 Value<int?> lunarYear = const Value.absent(),
                 Value<int> lunarMonth = const Value.absent(),
                 Value<int> lunarDay = const Value.absent(),
@@ -2705,6 +2890,9 @@ class $$AnniversariesTableTableManager
                 id: id,
                 title: title,
                 type: type,
+                isSolar: isSolar,
+                month: month,
+                day: day,
                 lunarYear: lunarYear,
                 lunarMonth: lunarMonth,
                 lunarDay: lunarDay,
@@ -2718,6 +2906,9 @@ class $$AnniversariesTableTableManager
                 required String id,
                 required String title,
                 Value<String> type = const Value.absent(),
+                Value<bool> isSolar = const Value.absent(),
+                Value<int> month = const Value.absent(),
+                Value<int> day = const Value.absent(),
                 Value<int?> lunarYear = const Value.absent(),
                 required int lunarMonth,
                 required int lunarDay,
@@ -2729,6 +2920,9 @@ class $$AnniversariesTableTableManager
                 id: id,
                 title: title,
                 type: type,
+                isSolar: isSolar,
+                month: month,
+                day: day,
                 lunarYear: lunarYear,
                 lunarMonth: lunarMonth,
                 lunarDay: lunarDay,

@@ -12,6 +12,7 @@
             [minii-focus.pages.calendar-page :as calendar-page]
             [minii-focus.pages.anniversary-management :as anniversary-page]
             [minii-focus.widgets.calendar.dialogs :as cal-dialogs]
+            [minii-focus.logic.db :as db]
             [minii-focus.logic.task-actions :as actions]
             [minii-focus.logic.update :as update]
             ["dart:core" :as dc]))
@@ -93,7 +94,10 @@
        (m/FloatingActionButton.
         .backgroundColor m/Colors.pinkAccent
         .foregroundColor m/Colors.white
-        .onPressed #(cal-dialogs/show-add-anniversary-dialog! ctx (dc/DateTime.now))
+        .onPressed #(cal-dialogs/show-add-anniversary-dialog!
+                     ctx
+                     (dc/DateTime.now)
+                     (fn [m] (db/add-anniversary! m)))
         .child (m/Icon. m/Icons.add))
 
        :else (m/SizedBox.shrink))))))
