@@ -81,43 +81,7 @@
    "大寒" "ᠶᠡᠬᠡ ᠬᠦᠢᠲᠡᠨ"})
 
 ;; =============================================================================
-;; 2. Haircut Auspiciousness Dictionary (Day 1 to 30)
-;; =============================================================================
-
-(def haircut-days-map
-  {1  {:good? false :desc "ᠨᠠᠰᠤ ᠪᠤᠭᠤᠨᠢᠰᠤᠨ᠎ᠠ"}            ; Shortens life
-   2  {:good? false :desc "ᠬᠡᠯᠡ ᠠᠮᠠ᠂ ᠬᠡᠷᠡᠭᠦᠯ ᠲᠡᠮᠡᠴᠡᠯ ᠢᠷᠡᠨ᠎ᠡ"} ; Invites gossip and disputes
-   3  {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠪᠠᠶᠠᠯᠢᠭ ᠲᠡᠭᠦᠯᠳᠡᠷ ᠪᠤᠯᠤᠨ᠎ᠠ"}  ; Brings wealth and abundance
-   4  {:good? true  :desc "ᠪᠡᠶ᠎ᠡ ᠡᠷᠬᠡᠲᠡᠨ ᠦ ᠬᠦᠴᠦ ᠰᠠᠶᠢᠵᠢᠷᠠᠨ᠎ᠠ"}  ; Improves physical strength
-   5  {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠠᠷᠪᠢᠵᠢᠨ᠎ᠠ"}               ; Multiplies property and livestock
-   6  {:good? true  :desc "ᠦᠩᠭᠡ ᠵᠢᠰᠦ ᠰᠠᠶᠢᠵᠢᠷᠠᠨ᠎ᠠ"}           ; Improves complexion and appearance
-   7  {:good? false :desc "ᠬᠡᠯᠡ ᠠᠮᠠ᠂ ᠬᠡᠷᠡᠭᠦᠯ ᠲᠠᠰᠤᠷᠠᠬᠤ ᠦᠭᠡᠢ"}  ; Endless legal and verbal disputes
-   8  {:good? true  :desc "ᠨᠠᠰᠤ ᠤᠷᠲᠤᠰᠤᠨ᠎ᠠ"}                  ; Promotes longevity
-   9  {:good? true  :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠦᠭᠡᠢ᠂ ᠰᠠᠶᠢᠨ"}         ; Free from illness, auspicious
-   10 {:good? true  :desc "ᠡᠷᠴᠢ ᠬᠦᠴᠦ ᠶᠡᠬᠡᠰᠦᠨ᠎ᠡ"}             ; Increases vitality and energy
-   11 {:good? true  :desc "ᠤᠶᠤᠨ ᠤᠬᠠᠭᠠᠨ ᠬᠤᠷᠴᠠ ᠪᠤᠯᠤᠨ᠎ᠠ"}        ; Sharpens intelligence
-   12 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠢᠷᠡᠨ᠎ᠡ"}             ; Prone to illness
-   13 {:good? true  :desc "ᠵᠢᠷᠭᠠᠯ ᠢᠷᠡᠨ᠎ᠡ᠂ ᠦᠯᠵᠡᠶᠢᠲᠡᠢ"}         ; Brings happiness and good fortune
-   14 {:good? true  :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠠᠷᠪᠢᠵᠢᠨ᠎ᠠ"}               ; Abundant wealth
-   15 {:good? true  :desc "ᠦᠯᠵᠡᠶᠢᠲᠡᠢ ᠰᠠᠶᠢᠨ"}                 ; Greatly auspicious
-   16 {:good? false :desc "ᠰᠠᠭᠠᠳ ᠲᠤᠳᠬᠠᠷ ᠤᠴᠠᠷᠠᠨ᠎ᠠ"}            ; Encounters obstacles
-   17 {:good? false :desc "ᠦᠩᠭᠡ ᠵᠢᠰᠦ ᠳᠤᠷᠤᠶᠢᠲᠠᠨ᠎ᠠ"}            ; Weakens complexion
-   18 {:good? false :desc "ᠡᠳ᠋ ᠮᠠᠯ ᠤᠨ ᠭᠠᠷᠵᠠ ᠲᠠᠢ"}            ; Loss of wealth and property
-   19 {:good? true  :desc "ᠰᠠᠶᠢᠨ ᠨᠦᠬᠦᠷ ᠲᠡᠢ ᠤᠴᠠᠷᠠᠨ᠎ᠠ"}         ; Meets a noble friend
-   20 {:good? false :desc "ᠦᠯᠦᠰᠴᠦ ᠤᠮᠳᠠᠭᠠᠰᠤᠨ᠎ᠠ"}              ; Suffers hunger and thirst
-   21 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠢᠷᠡᠨ᠎ᠡ"}                   ; Invites sickness
-   22 {:good? true  :desc "ᠢᠳᠡᠭᠡ ᠤᠮᠳᠠᠭ᠎ᠠ ᠡᠯᠪᠡᠭ ᠤᠯᠳᠠᠨ᠎ᠠ"}      ; Abundant food and drink
-   23 {:good? true  :desc "ᠡᠳ᠋ ᠡᠳ᠋ᠯᠡᠯ᠂ ᠨᠡᠷ᠎ᠡ ᠬᠦᠨᠳᠦ ᠤᠯᠳᠠᠨ᠎ᠠ"}   ; Gains wealth and reputation
-   24 {:good? false :desc "ᠡᠪᠡᠴᠢᠨ ᠡᠮᠭᠡᠭ ᠢᠷᠡᠨ᠎ᠡ"}             ; Prone to sickness
-   25 {:good? false :desc "ᠨᠢᠳᠦ ᠪᠦᠷᠦᠯᠵᠡᠨ᠎ᠡ"}                 ; Blurs vision
-   26 {:good? true  :desc "ᠵᠢᠷᠭᠠᠯ ᠦᠷᠭᠦᠯᠵᠢᠳᠡ ᠢᠷᠡᠨ᠎ᠡ"}          ; Continuous joy and blessings
-   27 {:good? true  :desc "ᠦᠯᠵᠡᠶᠢᠲᠡᠢ ᠰᠠᠶᠢᠨ"}                 ; Auspicious and fortunate
-   28 {:good? false :desc "ᠬᠡᠷᠡᠭᠦᠯ ᠲᠡᠮᠡᠴᠡᠯ ᠢᠷᠡᠨ᠎ᠡ"}           ; Causes arguments and conflict
-   29 {:good? false :desc "ᠰᠦᠯᠳᠡ ᠲᠡᠨᠦᠵᠦ ᠤᠳᠤᠨ᠎ᠠ"}             ; Wandering spirit / loss of vitality
-   30 {:good? false :desc "ᠡᠷᠯᠢᠭ ᠯᠤᠭ᠎ᠠ ᠤᠴᠠᠷᠠᠨ᠎ᠠ᠂ ᠮᠠᠰᠢ ᠮᠠᠭᠤ"}}) ; Extremely inauspicious day
-
-;; =============================================================================
-;; 3. Formatting & Helper Functions
+;; 2. Formatting & Helper Functions
 ;; =============================================================================
 
 (defn format-gan-zhi
@@ -147,16 +111,8 @@
     (str "ᠰᠢᠨ᠎ᠡ ᠶᠢᠨ " day-int)
     (str day-int)))
 
-(defn get-haircut-info
-  [day-int]
-  (let [info (get haircut-days-map day-int {:good? false :desc ""})]
-    (assoc info
-           :status-label (if (:good? info) "ᠰᠠᠶᠢᠨ" "ᠮᠠᠭᠤ")
-           :full-text    (str "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ: " (:desc info)
-                              " (" (if (:good? info) "ᠰᠠᠶᠢᠨ" "ᠮᠠᠭᠤ") ")"))))
-
 ;; =============================================================================
-;; 4. Main Public API: DateTime -> Mongolian Calendar Data Map
+;; 3. Main Public API: DateTime -> Mongolian Calendar Data Map
 ;; =============================================================================
 
 (defn solar->mongol-lunar
@@ -170,8 +126,7 @@
           day-zhi      (.getDayZhiIndex lunar)
           raw-month    (.getMonth lunar)
           raw-day      (.getDay lunar)
-          jie-qi-cn    (.getJieQi lunar)
-          haircut-info (get-haircut-info raw-day)]
+          jie-qi-cn    (.getJieQi lunar)]
       {:solar-date       dt
        :lunar-year       (.getYear lunar)
        :lunar-month      (if (< raw-month 0) (- raw-month) raw-month)
@@ -185,7 +140,6 @@
        :mgl-day-gan-zhi  (str (format-gan-zhi day-gan day-zhi) " ᠡᠳᠦᠷ")
        :mgl-solar-term   (when (not (empty? jie-qi-cn))
                            (get solar-terms-map jie-qi-cn))
-       :haircut          haircut-info
        :grid-cell-label  (or (when (not (empty? jie-qi-cn))
                                (get solar-terms-map jie-qi-cn))
                              (if (= raw-day 1)

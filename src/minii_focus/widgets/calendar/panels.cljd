@@ -12,11 +12,7 @@
 (defn lunar-almanac-card
   "Polished bottom-left card: warm almanac surface, tap anywhere to open the 24pt large detail modal."
   [ctx palette ^dc/DateTime selected-dt day-anniversaries]
-  (let [info        (lunar/solar->mongol-lunar selected-dt)
-        haircut     (:haircut info)
-        good-hair?  (:good? haircut)
-        body-style  (m/TextStyle. .fontFamily theme/default-font .fontSize 14.0 .color (:on-body palette))
-        label-style (m/TextStyle. .fontFamily theme/default-font .fontSize 13.0 .fontWeight m/FontWeight.bold .color (:heading palette))]
+  (let [info (lunar/solar->mongol-lunar selected-dt)]
     (m/Container.
      .decoration (theme/soft-card-decoration (:card-bg palette) (:card-border palette) 18.0 (:shadow-base palette))
      .child
@@ -100,49 +96,7 @@
                                          (m/TextStyle.
                                           .fontFamily theme/default-font
                                           .fontSize 13.0
-                                          .color (:on-muted palette))))]))
-
-               (m/SizedBox. .width 8.0)
-
-               ;; 3. Haircut Auspiciousness column
-               (m/Row.
-                .crossAxisAlignment m/CrossAxisAlignment.start
-                .children
-                [(m/Column.
-                  .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                  .children
-                  [(m/Icon. m/Icons.content_cut
-                            .size 14.0
-                            .color (if good-hair? m/Colors.teal m/Colors.redAccent))
-                   (m/Expanded.
-                    .child
-                    (m/Center.
-                     .child
-                     (m/FittedBox.
-                      .fit m/BoxFit.scaleDown
-                      .child
-                      (theme/vertical-mongol-text "ᠦᠰᠦ" label-style))))
-                   (m/Container.
-                    .padding (m/EdgeInsets.symmetric .horizontal 3.5 .vertical 4.0)
-                    .decoration (m/BoxDecoration.
-                                 .color (if good-hair?
-                                          (.withOpacity m/Colors.teal 0.15)
-                                          (.withOpacity m/Colors.redAccent 0.12))
-                                 .borderRadius (m/BorderRadius.circular 6.0))
-                    .child (theme/vertical-mongol-text (:status-label haircut)
-                                                 (m/TextStyle.
-                                                  .fontFamily theme/default-font
-                                                  .fontSize 11.5
-                                                  .fontWeight m/FontWeight.bold
-                                                  .color (if good-hair?
-                                                           m/Colors.teal.shade800
-                                                           m/Colors.red.shade800))))])
-                 (m/SizedBox. .width 6.0)
-                 (m/FittedBox.
-                  .fit m/BoxFit.scaleDown
-                  .alignment m/Alignment.topCenter
-                  .child
-                  (theme/vertical-mongol-text (:desc haircut) body-style))])]))))
+                                          .color (:on-muted palette))))]))]))))
 
           ;; Top-right expand pill icon
           (m/Positioned.

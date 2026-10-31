@@ -234,6 +234,7 @@
           .onPressed #(cal-dialogs/show-add-anniversary-dialog!
                        ctx
                        (dc/DateTime.now)
+                       nil
                        save-anniversary-and-notify!))])))
      (m/Expanded.
       .child

@@ -122,14 +122,13 @@
                 .borderRadius (m/BorderRadius.circular 10.0))))
 
 (defn calendar-day-cell
-  "Refined day cell with weekend tinting, elevated selection state, and clear task/haircut badges."
+  "Refined day cell with weekend tinting, elevated selection state, and clear task badges."
   [palette ^dc/DateTime dt ^dc/DateTime? selected-dt ^dc/DateTime today-dt day-tasks day-anniversaries]
   (let [is-selected?  (dates/same-day? dt selected-dt)
         is-today?     (dates/same-day? dt today-dt)
         is-weekend?   (dates/weekend? dt)
         lunar-info    (lunar/solar->mongol-lunar dt)
         has-solar?    (some? (:mgl-solar-term lunar-info))
-        good-hair?    (get-in lunar-info [:haircut :good?])
         has-anniv?    (not (empty? day-anniversaries))
         total-tasks   (count day-tasks)
         all-done?     (and (pos? total-tasks) (every? dates/task-completed? day-tasks))
@@ -182,7 +181,7 @@
       (m/Column.
        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
        .children
-       [;; Top row: Solar date number + anniversary / haircut dot
+       [;; Top row: Solar date number + anniversary badge
         (m/Row.
          .mainAxisAlignment m/MainAxisAlignment.center
          .mainAxisSize m/MainAxisSize.min
@@ -193,21 +192,12 @@
                            .height 1.0
                            .fontWeight m/FontWeight.bold
                            .color solar-color))
-          (if has-anniv?
+          (when has-anniv?
             (m/Padding.
              .padding (m/EdgeInsets.only .left 2.0)
              .child (m/Icon. m/Icons.cake
                              .size 13.0
-                             .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent)))
-            (if good-hair?
-              (m/Container.
-               .margin (m/EdgeInsets.only .left 2.5)
-               .width 5.0
-               .height 5.0
-               .decoration (m/BoxDecoration.
-                            .color (if is-selected? m/Colors.tealAccent m/Colors.teal)
-                            .shape m/BoxShape.circle))
-              (m/SizedBox.shrink)))])
+                             .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent))))])
 
         ;; Middle: Lunar day / solar term label
         (m/Expanded.

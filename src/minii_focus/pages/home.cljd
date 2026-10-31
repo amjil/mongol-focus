@@ -97,6 +97,7 @@
         .onPressed #(cal-dialogs/show-add-anniversary-dialog!
                      ctx
                      (dc/DateTime.now)
+                     nil
                      (fn [m] (db/add-anniversary! m)))
         .child (m/Icon. m/Icons.add))
 

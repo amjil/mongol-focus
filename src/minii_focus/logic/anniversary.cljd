@@ -9,7 +9,7 @@
 (defonce show-traditional-festivals? (atom true))
 
 (def traditional-festivals
-  [{:id "fest-tsagaan-sar"
+  [   {:id "fest-tsagaan-sar"
     :title "ᠴᠠᠭᠠᠨ ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ ᠰᠢᠨ᠎ᠡ ᠶᠢᠨ ᠨᠢᠭᠡᠨ"
     :calendar-type :lunar
     :is-solar? false
@@ -17,16 +17,6 @@
     :day 1
     :lunar-month 1
     :lunar-day 1
-    :type :festival
-    :built-in? true}
-   {:id "fest-mid-autumn"
-    :title "ᠨᠠᠢᠮᠠᠳᠤᠭᠠᠷ ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ ᠠᠷᠪᠠᠨ ᠲᠠᠪᠤᠨ"
-    :calendar-type :lunar
-    :is-solar? false
-    :month 8
-    :day 15
-    :lunar-month 8
-    :lunar-day 15
     :type :festival
     :built-in? true}
    {:id "fest-gal-tahih"
