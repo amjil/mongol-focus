@@ -171,7 +171,7 @@
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/TasksCompanion.insert
                      :title title
-                     :notes (if notes (d/Value ^String notes) (d/Value.absent))
+                     :notes (if notes (d/Value ^String notes) (d/Value nil))
                      ;; Use Value(null) with type annotation for nullable int fields
                      :categoryId (if category-id
                                    (d/Value ^int category-id)
@@ -378,8 +378,8 @@
   (if-let [^drift/AppDatabase database @db]
     (let [companion (drift/CategoriesCompanion.insert
                      .name name
-                     .iconCode (if (some? icon-code) (d/Value ^int icon-code) (d/Value.absent))
-                     .position (if (some? position) (d/Value ^int position) (d/Value.absent)))]
+                     .iconCode (if (some? icon-code) (d/Value ^int icon-code) (d/Value nil))
+                     .position (d/Value ^int (if (some? position) position 0)))]
       (.insert (.into database (.-categories database)) companion))
     (throw (ex-info "Database not initialized" {}))))
 

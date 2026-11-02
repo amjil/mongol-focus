@@ -186,18 +186,18 @@
          .mainAxisAlignment m/MainAxisAlignment.center
          .mainAxisSize m/MainAxisSize.min
          .children
-         [(m/Text. (str (.-day dt))
-                   .style (m/TextStyle.
-                           .fontSize theme/grid-solar-font-size
-                           .height 1.0
-                           .fontWeight m/FontWeight.bold
-                           .color solar-color))
-          (when has-anniv?
-            (m/Padding.
-             .padding (m/EdgeInsets.only .left 2.0)
-             .child (m/Icon. m/Icons.cake
-                             .size 13.0
-                             .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent))))])
+         (cond-> [(m/Text. (str (.-day dt))
+                           .style (m/TextStyle.
+                                   .fontSize theme/grid-solar-font-size
+                                   .height 1.0
+                                   .fontWeight m/FontWeight.bold
+                                   .color solar-color))]
+           has-anniv?
+           (conj (m/Padding.
+                  .padding (m/EdgeInsets.only .left 2.0)
+                  .child (m/Icon. m/Icons.cake
+                                  .size 13.0
+                                  .color (if is-selected? m/Colors.amberAccent m/Colors.pinkAccent))))))
 
         ;; Middle: Lunar day / solar term label
         (m/Expanded.

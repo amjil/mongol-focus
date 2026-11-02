@@ -1,21 +1,20 @@
 (ns minii-focus.logic.task-actions
   (:require
-   [clojure.string :as str]
    [minii-focus.widgets.input-dialog :as input-dialog]
    [minii-focus.widgets.confirm-dialog :as confirm]
    [minii-focus.logic.db :as db]
    [minii-focus.logic.records :as rec]
    [minii-focus.state.store :as store]
-   ["dart:core" :as dc]
    ["package:flutter/material.dart" :as m]))
 
 (defn open-task-editor
   "Open task editor dialog.
    Supports both create and edit modes.
-   In is-edit? mode, it will update the selected-task that the detail page is watching."
+   In is-edit? mode, it will update the selected-task that the detail page is watching.
+   Optional :due-date is stored only when creating a task."
   ([ctx] (open-task-editor ctx nil))
   ([ctx task-map]
-   (let [{:keys [id title notes parent-id]} task-map
+   (let [{:keys [id title notes parent-id due-date]} task-map
          is-edit? (some? id)]
      (m/showDialog
       .context ctx
@@ -38,7 +37,10 @@
                                             updated-task (when current-task
                                                            (merge current-task {:title new-title :notes new-notes}))]
                                         (assoc state :selected-task updated-task)))))
-                           (db/add-task! {:title new-title :notes new-notes :parent-id parent-id}))
+                           (db/add-task! {:title new-title
+                                          :notes new-notes
+                                          :parent-id parent-id
+                                          :due-date due-date}))
                          (m/Navigator.pop ctx)))
           :on-cancel #(m/Navigator.pop ctx)}))))))
 
@@ -64,9 +66,3 @@
   (let [id (:id task)
         done? (rec/task-done? task)]
     (db/toggle-task-status! id (not done?))))
-
-(defn add-task!
-  "Create a task with optional due date (used by calendar FAB dialog)."
-  [title ^dc/DateTime due-date]
-  (when-not (str/blank? (.trim title))
-    (db/add-task! {:title (.trim title) :due-date due-date})))
