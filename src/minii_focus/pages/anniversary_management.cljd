@@ -31,15 +31,47 @@
     (await (notif/cancel-anniversary-reminder! ann-id))
     (catch dc/Object _ nil)))
 
+(defn- vscroll-mongol
+  "Vertical Mongolian column that scrolls when the phrase is taller than the card."
+  [text style]
+  (m/SingleChildScrollView.
+   .scrollDirection m/Axis.vertical
+   .child (mg/MongolText. text .style style)))
+
+(defn- anniversary-date-text
+  [is-solar? month day]
+  (if is-solar?
+    (str month " ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ " day)
+    (str (lunar/format-lunar-month month) " " (lunar/format-lunar-day day))))
+
+(defn- anniversary-type-label
+  [type]
+  (cond
+    (= type :festival) "ᠪᠠᠶᠠᠷ"
+    (= type :memorial) "ᠳᠤᠷᠠᠰᠬᠠᠯ"
+    :else "ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ"))
+
 (defn- anniversary-card
-  "Vertical Mongolian card displaying countdown, calendar badge, title, and date."
+  "First vertical column is kind, solar or lunar, and countdown; then title and date."
   [ctx palette item]
-  (let [{:keys [id title type days-left next-solar-date built-in?]} item
+  (let [{:keys [id title type days-left built-in?]} item
         is-solar? (or (:is-solar? item) (= (:calendar-type item) :solar))
-        m         (or (:month item) (:lunar-month item) 1)
-        d         (or (:day item) (:lunar-day item) 1)
-        is-today? (zero? (or days-left 999))
-        is-soon?  (<= (or days-left 999) 7)]
+        month     (or (:month item) (:lunar-month item) 1)
+        day       (or (:day item) (:lunar-day item) 1)
+        days      (or days-left 999)
+        is-today? (zero? days)
+        is-soon?  (<= days 7)
+        accent    (if (= type :festival) m/Colors.amber.shade800 m/Colors.pinkAccent)
+        countdown (if is-today? "ᠡᠨᠡ ᠡᠳᠦᠷ" (str days " ᠡᠳᠦᠷ"))
+        title-style (m/TextStyle.
+                     .fontFamily theme/default-font
+                     .fontSize 22.0
+                     .fontWeight m/FontWeight.bold
+                     .color (:on-body palette))
+        date-style (m/TextStyle.
+                    .fontFamily theme/default-font
+                    .fontSize 15.0
+                    .color (:on-muted palette))]
     (m/GestureDetector.
      .onTap (when-not built-in?
               #(cal-dialogs/show-add-anniversary-dialog!
@@ -49,116 +81,80 @@
                 save-anniversary-and-notify!))
      .child
      (m/Container.
-      .width 112.0
-      .margin (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 10.0)
-      .padding (m/EdgeInsets.symmetric .vertical 14.0 .horizontal 10.0)
+      .margin (m/EdgeInsets.only .right 12.0 .top 12.0 .bottom 12.0)
+      .padding (m/EdgeInsets.fromLTRB 12.0 12.0 10.0 8.0)
       .decoration (theme/soft-card-decoration
                    (:card-bg palette)
-                   (if is-soon? m/Colors.pinkAccent (:card-border palette))
-                   22.0
+                   (if (or is-today? is-soon?) accent (:card-border palette))
+                   20.0
                    (:shadow-base palette))
       .child
-     (m/Column.
-      .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-      .children
-      [(m/Column.
-        .children
-        [(m/Row.
-          .mainAxisAlignment m/MainAxisAlignment.spaceBetween
+      (m/Column.
+       .crossAxisAlignment m/CrossAxisAlignment.center
+       .children
+       [(m/Expanded.
+         .child
+         (m/Row.
+          .crossAxisAlignment m/CrossAxisAlignment.start
+          .mainAxisSize m/MainAxisSize.min
           .children
-          [(m/Icon. (cond
-                      (= type :festival) m/Icons.auto_awesome
-                      (= type :memorial) m/Icons.favorite
-                      :else              m/Icons.cake)
-                    .size 22.0
-                    .color (if (= type :festival) m/Colors.amber.shade700 m/Colors.pinkAccent))
-           (m/Container.
-            .padding (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 3.0)
-            .decoration (m/BoxDecoration.
-                         .color (.withOpacity (:primary palette) 0.08)
-                         .borderRadius (m/BorderRadius.circular 6.0))
-            .child (mg/MongolText. (if is-solar? "ᠠᠷᠭ᠎ᠠ" "ᠪᠢᠯᠢᠭ")
-                                   .style (m/TextStyle.
-                                           .fontFamily theme/default-font
-                                           .fontSize 12.0
-                                           .fontWeight m/FontWeight.bold
-                                           .color (:heading palette))))])
-         (m/SizedBox. .height 8.0)
-         (m/Container.
-          .width dc/double.infinity
-          .padding (m/EdgeInsets.symmetric .vertical 4.0)
-          .decoration (m/BoxDecoration.
-                       .color (cond
-                                is-today? m/Colors.pinkAccent
-                                is-soon?  (.withOpacity m/Colors.pink 0.14)
-                                :else     (:page-bg palette))
-                       .borderRadius (m/BorderRadius.circular 8.0))
-          .child (m/Center.
-                  .child
-                  (if is-today?
-                    (mg/MongolText. "ᠡᠨᠡ ᠡᠳᠦᠷ"
-                                    .style (m/TextStyle.
-                                            .fontFamily theme/default-font
-                                            .fontSize 14.0
-                                            .fontWeight m/FontWeight.bold
-                                            .color m/Colors.white))
-                    (m/Text. (str days-left " ᠡᠳᠦᠷ")
-                             .style (m/TextStyle.
-                                     .fontFamily theme/default-font
-                                     .fontSize 14.0
-                                     .fontWeight m/FontWeight.bold
-                                     .color (if is-soon? m/Colors.pink.shade700 (:heading palette)))))))])
-       (m/SizedBox. .height 10.0)
-       (m/Expanded.
-        .child
-        (m/Row.
-         .mainAxisAlignment m/MainAxisAlignment.center
-         .crossAxisAlignment m/CrossAxisAlignment.start
-         .children
-         [(m/Expanded.
-           .child
-           (m/SingleChildScrollView.
+          [(m/SingleChildScrollView.
             .scrollDirection m/Axis.vertical
             .child
-            (mg/MongolText. title
-                            .style (m/TextStyle.
-                                    .fontFamily theme/default-font
-                                    .fontSize 21.0
-                                    .fontWeight m/FontWeight.bold
-                                    .color (:on-body palette)))))
-          (m/SizedBox. .width 6.0)
-          (m/SingleChildScrollView.
-           .scrollDirection m/Axis.vertical
-           .child
-           (mg/MongolText. (if is-solar?
-                             (str m " ᠰᠠᠷ᠎ᠠ ᠶᠢᠨ " d)
-                             (str (lunar/format-lunar-month m) " • "
-                                  (lunar/format-lunar-day d)))
-                           .style (m/TextStyle.
-                                   .fontFamily theme/default-font
-                                   .fontSize 15.0
-                                   .color (:on-muted palette))))]))
-       (m/SizedBox. .height 8.0)
-       (m/Row.
-        .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-        .children
-        [(if next-solar-date
-           (m/Text. (str (.-month ^dc/DateTime next-solar-date)
-                         "/"
-                         (.-day ^dc/DateTime next-solar-date))
-                    .style (m/TextStyle.
-                            .fontSize 13.0
-                            .fontWeight m/FontWeight.w600
-                            .color (:on-muted palette)))
-           (m/SizedBox.shrink))
-         (if built-in?
-           (m/Icon. m/Icons.lock_outline .size 16.0 .color (:on-muted palette))
-           (m/InkWell.
-            .borderRadius (m/BorderRadius.circular 12.0)
-            .onTap #(remove-anniversary-and-cancel-notify! id)
-            .child (m/Padding.
-                    .padding (m/EdgeInsets.all 4.0)
-                    .child (m/Icon. m/Icons.delete_outline .size 20.0 .color m/Colors.redAccent))))])])))))
+            (m/Column.
+             .mainAxisSize m/MainAxisSize.min
+             .crossAxisAlignment m/CrossAxisAlignment.center
+             .children
+             [(m/Icon. (cond
+                         (= type :festival) m/Icons.auto_awesome
+                         (= type :memorial) m/Icons.favorite
+                         :else              m/Icons.cake)
+                       .size 20.0
+                       .color accent)
+              (m/SizedBox. .height 6.0)
+              (mg/MongolText. (anniversary-type-label type)
+                              .style (m/TextStyle.
+                                      .fontFamily theme/default-font
+                                      .fontSize 15.0
+                                      .fontWeight m/FontWeight.bold
+                                      .color accent))
+              (m/SizedBox. .height 6.0)
+              (mg/MongolText. (if is-solar? "ᠠᠷᠭ᠎ᠠ" "ᠪᠢᠯᠢᠭ")
+                              .style (m/TextStyle.
+                                      .fontFamily theme/default-font
+                                      .fontSize 13.0
+                                      .fontWeight m/FontWeight.bold
+                                      .color (:heading palette)))
+              (m/SizedBox. .height 8.0)
+              (m/Container.
+               .padding (m/EdgeInsets.symmetric .horizontal 6.0 .vertical 8.0)
+               .decoration (m/BoxDecoration.
+                            .color (cond
+                                     is-today? accent
+                                     is-soon?  (.withOpacity accent 0.14)
+                                     :else     (:page-bg palette))
+                            .borderRadius (m/BorderRadius.circular 12.0))
+               .child (mg/MongolText. countdown
+                                      .style (m/TextStyle.
+                                              .fontFamily theme/default-font
+                                              .fontSize 16.0
+                                              .fontWeight m/FontWeight.bold
+                                              .color (if is-today?
+                                                       m/Colors.white
+                                                       (if is-soon? accent (:heading palette))))))]))
+           (m/SizedBox. .width 10.0)
+           (vscroll-mongol (or title "") title-style)
+           (m/SizedBox. .width 8.0)
+           (vscroll-mongol (anniversary-date-text is-solar? month day) date-style)]))
+        (m/SizedBox. .height 6.0)
+        (if built-in?
+          (m/Icon. m/Icons.lock_outline .size 16.0 .color (:on-muted palette))
+          (m/InkWell.
+           .borderRadius (m/BorderRadius.circular 12.0)
+           .onTap #(remove-anniversary-and-cancel-notify! id)
+           .child (m/Padding.
+                   .padding (m/EdgeInsets.all 4.0)
+                   .child (m/Icon. m/Icons.delete_outline .size 20.0 .color m/Colors.redAccent))))])))))
 
 (defn- management-body
   [ctx palette sorted {:keys [embedded?]}]
@@ -200,33 +196,30 @@
                                      .color (:heading palette)))))))
          (f/widget
           :watch [show-fest? ann/show-traditional-festivals?]
-          (m/Tooltip.
-           .message "Traditional Festivals"
+          (m/InkWell.
+           .borderRadius (m/BorderRadius.circular 14.0)
+           .onTap #(swap! ann/show-traditional-festivals? not)
            .child
-           (m/InkWell.
-            .borderRadius (m/BorderRadius.circular 14.0)
-            .onTap #(swap! ann/show-traditional-festivals? not)
+           (m/Container.
+            .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
+            .decoration (m/BoxDecoration.
+                         .color (if show-fest?
+                                  (.withOpacity m/Colors.amber 0.2)
+                                  (:page-bg palette))
+                         .borderRadius (m/BorderRadius.circular 14.0))
             .child
-            (m/Container.
-             .padding (m/EdgeInsets.symmetric .vertical 8.0 .horizontal 6.0)
-             .decoration (m/BoxDecoration.
-                          .color (if show-fest?
-                                   (.withOpacity m/Colors.amber 0.2)
-                                   (:page-bg palette))
-                          .borderRadius (m/BorderRadius.circular 14.0))
-             .child
-             (m/Column.
-              .children
-              [(m/Icon. m/Icons.auto_awesome
-                        .size 18.0
-                        .color (if show-fest? m/Colors.amber.shade800 (:on-muted palette)))
-               (m/SizedBox. .height 4.0)
-               (mg/MongolText. "ᠪᠠᠶᠠᠷ"
-                               .style (m/TextStyle.
-                                       .fontFamily theme/default-font
-                                       .fontSize 13.0
-                                       .fontWeight m/FontWeight.bold
-                                       .color (if show-fest? m/Colors.amber.shade900 (:on-muted palette))))])))))
+            (m/Column.
+             .children
+             [(m/Icon. m/Icons.auto_awesome
+                       .size 18.0
+                       .color (if show-fest? m/Colors.amber.shade800 (:on-muted palette)))
+              (m/SizedBox. .height 4.0)
+              (mg/MongolText. "ᠪᠠᠶᠠᠷ"
+                              .style (m/TextStyle.
+                                      .fontFamily theme/default-font
+                                      .fontSize 13.0
+                                      .fontWeight m/FontWeight.bold
+                                      .color (if show-fest? m/Colors.amber.shade900 (:on-muted palette))))]))))
          (m/SizedBox. .height 10.0)
          (m/IconButton.filled
           .style (m/IconButton.styleFrom .backgroundColor m/Colors.pinkAccent)
@@ -248,7 +241,7 @@
                                  .color (:on-muted palette))))
         (m/ListView.builder
          .scrollDirection m/Axis.horizontal
-         .padding (m/EdgeInsets.fromLTRB 8.0 8.0 24.0 8.0)
+         .padding (m/EdgeInsets.fromLTRB 4.0 4.0 20.0 4.0)
          .itemCount (count sorted)
          .itemBuilder (fn [_ idx]
                         (anniversary-card ctx palette (nth sorted idx))))))])))
