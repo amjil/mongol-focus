@@ -1,203 +1,129 @@
-# Mongol Focus
+# Minii Focus (Mongol Focus)
 
-A modern task management application built with Flutter and ClojureDart, designed specifically for Mongolian language support. Inspired by Things-style task management, Mongol Focus provides a clean and intuitive interface for organizing your daily tasks.
+**Minii Focus** is a modern, cross-platform productivity, task management, and traditional lunar calendar application built specifically for **Traditional Vertical Mongolian Script (ᠮᠤᠩᠭᠤᠯ ᠪᠢᠴᠢᠭ)**. Inspired by clean, Things-style task workflows and traditional Mongolian cultural almanacs, it is built with **ClojureDart**, **Flutter**, and **Drift (SQLite)**.
 
-## Features
+---
 
-### Task Management
-- **Create, Edit, and Delete Tasks**: Full CRUD operations for task management
-- **Task Details**: Support for task titles and detailed notes
-- **Task Completion**: Mark tasks as done with automatic completion timestamp
-- **Task Prioritization**: Set priority levels for tasks
-- **Due Dates**: Optional due date assignment for tasks
-- **Task Reordering**: Manual drag-and-drop sorting with display order persistence
-- **Subtasks Support**: Create and manage subtasks for any parent task
-- **Subtask Navigation**: Dedicated page for viewing and managing subtasks of a task
-- **Subtask Count Display**: Show the number of subtasks for each task in the detail view
+## ✨ Key Features
 
-### Categories & Organization
-- **Category Management**: Create and manage custom categories/lists
-- **Category Icons**: Assign icons to categories for visual organization
-- **Category Filtering**: Filter tasks by category
-- **Sidebar Navigation**: Quick access to categories via sidebar drawer
+### 1. Vertical Traditional Mongolian Task Management
+* **Native Vertical Typography**: Designed from the ground up for left-to-right vertical Mongolian script (`OyunQaganTig` font) using the `mongol` Flutter package.
+* **Built-in Mongolian Virtual Keyboard**: Seamless vertical text input with candidate word prediction, automatic punctuation mapping, and floating action toolbars.
+* **Hierarchical Organization**:
+  * **Categories & Lists**: Custom categories with icon pickers and drag-and-drop ordering.
+  * **Subtasks & Checklists**: Break complex tasks down into manageable subtasks with real-time completion progress indicators.
+  * **Recurrence & Reminders**: Configure daily, weekly, or monthly repeating tasks and exact local push notifications.
+  * **Logbook**: Automatically archives completed tasks for historical review and statistics.
 
-### Search & Filtering
-- **Full-Text Search**: Search tasks by title or notes content
-- **Category-Aware Search**: Combine search with category filtering
-- **Real-Time Filtering**: Instant search results as you type
+### 2. Mongolian Lunar Calendar & Almanac (`ᠮᠤᠩᠭᠤᠯ ᠬᠤᠸᠠᠩᠯᠢ`)
+* **Elder-Friendly High-Contrast UI**: Enlarged vertical typography, clear weekend tinting, and elevated Bento-style cards tailored for effortless readability across all age groups.
+* **Smooth Horizontal Month Navigation**: Switch months naturally via horizontal swipe/drag gestures or the floating vertical month capsule, complete with synchronized slide-and-fade transitions.
+* **Traditional Mongolian Lunar Almanac**:
+  * Displays Lunar Month and Day names, Year Color & Element (`Жишээ: Хөхөгчин могой жил`), and Day Ganzhi (`Өдрийн өнгө`).
+  * Highlights 24 Solar Terms (`24 улирал`) directly in the calendar grid and detail cards.
 
-### Views & Navigation
-- **Today View**: View all active (uncompleted) tasks
-- **Logbook View**: Browse completed tasks sorted by completion date
-- **Settings Page**: Customize app preferences
-- **Bottom Navigation**: Easy switching between main views
-- **Smooth Animations**: Fade transitions and entry animations for better UX
+### 3. Dual-Calendar Birthdays & Anniversaries (`ᠲᠦᠷᠦᠭᠰᠡᠨ ᠡᠳᠦᠷ ᠪᠠ ᠣᠢ`)
+* **Solar & Lunar Support**: Record birthdays and memorials using either the **Lunar Calendar (`ᠪᠢᠯᠢᠭ ᠦᠨ ᠤᠯᠠᠷᠢᠯ`)** or the **Gregorian Solar Calendar (`ᠠᠷᠭ᠎ᠠ ᠶᠢᠨ ᠤᠯᠠᠷᠢᠯ`)**.
+* **Smart Date Resolution**: Automatically handles Lunar leap months (`Илүү сар`), 30-to-29 small-month fallbacks, and Gregorian Feb 29 leap-year adjustments.
+* **Standalone Countdown Page**: View all upcoming birthdays, memorials, and traditional festivals sorted by days remaining, with titled vertical number wheels (`ᠰᠠᠷ᠎ᠠ` / `ᠡᠳᠦᠷ`) for easy creation and editing.
+* **Built-in Traditional Festivals**: One-tap toggle to display traditional Mongolian festivals (such as *Tsagaan Sar* `ᠴᠠᠭᠠᠨ ᠰᠠᠷ᠎ᠠ`, *Gal Tahih* `ᠭᠠᠯ ᠲᠠᠬᠢᠬᠤ ᠡᠳᠦᠷ`, etc.).
+* **Automated Local Notifications**: Schedules local reminders at 09:00 AM both in advance (e.g., 3 days prior) and on the exact day of the anniversary.
 
-### Mongolian Language Support
-- **Mongolian Text Rendering**: Full support for vertical Mongolian script using the `mongol` package
-- **Multiple Font Families**: Support for 8 different Mongolian fonts:
-  - OyunQaganTig
-  - OyunAgulaTig
-  - OyunGarbiqimelTig
-  - OyunGarqagTig
-  - OyunGurbanUlusTig
-  - OyunHaraTig
-  - OyunHawangTig
-  - OyunSoninTig
-- **Virtual Keyboard**: Integrated Mongolian virtual keyboard for text input
-- **FST Input Method**: Finite State Transducer (FST) based input method for efficient Mongolian text entry
-- **Mongolian UI Elements**: All UI components support Mongolian text display
+### 4. Adaptive Material 3 Theming
+* Full support for Light and Dark modes using dynamic Material 3 `ColorScheme` palettes.
 
-### Data Persistence
-- **SQLite Database**: Local data storage using Drift (formerly Moor)
-- **Reactive Queries**: Stream-based reactive database queries for real-time UI updates
-- **Data Migration**: Built-in database migration support
+---
 
-### User Interface
-- **Material Design 3**: Modern Material Design 3 UI components
-- **Dark Mode**: Full dark theme support
-- **Responsive Layout**: Adaptive layouts for different screen sizes
-- **Floating Action Button**: Quick task creation with scroll-aware FAB
-- **Slidable Actions**: Swipe actions on task cards for quick operations
+## 🏗️ Project Structure
 
-### Settings & Customization
-- **Dark Mode Toggle**: Enable/disable dark theme
-- **Notification Settings**: Configure notification preferences
-- **Language Settings**: Language preference management
-- **Sidebar Control**: Toggle sidebar visibility
-
-## Technology Stack
-
-- **Framework**: Flutter 3.10.4+
-- **Language**: ClojureDart (Clojure for Dart/Flutter)
-- **Database**: Drift (SQLite) with reactive streams
-- **Mongolian Support**: 
-  - `mongol` package for vertical text rendering
-  - `mongol_code` for Mongolian text encoding
-  - Custom virtual keyboard implementation
-  - FST-based input method
-- **State Management**: Atom-based state management with reactive streams
-- **UI Components**: Material Design 3, custom Mongolian components
-
-## Project Structure
-
-```
-lib/
-  ├── main.dart                    # Flutter entry point
-  ├── database.dart                # Drift database schema
-  └── connection/                  # Database connection logic
-
-src/minii_focus/
-  ├── main.cljd                    # Application entry point
-  ├── pages/
-  │   ├── home.cljd               # Main home page
-  │   ├── settings.cljd           # Settings page
-  │   ├── task_detail.cljd        # Task detail view
-  │   └── subtasks_list.cljd      # Subtasks list page
-  ├── widgets/
-  │   ├── main_list.cljd          # Task list widget
-  │   ├── task_card.cljd          # Individual task card
-  │   ├── bottom_nav.cljd         # Bottom navigation
-  │   ├── fab.cljd                # Floating action button
-  │   ├── sidebar.cljd            # Category sidebar
-  │   └── ...                     # Other UI components
-  ├── logic/
-  │   ├── db.cljd                 # Database operations
-  │   ├── task.cljd               # Task business logic
-  │   ├── task_actions.cljd       # Task action handlers
-  │   ├── category_actions.cljd   # Category operations
-  │   └── search_actions.cljd     # Search functionality
-  └── state/
-      └── store.cljd              # Global state management
-
-assets/
-  ├── fonts/                      # Mongolian font files
-  └── fst/                        # FST input method resources
+```text
+├── assets/                     # App icons and static assets
+├── lib/                        # Dart interop & Drift SQLite layer
+│   ├── connection/             # Native / Web SQLite database connections
+│   ├── database.dart           # Drift table definitions (Tasks, Categories, Anniversaries)
+│   ├── database.g.dart         # Generated Drift query & data classes
+│   ├── notification_helper.dart# Platform-specific notification permission helpers
+│   └── main.dart               # Flutter entry point bridging to ClojureDart
+├── src/minii_focus/            # ClojureDart application source
+│   ├── logic/                  # Pure business logic & reactive DB streams
+│   │   ├── anniversary.cljd    # Solar/Lunar date resolution & countdown engine
+│   │   ├── category_actions.cljd
+│   │   ├── db.cljd             # Reactive Drift streams & CRUD operations
+│   │   ├── lunar.cljd          # Mongolian lunar calendar & haircut almanac calculations
+│   │   ├── notification.cljd   # Local push notification scheduling
+│   │   ├── records.cljd        # Drift row <-> Clojure map normalization
+│   │   ├── stats.cljd          # Task completion statistics
+│   │   └── task.cljd           # Task grouping and filtering helpers
+│   ├── pages/                  # Top-level application screens
+│   │   ├── anniversary_management.cljd # Standalone Birthday & Anniversary page
+│   │   ├── calendar_page.cljd          # Mongolian Lunar Calendar page
+│   │   ├── category_management.cljd    # Category CRUD & reordering page
+│   │   ├── home.cljd                   # Main task list & navigation shell
+│   │   ├── settings.cljd               # Theme & preferences page
+│   │   ├── subtasks_list.cljd          # Subtasks management view
+│   │   └── task_detail.cljd            # Detailed task editor
+│   ├── state/
+│   │   └── store.cljd          # Global UI state atoms
+│   ├── widgets/                # Reusable vertical Mongolian UI components
+│   │   ├── calendar/           # Modularized calendar sub-components
+│   │   │   ├── body.cljd       # Top grid + bottom Bento split layout
+│   │   │   ├── dates.cljd      # Grid cell date helpers
+│   │   │   ├── dialogs.cljd    # Elder-friendly large-font modals & wheel pickers
+│   │   │   ├── grid.cljd       # Month switcher pill & 7x6 day cells
+│   │   │   ├── panels.cljd     # Bottom lunar almanac & day tasks cards
+│   │   │   ├── state.cljd      # Calendar month, selected date & swipe state
+│   │   │   └── theme.cljd      # Calendar typography & Material 3 palette
+│   │   ├── input_dialog.cljd   # Unified Mongolian virtual keyboard input dialog
+│   │   └── ...
+│   ├── main.cljd               # ClojureDart app initialization
+│   ├── route_names.cljd        # Named route constants
+│   └── routes.cljd             # Route table configuration
+├── web/                        # Web build assets & OyunQaganTig font
+├── deps.edn                    # ClojureDart dependencies & aliases
+└── pubspec.yaml                # Flutter/Dart package dependencies
 ```
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
+* **Flutter SDK** (3.x or later)
+* **Clojure CLI** (`clj` / `clojure`)
+* **Java JDK** (11 or later, required by Clojure CLI)
 
-- Flutter SDK 3.10.4 or higher
-- Clojure CLI tools
-- Dart SDK (included with Flutter)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd mongol-focus
-```
-
-2. Install Flutter dependencies:
+### 1. Install Dependencies
+Fetch the Dart/Flutter packages:
 ```bash
 flutter pub get
 ```
 
-3. Install ClojureDart dependencies:
+### 2. Generate Drift Database Code (If Schema Changed)
+If you modify `lib/database.dart`, regenerate `lib/database.g.dart` using `build_runner`:
 ```bash
-clj -M:cljd prep
+dart run build_runner build --delete-conflicting-outputs
 ```
 
-4. Generate database code:
+### 3. Run the Application with ClojureDart
+Start the ClojureDart compiler and launch the Flutter app on your connected device or simulator:
 ```bash
-flutter pub run build_runner build
+clj -M:cljd flutter
 ```
+*(Or pass a target device, e.g., `clj -M:cljd flutter -d macos`, `-d chrome`, or `-d <device-id>`).*
 
-5. Run the application:
-```bash
-flutter run
-```
+---
 
-## Development
+## 🛠️ Tech Stack
 
-### Building
+* **Language**: [ClojureDart](https://github.com/Tensegritics/ClojureDart)
+* **UI Framework**: [Flutter](https://flutter.dev/) (Material 3)
+* **Vertical Script Layout**: [`mongol`](https://pub.dev/packages/mongol)
+* **Local Database**: [Drift](https://drift.simonbinder.eu/) (Reactive SQLite)
+* **Lunar & Solar Astronomy**: [`lunar`](https://pub.dev/packages/lunar)
+* **Local Notifications**: [`flutter_local_notifications`](https://pub.dev/packages/flutter_local_notifications) & [`timezone`](https://pub.dev/packages/timezone)
 
-To build the ClojureDart code:
-```bash
-clj -M:cljd prep
-```
+---
 
-To generate database code:
-```bash
-flutter pub run build_runner build --delete-conflicting-outputs
-```
+## 📄 License
 
-### Database Schema
-
-The application uses Drift for database management with two main tables:
-
-- **Tasks**: Stores task information (title, notes, completion status, due dates, priority, category, parent_id for subtasks, display_order for sorting, etc.)
-- **Categories**: Stores category/list information (name, icon, position)
-
-Tasks support a self-referential relationship through the `parent_id` field, allowing tasks to have subtasks. The main task list only shows top-level tasks (tasks without a parent).
-
-## Dependencies
-
-### Flutter Packages
-- `drift`: Reactive SQLite database
-- `mongol`: Mongolian vertical text rendering
-- `mongol_code`: Mongolian text encoding
-- `flutter_slidable`: Swipeable list items
-- `flutter_styled_toast`: Toast notifications
-- `vibration`: Haptic feedback
-- `http`: HTTP client
-- `archive`: Archive file handling
-- `path_provider`: File system paths
-- `intl`: Internationalization
-
-### ClojureDart Dependencies
-- `tensegritics/clojuredart`: ClojureDart runtime
-- `amjil/mongol-virtual-keyboard`: Mongolian virtual keyboard
-- `amjil/mongol-date-picker`: Mongolian date picker
-- `amjil/mgl-components`: Mongolian UI components
-
-## License
-
-See [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
