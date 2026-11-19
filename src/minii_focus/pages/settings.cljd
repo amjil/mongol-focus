@@ -50,6 +50,10 @@
 (defn- log-action [label]
   (dc/print (str "Settings action: " label)))
 
+(def ^:private section-config
+  {:min-item-width 110.0
+   :max-item-width 140.0})
+
 (defn- open-font-family-dialog [ctx]
   (bs/bottom-sheet
    ctx
@@ -112,7 +116,8 @@
          [{:title "ᠠᠩᠭᠢᠯᠠᠯ ᠲᠣᠬᠢᠷᠠᠭᠤᠯᠬᠤ"
            :leading m.Icons/folder_special
            :show-arrow? true
-           :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management") nil)}])
+           :on-tap (fn [] (m/Navigator.pushNamed ctx "/category-management") nil)}]
+         :custom-config section-config)
 
         ;; --- Group 2: Interface Preferences ---
         (sett/settings-section
@@ -131,7 +136,8 @@
            :subtitle (str "ᠣᠳᠣ᠎ᠶᠢᠨ: " font-family)
            :leading m.Icons/font_download
            :show-arrow? true
-           :on-tap #(open-font-family-dialog ctx)}])
+           :on-tap #(open-font-family-dialog ctx)}]
+         :custom-config section-config)
 
         ;; --- Group 3: App Information ---
         (sett/settings-section
@@ -150,4 +156,5 @@
            :subtitle "ᠰᠢᠨ᠎ᠡ ᠬᠤᠪᠢᠯᠪᠤᠷᠢ᠎ᠶᠢ ᠰᠢᠯᠭᠠᠬᠤ"
            :leading m.Icons/system_update
            :show-arrow? true
-           :on-tap #(update/check-for-update! ctx {:manual? true})}])]))))))
+           :on-tap #(update/check-for-update! ctx {:manual? true})}]
+         :custom-config section-config)]))))))
