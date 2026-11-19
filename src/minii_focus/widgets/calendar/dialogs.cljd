@@ -446,11 +446,9 @@
 ;; =============================================================================
 
 (defn show-almanac-detail-dialog!
-  "Popup dialog displaying the selected day's lunar almanac, haircut auspiciousness, and anniversaries in extra-large font."
+  "Popup dialog displaying the selected day's lunar almanac and anniversaries in extra-large font."
   [ctx ^dc/DateTime selected-dt day-anniversaries]
-  (let [info       (lunar/solar->mongol-lunar selected-dt)
-        haircut    (:haircut info)
-        good-hair? (:good? haircut)]
+  (let [info (lunar/solar->mongol-lunar selected-dt)]
     (m/showDialog
      .context ctx
      .builder
@@ -498,11 +496,11 @@
                          .decoration (m/BoxDecoration.
                                       .color (:primary p)
                                       .borderRadius (m/BorderRadius.circular 10.0))
-                         .child (m/Text. (str (.-month selected-dt) "/" (.-day selected-dt))
-                                         .style (m/TextStyle.
-                                                 .fontSize 16.0
-                                                 .fontWeight m/FontWeight.bold
-                                                 .color (:on-primary p))))
+                         .child (mg/MongolText. (str (.-month selected-dt) "/" (.-day selected-dt))
+                                                .style (m/TextStyle.
+                                                        .fontSize 16.0
+                                                        .fontWeight m/FontWeight.bold
+                                                        .color (:on-primary p))))
                         (m/SizedBox. .height 10.0)
                         (m/Expanded.
                          .child
@@ -578,73 +576,7 @@
                                     .fontWeight m/FontWeight.bold
                                     .color m/Colors.pink.shade700))))])))
                            day-anniversaries)
-                     (m/SizedBox. .width 4.0)))
-
-                  ;; 3. Haircut Auspiciousness Full Detail Card
-                  [(m/Container.
-                    .padding (m/EdgeInsets.symmetric .horizontal 12.0 .vertical 12.0)
-                    .decoration (m/BoxDecoration.
-                                 .color (if good-hair?
-                                          (.withOpacity m/Colors.teal 0.06)
-                                          (.withOpacity m/Colors.redAccent 0.05))
-                                 .borderRadius (m/BorderRadius.circular 16.0)
-                                 .border (m/Border.all
-                                          .color (if good-hair?
-                                                   (.withOpacity m/Colors.teal 0.2)
-                                                   (.withOpacity m/Colors.redAccent 0.2))))
-                    .child
-                    (m/Row.
-                     .crossAxisAlignment m/CrossAxisAlignment.stretch
-                     .children
-                     [(m/Column.
-                       .mainAxisAlignment m/MainAxisAlignment.spaceBetween
-                       .children
-                       [(m/Icon. m/Icons.content_cut
-                                 .size 20.0
-                                 .color (if good-hair? m/Colors.teal m/Colors.redAccent))
-                        (m/SizedBox. .height 6.0)
-                        (m/Expanded.
-                         .child
-                         (m/Center.
-                          .child
-                          (m/FittedBox.
-                           .fit m/BoxFit.scaleDown
-                           .child
-                           (theme/vertical-mongol-text
-                            "ᠦᠰᠦ ᠵᠠᠰᠠᠭᠤᠯᠪᠠᠯ"
-                            (m/TextStyle.
-                             .fontFamily theme/default-font
-                             .fontSize 18.0
-                             .fontWeight m/FontWeight.bold
-                             .color (:on-muted p))))))
-                        (m/SizedBox. .height 6.0)
-                        (m/Container.
-                         .padding (m/EdgeInsets.symmetric .horizontal 5.0 .vertical 6.0)
-                         .decoration (m/BoxDecoration.
-                                      .color (if good-hair?
-                                               (.withOpacity m/Colors.teal 0.16)
-                                               (.withOpacity m/Colors.redAccent 0.14))
-                                      .borderRadius (m/BorderRadius.circular 8.0))
-                         .child (theme/vertical-mongol-text
-                                 (:status-label haircut)
-                                 (m/TextStyle.
-                                  .fontFamily theme/default-font
-                                  .fontSize 17.5
-                                  .fontWeight m/FontWeight.bold
-                                  .color (if good-hair?
-                                           m/Colors.teal.shade800
-                                           m/Colors.red.shade800))))])
-                      (m/SizedBox. .width 12.0)
-                      (m/SingleChildScrollView.
-                       .scrollDirection m/Axis.vertical
-                       .child
-                       (theme/vertical-mongol-text
-                        (:desc haircut)
-                        (m/TextStyle.
-                         .fontFamily theme/default-font
-                         .fontSize 21.0
-                         .fontWeight m/FontWeight.w500
-                         .color (:on-body p))))]))])))))
+                     (m/SizedBox. .width 4.0))))))))
 
              (m/SizedBox. .width 10.0)
 

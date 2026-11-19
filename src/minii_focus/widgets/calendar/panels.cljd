@@ -174,7 +174,7 @@
                .fit m/BoxFit.scaleDown
                .child
                (theme/vertical-mongol-text
-                "ᠡᠳᠦᠷ ᠦᠨ ᠠᠵᠢᠯ"
+                "ᠡᠳᠦᠷ᠎ᠦᠨ ᠠᠵᠢᠯ"
                 (m/TextStyle.
                  .fontFamily theme/default-font
                  .fontSize 13.5

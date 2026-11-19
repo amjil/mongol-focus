@@ -64,7 +64,7 @@
               .crossAxisAlignment m/CrossAxisAlignment.center
               .children
               [(theme/vertical-mongol-text
-                (str (.-year current-month) " ᠣᠨ ᠤ " (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
+                (str (.-year current-month) "ᠣᠨ᠎ᠤ" (.-month current-month) " ᠰᠠᠷ᠎ᠠ")
                 (m/TextStyle.
                  .fontFamily theme/default-font
                  .fontSize theme/pill-month-font-size
